@@ -1,0 +1,2158 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>نظام صيانة المطابخ المركزية وغرف التبريد</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@300;400;500;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@2.44.0/tabler-icons.min.css">
+<style>
+:root {
+  --blue-dark: #0F3460;
+  --blue-main: #1D4E89;
+  --blue-light: #2E7BC4;
+  --blue-pale: #E6F1FB;
+  --green: #2D7D3A;
+  --green-pale: #EAF3DE;
+  --orange: #C4680A;
+  --orange-pale: #FDF0E0;
+  --red: #C0392B;
+  --red-pale: #FCEBEB;
+  --bg: #F4F6F9;
+  --bg-card: #FFFFFF;
+  --border: #E2E8F0;
+  --text: #1A202C;
+  --text-sec: #64748B;
+  --text-ter: #94A3B8;
+  --shadow: 0 1px 3px rgba(0,0,0,0.06), 0 4px 12px rgba(0,0,0,0.04);
+  --shadow-lg: 0 4px 16px rgba(0,0,0,0.08), 0 12px 32px rgba(0,0,0,0.06);
+  --radius: 12px;
+  --radius-sm: 8px;
+  --sidebar-w: 220px;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html, body { height: 100%; font-family: 'Tajawal', sans-serif; background: var(--bg); color: var(--text); font-size: 14px; }
+
+/* ========== LAYOUT ========== */
+.app { display: flex; flex-direction: column; height: 100vh; overflow: hidden; }
+.topbar { background: var(--blue-dark); padding: 0 20px; height: 56px; display: flex; align-items: center; gap: 14px; flex-shrink: 0; box-shadow: 0 2px 8px rgba(0,0,0,0.2); z-index: 50; }
+.logo { width: 36px; height: 36px; background: rgba(255,255,255,0.12); border-radius: var(--radius-sm); display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+.logo i { color: #7EC8E3; font-size: 20px; }
+.brand { flex: 1; min-width: 0; }
+.brand-name { color: #fff; font-size: 15px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.brand-sub { color: #7EC8E3; font-size: 11px; }
+.topbar-right { display: flex; align-items: center; gap: 10px; flex-shrink: 0; }
+.date-chip { background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.12); border-radius: 99px; padding: 4px 12px; font-size: 11px; color: #CBD5E1; }
+.notif-btn { position: relative; background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.12); border-radius: 99px; padding: 5px 12px; color: #fff; font-size: 12px; cursor: pointer; display: flex; align-items: center; gap: 5px; }
+.notif-dot { position: absolute; top: 4px; left: 6px; width: 8px; height: 8px; border-radius: 50%; background: #E74C3C; border: 1.5px solid var(--blue-dark); }
+.user-avatar { width: 32px; height: 32px; border-radius: 50%; background: var(--blue-light); display: flex; align-items: center; justify-content: center; color: #fff; font-size: 13px; font-weight: 700; cursor: pointer; }
+.hamburger { display: none; background: none; border: none; color: #fff; font-size: 22px; cursor: pointer; padding: 4px; }
+
+.body { display: flex; flex: 1; overflow: hidden; }
+
+/* ========== SIDEBAR ========== */
+.sidebar { width: var(--sidebar-w); background: var(--bg-card); border-left: 1px solid var(--border); display: flex; flex-direction: column; flex-shrink: 0; overflow-y: auto; z-index: 30; }
+.sidebar-inner { padding: 12px 0; flex: 1; }
+.nav-section { font-size: 10px; font-weight: 700; color: var(--text-ter); letter-spacing: 0.8px; padding: 10px 16px 4px; text-transform: uppercase; }
+.nav-item { display: flex; align-items: center; gap: 10px; padding: 9px 16px; font-size: 13px; color: var(--text-sec); cursor: pointer; border-right: 3px solid transparent; transition: all 0.15s; position: relative; }
+.nav-item:hover { background: var(--bg); color: var(--text); }
+.nav-item.active { color: var(--blue-main); background: var(--blue-pale); border-right-color: var(--blue-main); font-weight: 500; }
+.nav-item i { font-size: 17px; flex-shrink: 0; }
+.nav-badge { margin-right: auto; font-size: 10px; padding: 1px 6px; border-radius: 99px; background: var(--orange-pale); color: var(--orange); font-weight: 600; }
+.sidebar-footer { padding: 12px 16px; border-top: 1px solid var(--border); }
+.user-info { display: flex; align-items: center; gap: 10px; }
+.user-name { font-size: 12px; font-weight: 500; color: var(--text); }
+.user-role { font-size: 10px; color: var(--text-sec); }
+
+/* ========== MAIN CONTENT ========== */
+.main { flex: 1; overflow-y: auto; padding: 20px; min-width: 0; }
+.page { display: none; }
+.page.active { display: block; }
+.page-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 18px; flex-wrap: wrap; gap: 10px; }
+.page-title { font-size: 18px; font-weight: 700; color: var(--text); }
+.page-sub { font-size: 12px; color: var(--text-sec); margin-top: 2px; }
+.btn { display: inline-flex; align-items: center; gap: 6px; padding: 8px 16px; border-radius: var(--radius-sm); font-size: 13px; font-weight: 500; cursor: pointer; border: none; font-family: 'Tajawal', sans-serif; transition: all 0.15s; }
+.btn-primary { background: var(--blue-main); color: #fff; }
+.btn-primary:hover { background: var(--blue-dark); }
+.btn-outline { background: var(--bg-card); color: var(--text); border: 1px solid var(--border); }
+.btn-outline:hover { background: var(--bg); }
+.btn-warning { background: var(--orange-pale); color: var(--orange); border: 1px solid #FAC775; }
+.btn-danger { background: var(--red-pale); color: var(--red); }
+
+/* ========== DASHBOARD ========== */
+.stats-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 18px; }
+.stat-card { background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius); padding: 16px; box-shadow: var(--shadow); transition: transform 0.15s; cursor: default; }
+.stat-card:hover { transform: translateY(-2px); box-shadow: var(--shadow-lg); }
+.stat-icon { width: 38px; height: 38px; border-radius: var(--radius-sm); display: flex; align-items: center; justify-content: center; margin-bottom: 10px; }
+.stat-icon i { font-size: 20px; }
+.stat-val { font-size: 26px; font-weight: 700; color: var(--text); line-height: 1; }
+.stat-lbl { font-size: 12px; color: var(--text-sec); margin-top: 4px; }
+.stat-change { font-size: 11px; margin-top: 6px; display: flex; align-items: center; gap: 3px; }
+.up { color: var(--green); }
+.down { color: var(--red); }
+.warn { color: var(--orange); }
+
+.grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-bottom: 14px; }
+.card { background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius); box-shadow: var(--shadow); overflow: hidden; }
+.card-header { padding: 12px 16px; border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; }
+.card-title { font-size: 13px; font-weight: 600; color: var(--text); display: flex; align-items: center; gap: 7px; }
+.card-title i { font-size: 15px; color: var(--text-sec); }
+.card-action { font-size: 12px; color: var(--blue-light); cursor: pointer; background: none; border: none; font-family: 'Tajawal'; }
+.list-row { display: flex; align-items: center; gap: 10px; padding: 10px 16px; border-bottom: 1px solid var(--border); }
+.list-row:last-child { border-bottom: none; }
+.list-row:hover { background: var(--bg); }
+.avatar { width: 32px; height: 32px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 700; flex-shrink: 0; }
+.row-info { flex: 1; min-width: 0; }
+.row-name { font-size: 13px; font-weight: 500; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.row-sub { font-size: 11px; color: var(--text-sec); }
+.badge { font-size: 10px; padding: 3px 8px; border-radius: 99px; font-weight: 600; white-space: nowrap; flex-shrink: 0; }
+.b-success { background: var(--green-pale); color: var(--green); }
+.b-warning { background: var(--orange-pale); color: var(--orange); }
+.b-danger { background: var(--red-pale); color: var(--red); }
+.b-info { background: var(--blue-pale); color: var(--blue-main); }
+.b-gray { background: #F1F5F9; color: #64748B; }
+
+/* chart */
+.chart-wrap { padding: 14px 16px; }
+.bar-group { display: flex; align-items: flex-end; gap: 5px; height: 80px; margin-bottom: 8px; }
+.bar-col { display: flex; flex-direction: column; align-items: center; gap: 2px; flex: 1; }
+.bar { width: 100%; border-radius: 3px 3px 0 0; }
+.bar-lbl { font-size: 9px; color: var(--text-ter); }
+.bar-v { font-size: 9px; color: var(--text-sec); }
+.legend { display: flex; gap: 14px; }
+.leg { display: flex; align-items: center; gap: 5px; font-size: 11px; color: var(--text-sec); }
+.leg-dot { width: 10px; height: 10px; border-radius: 3px; }
+.week-totals { display: grid; grid-template-columns: 1fr 1fr 1fr; border-top: 1px solid var(--border); }
+.wt { text-align: center; padding: 10px 8px; }
+.wt:not(:last-child) { border-left: 1px solid var(--border); }
+.wt-val { font-size: 18px; font-weight: 700; }
+.wt-lbl { font-size: 10px; color: var(--text-sec); margin-top: 2px; }
+
+/* ========== VISITS PAGE ========== */
+.visits-toolbar { display: flex; align-items: center; gap: 10px; margin-bottom: 14px; flex-wrap: wrap; }
+.search-box { flex: 1; min-width: 200px; position: relative; }
+.search-box i { position: absolute; right: 10px; top: 50%; transform: translateY(-50%); color: var(--text-ter); font-size: 16px; }
+.search-box input { width: 100%; padding: 8px 36px 8px 12px; border: 1px solid var(--border); border-radius: var(--radius-sm); font-size: 13px; background: var(--bg-card); font-family: 'Tajawal'; direction: rtl; outline: none; color: var(--text); }
+.search-box input:focus { border-color: var(--blue-light); }
+.filter-tabs { display: flex; background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius-sm); overflow: hidden; }
+.f-tab { padding: 7px 14px; font-size: 12px; font-weight: 500; cursor: pointer; color: var(--text-sec); background: none; border: none; font-family: 'Tajawal'; border-left: 1px solid var(--border); }
+.f-tab:last-child { border-left: none; }
+.f-tab.active { background: var(--blue-main); color: #fff; }
+.visits-table { background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius); box-shadow: var(--shadow); overflow: hidden; }
+.table-header { display: grid; grid-template-columns: 2fr 1.5fr 1fr 1fr 1fr 80px; padding: 10px 16px; background: var(--bg); border-bottom: 1px solid var(--border); font-size: 11px; font-weight: 600; color: var(--text-sec); text-transform: uppercase; letter-spacing: 0.4px; }
+.table-row { display: grid; grid-template-columns: 2fr 1.5fr 1fr 1fr 1fr 80px; padding: 11px 16px; border-bottom: 1px solid var(--border); align-items: center; transition: background 0.1s; cursor: pointer; }
+.table-row:last-child { border-bottom: none; }
+.table-row:hover { background: var(--bg); }
+.table-row .cell { font-size: 13px; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.table-row .cell.sec { color: var(--text-sec); font-size: 12px; }
+.row-actions { display: flex; gap: 6px; }
+.row-btn { background: none; border: none; color: var(--text-ter); cursor: pointer; padding: 3px; border-radius: 4px; font-size: 15px; }
+.row-btn:hover { background: var(--bg); color: var(--text-sec); }
+
+/* ========== NEW VISIT FORM ========== */
+.form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-bottom: 14px; }
+.form-card { background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius); box-shadow: var(--shadow); padding: 20px; }
+.form-card h3 { font-size: 14px; font-weight: 600; color: var(--text); margin-bottom: 14px; display: flex; align-items: center; gap: 8px; padding-bottom: 10px; border-bottom: 1px solid var(--border); }
+.form-card h3 i { color: var(--blue-main); }
+.field { margin-bottom: 12px; }
+.field label { display: block; font-size: 12px; font-weight: 500; color: var(--text-sec); margin-bottom: 5px; }
+.field-wrap { position: relative; }
+.field input, .field textarea, .field select {
+  width: 100%; padding: 8px 12px; border: 1px solid var(--border); border-radius: var(--radius-sm);
+  font-size: 13px; color: var(--text); background: var(--bg-card); font-family: 'Tajawal';
+  direction: rtl; outline: none; transition: border-color 0.15s;
+}
+.field input:focus, .field textarea:focus, .field select:focus { border-color: var(--blue-light); background: #fff; box-shadow: 0 0 0 3px rgba(46,123,196,0.08); }
+.field textarea { resize: vertical; min-height: 70px; }
+.autocomplete-dd { position: absolute; top: calc(100% + 2px); right: 0; left: 0; background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius-sm); box-shadow: var(--shadow-lg); z-index: 200; overflow: hidden; display: none; }
+.autocomplete-dd.open { display: block; }
+.dd-head { padding: 5px 12px; font-size: 10px; color: var(--text-ter); background: var(--bg); border-bottom: 1px solid var(--border); display: flex; align-items: center; gap: 4px; }
+.dd-opt { padding: 8px 12px; font-size: 13px; color: var(--text); cursor: pointer; display: flex; align-items: center; gap: 8px; border-bottom: 1px solid var(--border); }
+.dd-opt:last-child { border-bottom: none; }
+.dd-opt:hover { background: var(--blue-pale); }
+.dd-opt i { font-size: 14px; color: var(--text-ter); }
+.dd-new { padding: 7px 12px; font-size: 12px; color: var(--blue-light); cursor: pointer; display: flex; align-items: center; gap: 6px; background: var(--bg); border-top: 1px solid var(--border); }
+.tags-wrap { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 6px; }
+.tag { display: flex; align-items: center; gap: 4px; background: var(--blue-pale); color: var(--blue-main); border-radius: 99px; padding: 3px 10px; font-size: 12px; }
+.tag button { background: none; border: none; color: var(--blue-light); cursor: pointer; font-size: 14px; line-height: 1; padding: 0 0 0 2px; }
+.checklist { display: flex; flex-direction: column; gap: 6px; }
+.check-item { display: flex; align-items: center; gap: 10px; padding: 8px 12px; background: var(--bg); border: 1px solid var(--border); border-radius: var(--radius-sm); }
+.check-item input[type=checkbox] { width: 16px; height: 16px; accent-color: var(--blue-main); flex-shrink: 0; }
+.check-item span { font-size: 13px; flex: 1; }
+.add-item-btn { display: flex; align-items: center; gap: 6px; color: var(--blue-light); font-size: 12px; cursor: pointer; padding: 6px 0; background: none; border: none; font-family: 'Tajawal'; }
+
+
+.tech-cards-grid { display: grid; grid-template-columns: repeat(4,1fr); gap: 14px; }
+.tech-card { background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius); box-shadow: var(--shadow); overflow: hidden; transition: transform 0.15s, box-shadow 0.15s; }
+.tech-card:hover { transform: translateY(-2px); box-shadow: var(--shadow-lg); }
+.tech-card-header { padding: 16px 14px 12px; text-align: center; border-bottom: 1px solid var(--border); position: relative; }
+.tech-big-avatar { width: 56px; height: 56px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 20px; font-weight: 700; margin: 0 auto 8px; border: 3px solid var(--bg); box-shadow: 0 2px 8px rgba(0,0,0,0.1); }
+.tech-card-name { font-size: 14px; font-weight: 600; color: var(--text); }
+.tech-card-spec { font-size: 11px; color: var(--text-sec); margin-top: 2px; }
+.tech-status-dot { position: absolute; top: 14px; left: 14px; width: 10px; height: 10px; border-radius: 50%; border: 2px solid var(--bg-card); }
+.tech-card-body { padding: 12px 14px; }
+.tech-stat-row { display: flex; justify-content: space-between; margin-bottom: 10px; }
+.tech-stat { text-align: center; flex: 1; }
+.tech-stat-val { font-size: 16px; font-weight: 700; color: var(--text); }
+.tech-stat-lbl { font-size: 10px; color: var(--text-sec); margin-top: 1px; }
+.perf-bar-wrap { margin-bottom: 8px; }
+.perf-bar-label { display: flex; justify-content: space-between; font-size: 11px; color: var(--text-sec); margin-bottom: 4px; }
+.perf-bar-bg { height: 6px; background: var(--border); border-radius: 99px; overflow: hidden; }
+.perf-bar-fill { height: 100%; border-radius: 99px; transition: width 0.6s; }
+.tech-card-actions { display: flex; gap: 6px; padding: 10px 14px; border-top: 1px solid var(--border); }
+.tech-action-btn { flex: 1; padding: 6px; border-radius: var(--radius-sm); font-size: 11px; font-weight: 500; cursor: pointer; border: 1px solid var(--border); background: var(--bg); color: var(--text-sec); display: flex; align-items: center; justify-content: center; gap: 4px; font-family: 'Tajawal'; transition: all 0.15s; }
+.tech-action-btn:hover { background: var(--blue-pale); color: var(--blue-main); border-color: var(--blue-light); }
+.tech-action-btn.danger:hover { background: var(--red-pale); color: var(--red); border-color: var(--red); }
+.stars { color: #F59E0B; font-size: 12px; letter-spacing: 1px; }
+.compare-bar { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
+.compare-name { font-size: 12px; color: var(--text); min-width: 90px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.compare-bar-bg { flex: 1; height: 20px; background: var(--bg); border-radius: 4px; overflow: hidden; position: relative; }
+.compare-bar-fill { height: 100%; border-radius: 4px; display: flex; align-items: center; justify-content: flex-end; padding-left: 6px; font-size: 10px; color: #fff; font-weight: 600; transition: width 0.6s; }
+.visit-type-row { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
+.vt-dot { width: 12px; height: 12px; border-radius: 3px; flex-shrink: 0; }
+.vt-label { font-size: 12px; color: var(--text); flex: 1; }
+.vt-bar-bg { flex: 1.5; height: 8px; background: var(--bg); border-radius: 99px; overflow: hidden; }
+.vt-bar-fill { height: 100%; border-radius: 99px; }
+.vt-count { font-size: 11px; color: var(--text-sec); min-width: 30px; text-align: left; }
+@media(max-width:960px){ .tech-cards-grid { grid-template-columns: repeat(2,1fr); } }
+@media(max-width:520px){ .tech-cards-grid { grid-template-columns: 1fr; } }
+
+
+
+.reports-search-card { background:var(--bg-card); border:1px solid var(--border); border-radius:var(--radius); box-shadow:var(--shadow); padding:20px; margin-bottom:18px; }
+.reports-search-title { font-size:15px; font-weight:600; color:var(--text); margin-bottom:14px; display:flex; align-items:center; gap:8px; padding-bottom:12px; border-bottom:1px solid var(--border); }
+.reports-filters { display:grid; grid-template-columns:repeat(4,1fr); gap:12px; margin-bottom:14px; }
+.filter-field { display:flex; flex-direction:column; gap:5px; }
+.filter-label { font-size:11px; font-weight:500; color:var(--text-sec); display:flex; align-items:center; gap:4px; }
+.filter-input { padding:8px 12px; border:1px solid var(--border); border-radius:var(--radius-sm); font-size:13px; color:var(--text); background:var(--bg-card); font-family:'Tajawal'; direction:rtl; outline:none; transition:border-color .15s; }
+.filter-input:focus { border-color:var(--blue-light); box-shadow:0 0 0 3px rgba(46,123,196,0.08); }
+.filter-actions { display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
+.active-filters { display:flex; gap:6px; flex-wrap:wrap; margin-top:10px; min-height:24px; }
+.filter-tag { display:flex; align-items:center; gap:5px; background:var(--blue-pale); color:var(--blue-main); border-radius:99px; padding:3px 10px; font-size:11px; font-weight:500; }
+.filter-tag button { background:none; border:none; color:var(--blue-main); cursor:pointer; font-size:13px; line-height:1; padding:0 0 0 2px; opacity:.7; }
+.filter-tag button:hover { opacity:1; }
+.reports-results-header { display:flex; align-items:center; justify-content:space-between; margin-bottom:10px; flex-wrap:wrap; gap:8px; }
+.results-count { font-size:13px; color:var(--text-sec); }
+.results-count strong { color:var(--text); font-weight:600; }
+.report-table { background:var(--bg-card); border:1px solid var(--border); border-radius:var(--radius); box-shadow:var(--shadow); overflow:hidden; }
+.rt-header { display:grid; grid-template-columns:1.8fr 1.2fr 1fr 1.2fr 0.8fr 0.8fr 80px; padding:10px 16px; background:var(--bg); border-bottom:1px solid var(--border); font-size:11px; font-weight:600; color:var(--text-sec); letter-spacing:.3px; }
+.rt-row { display:grid; grid-template-columns:1.8fr 1.2fr 1fr 1.2fr 0.8fr 0.8fr 80px; padding:11px 16px; border-bottom:1px solid var(--border); align-items:center; cursor:pointer; transition:background .1s; }
+.rt-row:last-child { border-bottom:none; }
+.rt-row:hover { background:var(--bg); }
+.rt-cell { font-size:12px; color:var(--text); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.rt-cell.sec { color:var(--text-sec); font-size:11px; }
+.highlight { background:#FEF9C3; border-radius:3px; padding:0 2px; }
+.no-results { padding:40px 20px; text-align:center; }
+.no-results i { font-size:40px; color:var(--text-ter); margin-bottom:10px; display:block; }
+.no-results p { font-size:13px; color:var(--text-sec); }
+.report-summary-cards { display:grid; grid-template-columns:repeat(4,1fr); gap:10px; margin-bottom:14px; }
+.sum-mini { background:var(--bg-card); border:1px solid var(--border); border-radius:var(--radius-sm); padding:12px; text-align:center; }
+.sum-mini-val { font-size:20px; font-weight:700; }
+.sum-mini-lbl { font-size:11px; color:var(--text-sec); margin-top:2px; }
+@media(max-width:960px){ .reports-filters{grid-template-columns:1fr 1fr} .rt-header,.rt-row{grid-template-columns:1.8fr 1.2fr 1fr 0.8fr 70px} .rt-header .rh3,.rt-row .rc3,.rt-header .rh5,.rt-row .rc5{display:none} }
+@media(max-width:520px){ .reports-filters{grid-template-columns:1fr} .report-summary-cards{grid-template-columns:repeat(2,1fr)} .rt-header,.rt-row{grid-template-columns:1.8fr 1fr 70px} .rt-header .rh2,.rt-row .rc2,.rt-header .rh4,.rt-row .rc4{display:none} }
+
+.clients-kpi { display:grid; grid-template-columns:repeat(5,1fr); gap:12px; margin-bottom:18px; }
+.client-card { background:var(--bg-card); border:1px solid var(--border); border-radius:var(--radius); box-shadow:var(--shadow); overflow:hidden; transition:transform 0.15s,box-shadow 0.15s; cursor:pointer; }
+.client-card:hover { transform:translateY(-2px); box-shadow:var(--shadow-lg); }
+.client-card-header { padding:14px 16px 10px; border-bottom:1px solid var(--border); display:flex; align-items:flex-start; gap:12px; }
+.client-avatar { width:42px; height:42px; border-radius:var(--radius-sm); display:flex; align-items:center; justify-content:center; font-size:16px; font-weight:700; flex-shrink:0; }
+.client-name { font-size:13px; font-weight:600; color:var(--text); }
+.client-sub  { font-size:11px; color:var(--text-sec); margin-top:2px; }
+.client-card-body { padding:12px 16px; }
+.mini-stat-row { display:flex; justify-content:space-between; gap:6px; margin-bottom:10px; }
+.mini-stat { text-align:center; flex:1; padding:6px 4px; background:var(--bg); border-radius:var(--radius-sm); }
+.mini-stat-val { font-size:14px; font-weight:700; color:var(--text); }
+.mini-stat-lbl { font-size:9px; color:var(--text-sec); margin-top:1px; }
+.client-progress-wrap { margin-bottom:8px; }
+.client-progress-label { display:flex; justify-content:space-between; font-size:11px; color:var(--text-sec); margin-bottom:3px; }
+.client-progress-bg { height:5px; background:var(--border); border-radius:99px; overflow:hidden; }
+.client-progress-fill { height:100%; border-radius:99px; transition:width 0.6s; }
+.client-tags { display:flex; flex-wrap:wrap; gap:4px; margin-top:8px; }
+.client-tag { font-size:10px; padding:2px 7px; border-radius:99px; font-weight:500; }
+.client-card-footer { display:flex; border-top:1px solid var(--border); }
+.client-footer-btn { flex:1; padding:8px; font-size:11px; font-weight:500; cursor:pointer; border:none; background:none; font-family:'Tajawal'; color:var(--text-sec); display:flex; align-items:center; justify-content:center; gap:4px; transition:background 0.15s; }
+.client-footer-btn:hover { background:var(--blue-pale); color:var(--blue-main); }
+.client-footer-btn:not(:last-child) { border-left:1px solid var(--border); }
+.client-detail-panel { background:var(--bg-card); border:1px solid var(--border); border-radius:var(--radius); box-shadow:var(--shadow); margin-top:16px; overflow:hidden; display:none; }
+.cdp-header { padding:14px 18px; background:var(--blue-dark); display:flex; align-items:center; justify-content:space-between; }
+.cdp-title { color:#fff; font-size:15px; font-weight:600; }
+.cdp-tabs { display:flex; border-bottom:1px solid var(--border); }
+.cdp-tab { padding:10px 18px; font-size:12px; font-weight:500; cursor:pointer; color:var(--text-sec); border-bottom:2px solid transparent; background:none; border-top:none; border-left:none; border-right:none; font-family:'Tajawal'; }
+.cdp-tab.active { color:var(--blue-main); border-bottom-color:var(--blue-main); }
+.timeline-item { display:flex; gap:14px; padding:12px 18px; border-bottom:1px solid var(--border); }
+.timeline-item:last-child { border-bottom:none; }
+.timeline-dot-wrap { display:flex; flex-direction:column; align-items:center; gap:0; flex-shrink:0; }
+.timeline-dot { width:12px; height:12px; border-radius:50%; flex-shrink:0; margin-top:3px; }
+.timeline-line { flex:1; width:2px; background:var(--border); margin-top:3px; }
+.timeline-content { flex:1; }
+.timeline-title { font-size:13px; font-weight:500; color:var(--text); }
+.timeline-meta { font-size:11px; color:var(--text-sec); margin-top:2px; }
+.warranty-bar { display:flex; align-items:center; gap:10px; padding:10px 18px; border-bottom:1px solid var(--border); }
+.warranty-icon { width:32px; height:32px; border-radius:var(--radius-sm); display:flex; align-items:center; justify-content:center; flex-shrink:0; }
+@media(max-width:1100px){ .clients-kpi{grid-template-columns:repeat(3,1fr)} }
+@media(max-width:960px){ .clients-kpi{grid-template-columns:repeat(2,1fr)} .clients-grid{grid-template-columns:1fr 1fr!important} }
+@media(max-width:520px){ .clients-kpi{grid-template-columns:1fr 1fr} .clients-grid{grid-template-columns:1fr!important} }
+
+
+
+.reports-search-card { background:var(--bg-card); border:1px solid var(--border); border-radius:var(--radius); box-shadow:var(--shadow); padding:20px; margin-bottom:18px; }
+.reports-search-title { font-size:15px; font-weight:600; color:var(--text); margin-bottom:14px; display:flex; align-items:center; gap:8px; padding-bottom:12px; border-bottom:1px solid var(--border); }
+.reports-filters { display:grid; grid-template-columns:repeat(4,1fr); gap:12px; margin-bottom:14px; }
+.filter-field { display:flex; flex-direction:column; gap:5px; }
+.filter-label { font-size:11px; font-weight:500; color:var(--text-sec); display:flex; align-items:center; gap:4px; }
+.filter-input { padding:8px 12px; border:1px solid var(--border); border-radius:var(--radius-sm); font-size:13px; color:var(--text); background:var(--bg-card); font-family:'Tajawal'; direction:rtl; outline:none; transition:border-color .15s; }
+.filter-input:focus { border-color:var(--blue-light); box-shadow:0 0 0 3px rgba(46,123,196,0.08); }
+.filter-actions { display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
+.active-filters { display:flex; gap:6px; flex-wrap:wrap; margin-top:10px; min-height:24px; }
+.filter-tag { display:flex; align-items:center; gap:5px; background:var(--blue-pale); color:var(--blue-main); border-radius:99px; padding:3px 10px; font-size:11px; font-weight:500; }
+.filter-tag button { background:none; border:none; color:var(--blue-main); cursor:pointer; font-size:13px; line-height:1; padding:0 0 0 2px; opacity:.7; }
+.filter-tag button:hover { opacity:1; }
+.reports-results-header { display:flex; align-items:center; justify-content:space-between; margin-bottom:10px; flex-wrap:wrap; gap:8px; }
+.results-count { font-size:13px; color:var(--text-sec); }
+.results-count strong { color:var(--text); font-weight:600; }
+.report-table { background:var(--bg-card); border:1px solid var(--border); border-radius:var(--radius); box-shadow:var(--shadow); overflow:hidden; }
+.rt-header { display:grid; grid-template-columns:1.8fr 1.2fr 1fr 1.2fr 0.8fr 0.8fr 80px; padding:10px 16px; background:var(--bg); border-bottom:1px solid var(--border); font-size:11px; font-weight:600; color:var(--text-sec); letter-spacing:.3px; }
+.rt-row { display:grid; grid-template-columns:1.8fr 1.2fr 1fr 1.2fr 0.8fr 0.8fr 80px; padding:11px 16px; border-bottom:1px solid var(--border); align-items:center; cursor:pointer; transition:background .1s; }
+.rt-row:last-child { border-bottom:none; }
+.rt-row:hover { background:var(--bg); }
+.rt-cell { font-size:12px; color:var(--text); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.rt-cell.sec { color:var(--text-sec); font-size:11px; }
+.highlight { background:#FEF9C3; border-radius:3px; padding:0 2px; }
+.no-results { padding:40px 20px; text-align:center; }
+.no-results i { font-size:40px; color:var(--text-ter); margin-bottom:10px; display:block; }
+.no-results p { font-size:13px; color:var(--text-sec); }
+.report-summary-cards { display:grid; grid-template-columns:repeat(4,1fr); gap:10px; margin-bottom:14px; }
+.sum-mini { background:var(--bg-card); border:1px solid var(--border); border-radius:var(--radius-sm); padding:12px; text-align:center; }
+.sum-mini-val { font-size:20px; font-weight:700; }
+.sum-mini-lbl { font-size:11px; color:var(--text-sec); margin-top:2px; }
+@media(max-width:960px){ .reports-filters{grid-template-columns:1fr 1fr} .rt-header,.rt-row{grid-template-columns:1.8fr 1.2fr 1fr 0.8fr 70px} .rt-header .rh3,.rt-row .rc3,.rt-header .rh5,.rt-row .rc5{display:none} }
+@media(max-width:520px){ .reports-filters{grid-template-columns:1fr} .report-summary-cards{grid-template-columns:repeat(2,1fr)} .rt-header,.rt-row{grid-template-columns:1.8fr 1fr 70px} .rt-header .rh2,.rt-row .rc2,.rt-header .rh4,.rt-row .rc4{display:none} }
+
+.clients-kpi { display:grid; grid-template-columns:repeat(5,1fr); gap:12px; margin-bottom:18px; }
+.client-cards-grid { display:grid; grid-template-columns:repeat(3,1fr); gap:14px; margin-bottom:18px; }
+.client-card { background:var(--bg-card); border:1px solid var(--border); border-radius:var(--radius); box-shadow:var(--shadow); overflow:hidden; transition:transform .15s,box-shadow .15s; }
+.client-card:hover { transform:translateY(-2px); box-shadow:var(--shadow-lg); }
+.client-card-header { padding:14px 16px 10px; border-bottom:1px solid var(--border); display:flex; align-items:flex-start; gap:12px; }
+.client-logo { width:44px; height:44px; border-radius:var(--radius-sm); display:flex; align-items:center; justify-content:center; font-size:16px; font-weight:700; flex-shrink:0; }
+.client-name { font-size:14px; font-weight:600; color:var(--text); }
+.client-type { font-size:11px; color:var(--text-sec); margin-top:2px; }
+.client-contract { font-size:10px; padding:2px 7px; border-radius:99px; margin-top:4px; display:inline-flex; align-items:center; gap:3px; font-weight:500; }
+.contract-active { background:var(--green-pale); color:var(--green); }
+.contract-none { background:#F1F5F9; color:#64748B; }
+.contract-expired { background:var(--red-pale); color:var(--red); }
+.client-stats-row { display:grid; grid-template-columns:repeat(4,1fr); border-bottom:1px solid var(--border); }
+.client-stat { padding:10px 8px; text-align:center; border-left:1px solid var(--border); }
+.client-stat:last-child { border-left:none; }
+.client-stat-val { font-size:15px; font-weight:700; color:var(--text); }
+.client-stat-lbl { font-size:10px; color:var(--text-sec); margin-top:2px; }
+.client-bars { padding:12px 14px; }
+.client-bar-row { display:flex; align-items:center; gap:8px; margin-bottom:7px; }
+.client-bar-row:last-child { margin-bottom:0; }
+.client-bar-lbl { font-size:11px; color:var(--text-sec); min-width:60px; }
+.client-bar-bg { flex:1; height:8px; background:var(--bg); border-radius:99px; overflow:hidden; }
+.client-bar-fill { height:100%; border-radius:99px; transition:width .5s; }
+.client-bar-val { font-size:11px; font-weight:600; color:var(--text); min-width:28px; text-align:left; }
+.client-card-footer { display:flex; gap:6px; padding:10px 14px; border-top:1px solid var(--border); }
+.client-btn { flex:1; padding:6px; border-radius:var(--radius-sm); font-size:11px; font-weight:500; cursor:pointer; border:1px solid var(--border); background:var(--bg); color:var(--text-sec); display:flex; align-items:center; justify-content:center; gap:4px; font-family:'Tajawal'; transition:all .15s; }
+.client-btn:hover { background:var(--blue-pale); color:var(--blue-main); border-color:var(--blue-light); }
+.warranty-tag { display:inline-flex; align-items:center; gap:4px; font-size:10px; padding:2px 7px; border-radius:99px; font-weight:600; }
+.w-yes { background:#DBEAFE; color:#1D4ED8; }
+.w-no  { background:#F1F5F9; color:#64748B; }
+.analytics-grid { display:grid; grid-template-columns:1fr 1fr; gap:14px; margin-bottom:14px; }
+.donut-wrap { display:flex; align-items:center; gap:16px; padding:14px; }
+.donut-svg { flex-shrink:0; }
+.donut-legend { flex:1; }
+.donut-leg-item { display:flex; align-items:center; gap:7px; margin-bottom:8px; font-size:12px; color:var(--text); }
+.donut-dot { width:12px; height:12px; border-radius:3px; flex-shrink:0; }
+.donut-count { margin-right:auto; font-weight:600; }
+.top-clients-row { display:flex; align-items:center; gap:10px; padding:9px 16px; border-bottom:1px solid var(--border); }
+.top-clients-row:last-child { border-bottom:none; }
+.top-rank { width:22px; height:22px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:11px; font-weight:700; flex-shrink:0; }
+.rank-1 { background:#F59E0B; color:#fff; }
+.rank-2 { background:#94A3B8; color:#fff; }
+.rank-3 { background:#C2855A; color:#fff; }
+.rank-other { background:var(--bg); color:var(--text-sec); border:1px solid var(--border); }
+@media(max-width:1100px){ .client-cards-grid{grid-template-columns:repeat(2,1fr)} .clients-kpi{grid-template-columns:repeat(3,1fr)} }
+@media(max-width:960px){ .client-cards-grid{grid-template-columns:1fr} .clients-kpi{grid-template-columns:repeat(2,1fr)} .analytics-grid{grid-template-columns:1fr} }
+
+.parts-tabs { display:flex; border-bottom:1px solid var(--border); margin-bottom:16px; background:var(--bg-card); border-radius:var(--radius) var(--radius) 0 0; overflow:hidden; }
+.p-tab { padding:10px 20px; font-size:13px; font-weight:500; cursor:pointer; color:var(--text-sec); border-bottom:2px solid transparent; background:none; border-top:none; border-left:none; border-right:none; font-family:'Tajawal'; transition:all 0.15s; }
+.p-tab.active { color:var(--blue-main); border-bottom-color:var(--blue-main); }
+.parts-grid { display:grid; grid-template-columns:repeat(4,1fr); gap:12px; margin-bottom:18px; }
+.part-stat-card { background:var(--bg-card); border:1px solid var(--border); border-radius:var(--radius); padding:14px; box-shadow:var(--shadow); }
+.part-stat-icon { width:36px; height:36px; border-radius:var(--radius-sm); display:flex; align-items:center; justify-content:center; margin-bottom:8px; }
+.part-stat-val { font-size:24px; font-weight:700; color:var(--text); }
+.part-stat-lbl { font-size:11px; color:var(--text-sec); margin-top:3px; }
+.inventory-table { background:var(--bg-card); border:1px solid var(--border); border-radius:var(--radius); box-shadow:var(--shadow); overflow:hidden; }
+.inv-header { display:grid; grid-template-columns:2fr 1fr 1fr 1fr 1fr 90px; padding:10px 16px; background:var(--bg); border-bottom:1px solid var(--border); font-size:11px; font-weight:600; color:var(--text-sec); letter-spacing:0.3px; }
+.inv-row { display:grid; grid-template-columns:2fr 1fr 1fr 1fr 1fr 90px; padding:11px 16px; border-bottom:1px solid var(--border); align-items:center; transition:background 0.1s; cursor:pointer; }
+.inv-row:last-child { border-bottom:none; }
+.inv-row:hover { background:var(--bg); }
+.inv-cell { font-size:13px; color:var(--text); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.inv-cell.sec { font-size:12px; color:var(--text-sec); }
+.stock-badge { display:inline-flex; align-items:center; gap:4px; font-size:11px; padding:3px 8px; border-radius:99px; font-weight:600; }
+.stock-ok { background:var(--green-pale); color:var(--green); }
+.stock-low { background:var(--orange-pale); color:var(--orange); }
+.stock-out { background:var(--red-pale); color:var(--red); }
+.history-table { background:var(--bg-card); border:1px solid var(--border); border-radius:var(--radius); box-shadow:var(--shadow); overflow:hidden; }
+.hist-header { display:grid; grid-template-columns:1.5fr 1fr 1fr 1.2fr 0.8fr 0.8fr; padding:10px 16px; background:var(--bg); border-bottom:1px solid var(--border); font-size:11px; font-weight:600; color:var(--text-sec); }
+.hist-row { display:grid; grid-template-columns:1.5fr 1fr 1fr 1.2fr 0.8fr 0.8fr; padding:10px 16px; border-bottom:1px solid var(--border); align-items:center; transition:background 0.1s; }
+.hist-row:last-child { border-bottom:none; }
+.hist-row:hover { background:var(--bg); }
+.hist-cell { font-size:12px; color:var(--text); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.hist-cell.sec { color:var(--text-sec); font-size:11px; }
+.tx-in { color:var(--green); font-weight:600; font-size:12px; }
+.tx-out { color:var(--red); font-weight:600; font-size:12px; }
+.part-detail-modal { display:none; position:fixed; inset:0; background:rgba(0,0,0,0.45); z-index:500; align-items:center; justify-content:center; padding:16px; }
+.part-modal-box { background:var(--bg-card); border-radius:var(--radius); width:100%; max-width:500px; max-height:88vh; overflow-y:auto; box-shadow:var(--shadow-lg); }
+@media(max-width:960px){ .parts-grid{grid-template-columns:repeat(2,1fr)} .inv-header,.inv-row{grid-template-columns:2fr 1fr 1fr 80px} .inv-header .ih3,.inv-row .ic3,.inv-header .ih4,.inv-row .ic4{display:none} .hist-header,.hist-row{grid-template-columns:1.5fr 1fr 1fr 0.8fr} .hist-header .hh4,.hist-row .hc4,.hist-header .hh5,.hist-row .hc5{display:none} }
+@media(max-width:520px){ .inv-header,.inv-row{grid-template-columns:2fr 1fr 70px} .inv-header .ih2,.inv-row .ic2,.inv-header .ih3,.inv-row .ic3,.inv-header .ih4,.inv-row .ic4{display:none} }
+
+.eq-select-wrap { position: relative; }
+.eq-selected { display: flex; align-items: center; justify-content: space-between; padding: 8px 12px; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--bg-card); cursor: pointer; transition: border-color 0.15s; min-height: 38px; }
+.eq-selected:hover { border-color: var(--blue-light); }
+.eq-selected.open { border-color: var(--blue-light); box-shadow: 0 0 0 3px rgba(46,123,196,0.08); }
+.eq-dropdown { position: absolute; top: calc(100% + 3px); right: 0; left: 0; background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius-sm); box-shadow: var(--shadow-lg); z-index: 300; overflow: hidden; }
+.eq-search-wrap { display: flex; align-items: center; gap: 8px; padding: 8px 12px; border-bottom: 1px solid var(--border); background: var(--bg); }
+.eq-search-wrap input { flex: 1; border: none; background: none; outline: none; font-size: 13px; font-family: 'Tajawal'; color: var(--text); direction: rtl; }
+.eq-list { max-height: 200px; overflow-y: auto; }
+.eq-item { padding: 9px 14px; font-size: 13px; color: var(--text); cursor: pointer; display: flex; align-items: center; gap: 8px; border-bottom: 1px solid var(--border); transition: background 0.1s; }
+.eq-item:last-child { border-bottom: none; }
+.eq-item:hover { background: var(--blue-pale); color: var(--blue-main); }
+.eq-item.selected { background: var(--blue-pale); color: var(--blue-main); font-weight: 500; }
+.eq-item i { font-size: 14px; color: var(--text-ter); }
+.eq-item.selected i { color: var(--blue-main); }
+.eq-add-row { display: flex; align-items: center; gap: 8px; padding: 9px 14px; font-size: 12px; color: var(--blue-light); cursor: pointer; background: var(--bg); border-top: 1px solid var(--border); font-weight: 500; }
+.eq-add-row:hover { background: var(--blue-pale); }
+.scan-input-wrap { display: flex; align-items: flex-start; gap: 8px; }
+.cam-btn { flex-shrink: 0; width: 38px; height: 38px; border-radius: var(--radius-sm); border: 1px solid var(--border); background: var(--bg); color: var(--blue-main); cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 18px; transition: all 0.15s; }
+.cam-btn:hover { background: var(--blue-pale); border-color: var(--blue-light); }
+.img-preview { margin-top: 8px; border: 1px solid var(--border); border-radius: var(--radius-sm); overflow: hidden; background: var(--bg); }
+.img-preview img { width: 100%; max-height: 140px; object-fit: cover; display: block; }
+.img-preview-actions { display: flex; align-items: center; justify-content: space-between; padding: 7px 10px; background: var(--bg-card); border-top: 1px solid var(--border); }
+.ocr-status { font-size: 11px; color: var(--text-sec); display: flex; align-items: center; gap: 5px; }
+.ocr-status.done { color: var(--green); }
+@keyframes spin { to { transform: rotate(360deg); } }
+.spin { display: inline-block; animation: spin 1s linear infinite; }
+
+
+/* voice notes section */
+.voice-toolbar { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; flex-wrap: wrap; }
+.mic-btn { display: flex; align-items: center; gap: 6px; padding: 6px 14px; border-radius: 99px; font-size: 12px; font-weight: 500; cursor: pointer; border: none; font-family: 'Tajawal'; }
+.mic-idle { background: var(--blue-pale); color: var(--blue-main); }
+.mic-rec { background: var(--red-pale); color: var(--red); }
+.mic-pulse { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+.mic-rec .mic-pulse { background: var(--red); animation: pulse 1s infinite; }
+.mic-idle .mic-pulse { background: var(--blue-main); }
+@keyframes pulse { 0%,100%{opacity:1}50%{opacity:0.3} }
+.lang-pills { display: flex; gap: 4px; }
+.lang-pill { font-size: 11px; padding: 4px 10px; border-radius: 99px; border: 1px solid var(--border); background: var(--bg-card); color: var(--text-sec); cursor: pointer; font-family: 'Tajawal'; }
+.lang-pill.active { background: var(--blue-pale); color: var(--blue-main); border-color: #B5D4F4; }
+.translate-box { border: 1px solid var(--border); border-radius: var(--radius-sm); overflow: hidden; margin-top: 8px; }
+.trans-header { display: flex; align-items: center; gap: 8px; padding: 7px 12px; background: var(--bg); border-bottom: 1px solid var(--border); }
+.trans-lbl { font-size: 11px; color: var(--text-sec); font-weight: 500; flex: 1; display: flex; align-items: center; gap: 5px; }
+.trans-tabs { display: flex; border: 1px solid var(--border); border-radius: 6px; overflow: hidden; }
+.t-tab { font-size: 11px; padding: 3px 9px; background: var(--bg-card); color: var(--text-sec); cursor: pointer; border: none; font-family: 'Tajawal'; }
+.t-tab.active { background: var(--blue-main); color: #fff; }
+.trans-body { padding: 10px 12px; font-size: 13px; color: var(--text); line-height: 1.6; }
+.trans-actions { display: flex; justify-content: flex-end; gap: 6px; padding: 6px 12px; border-top: 1px solid var(--border); }
+.sm-btn { font-size: 11px; padding: 3px 10px; border-radius: 99px; border: 1px solid var(--border); background: transparent; color: var(--text-sec); cursor: pointer; display: flex; align-items: center; gap: 4px; font-family: 'Tajawal'; }
+
+/* ========== SIGNATURE PAGE ========== */
+.sig-layout { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+.summary-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; padding: 14px; }
+.sum-card { background: var(--bg); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 10px 14px; }
+.sum-lbl { font-size: 11px; color: var(--text-sec); margin-bottom: 3px; }
+.sum-val { font-size: 15px; font-weight: 600; color: var(--text); }
+.alert-box { margin: 0 14px 10px; background: var(--orange-pale); border: 1px solid #FAC775; border-radius: var(--radius-sm); padding: 10px 12px; display: flex; gap: 8px; }
+.alert-box i { color: var(--orange); flex-shrink: 0; margin-top: 1px; }
+.alert-txt { font-size: 12px; color: #7A4501; line-height: 1.5; }
+.sig-wrap { padding: 10px 14px; }
+.sig-person-row { display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px; }
+.sig-name { font-size: 13px; font-weight: 500; display: flex; align-items: center; gap: 5px; }
+.sig-ts { font-size: 11px; color: var(--text-sec); }
+.sig-canvas-wrap { border: 1.5px dashed var(--border); border-radius: var(--radius-sm); background: var(--bg); overflow: hidden; position: relative; cursor: crosshair; }
+.sig-canvas-wrap canvas { display: block; width: 100%; }
+.sig-hint { position: absolute; top: 50%; left: 50%; transform: translate(-50%,-50%); font-size: 12px; color: var(--text-ter); pointer-events: none; text-align: center; display: flex; flex-direction: column; align-items: center; gap: 4px; }
+.sig-actions { display: flex; gap: 6px; margin-top: 6px; }
+.sig-btn { font-size: 11px; padding: 4px 10px; border-radius: 99px; border: 1px solid var(--border); background: transparent; color: var(--text-sec); cursor: pointer; display: flex; align-items: center; gap: 4px; font-family: 'Tajawal'; }
+.sig-confirm { background: var(--green-pale); color: var(--green); border-color: #97C459; }
+.sig-clear { color: var(--red); border-color: #F09595; }
+.progress-bar { height: 4px; background: var(--border); margin: 0 14px 10px; border-radius: 99px; overflow: hidden; }
+.progress-fill { height: 100%; border-radius: 99px; transition: width 0.4s, background 0.4s; }
+.close-action-bar { display: flex; gap: 8px; padding: 12px 14px; border-top: 1px solid var(--border); }
+.status-completed { display: flex; align-items: center; gap: 8px; padding: 10px 14px; background: var(--green-pale); border-top: 1px solid #97C459; border-radius: 0 0 var(--radius) var(--radius); }
+.status-completed i { color: var(--green); font-size: 18px; }
+.status-completed span { font-size: 13px; font-weight: 500; color: var(--green); }
+
+/* ========== BOTTOM NAV (mobile) ========== */
+.bottom-nav { display: none; background: var(--bg-card); border-top: 1px solid var(--border); padding: 6px 0 env(safe-area-inset-bottom, 6px); flex-shrink: 0; }
+.bnav { display: flex; justify-content: space-around; }
+.bn-item { display: flex; flex-direction: column; align-items: center; gap: 3px; padding: 5px 10px; cursor: pointer; color: var(--text-ter); font-size: 10px; background: none; border: none; font-family: 'Tajawal'; position: relative; transition: color 0.15s; }
+.bn-item.active { color: var(--blue-main); }
+.bn-item i { font-size: 22px; }
+.bn-badge { position: absolute; top: 3px; right: 8px; background: var(--red); color: #fff; font-size: 9px; border-radius: 99px; padding: 1px 5px; font-weight: 600; }
+
+/* ========== RESPONSIVE ========== */
+@media(max-width: 960px) {
+  .sidebar { position: fixed; top: 56px; right: -220px; height: calc(100% - 56px); transition: right 0.25s; z-index: 40; box-shadow: var(--shadow-lg); }
+  .sidebar.open { right: 0; }
+  .hamburger { display: block; }
+  .sidebar-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.35); z-index: 39; }
+  .sidebar-overlay.show { display: block; }
+  .stats-grid { grid-template-columns: repeat(2, 1fr); }
+  .grid2 { grid-template-columns: 1fr; }
+  .form-grid { grid-template-columns: 1fr; }
+  .sig-layout { grid-template-columns: 1fr; }
+  .date-pill { display: none; }
+  .bottom-nav { display: block; }
+  .table-header, .table-row { grid-template-columns: 2fr 1fr 1fr 70px; }
+  .table-header .h3, .table-row .c3,
+  .table-header .h4, .table-row .c4 { display: none; }
+}
+@media(max-width: 520px) {
+  .main { padding: 12px; }
+  .stats-grid { gap: 8px; }
+  .stat-val { font-size: 22px; }
+  .stat-change { display: none; }
+  .topbar { padding: 0 14px; }
+  .visits-toolbar { flex-direction: column; align-items: stretch; }
+  .table-header, .table-row { grid-template-columns: 2fr 1fr 60px; }
+  .table-header .h2, .table-row .c2,
+  .table-header .h4, .table-row .c4 { display: none; }
+  .page-title { font-size: 15px; }
+}
+
+@media print {
+  .sidebar, .bottom-nav, .topbar, .btn, .row-btn, .tech-action-btn,
+  .client-btn, .filter-tabs, .search-box, .page-header button,
+  .card-action, .sig-actions, .close-action-bar, .action-bar { display:none !important; }
+  .main { padding: 0 !important; overflow:visible !important; }
+  .body { overflow:visible !important; }
+  .app { height:auto !important; overflow:visible !important; }
+  .page { display:block !important; }
+  .page:not(.active) { display:none !important; }
+  .hrco-print-header { display:flex !important; }
+  body { background:#fff !important; }
+  .card, .stat-card, .inventory-table, .report-table, .visits-table,
+  .history-table { box-shadow:none !important; border:1px solid #E2E8F0 !important; }
+}
+
+</style>
+  <!-- Supabase SDK -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script>
+    // =============================================
+    // ضع هنا بياناتك من Supabase Dashboard
+    // =============================================
+    var SUPABASE_URL = 'https://XXXXXXXXXXXXXXXX.supabase.co';
+    var SUPABASE_ANON_KEY = 'eyXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX';
+    var supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+    var DB_READY = (SUPABASE_URL.indexOf('XXXX') === -1);
+  </script>
+</head>
+<body>
+<div class="app">
+  <!-- Print Header — يظهر فقط عند الطباعة -->
+  <div class="hrco-print-header" id="printHeader">
+    <img src="data:image/png;base64,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" alt="HRCO" class="hrco-print-logo">
+    <div class="hrco-print-info">
+      <div class="hrco-print-title">شركة هركو — نظام إدارة الصيانة</div>
+      <div class="hrco-print-sub">المطابخ المركزية · غرف التبريد · الثلاجات الصناعية</div>
+      <div class="hrco-print-date" id="printDate"></div>
+    </div>
+  </div>
+  <!-- TOP BAR -->
+  <div class="topbar">
+    <button class="hamburger" id="hamburger" aria-label="فتح القائمة"><i class="ti ti-menu-2"></i></button>
+    <div class="hrco-logo-wrap">
+      <img src="data:image/png;base64,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" alt="HRCO Logo" class="hrco-logo-img">
+    </div>
+    <div class="brand">
+      <div class="brand-name">نظام إدارة الصيانة</div>
+      <div class="brand-sub">هركو — للمطابخ المركزية وغرف التبريد</div>
+    </div>
+    <div class="topbar-right">
+      <span class="date-pill" id="dateChip"></span>
+      <button class="notif-btn"><div class="notif-dot"></div><i class="ti ti-bell"></i> 3</button>
+      <div class="user-avatar">م</div>
+    </div>
+  </div>
+
+  <div class="body">
+    <!-- SIDEBAR OVERLAY -->
+    <div class="sidebar-overlay" id="sidebarOverlay" onclick="closeSidebar()"></div>
+
+    <!-- SIDEBAR -->
+    <div class="sidebar" id="sidebar">
+      <div class="sidebar-inner">
+        <div class="nav-section">الرئيسية</div>
+        <div class="nav-item active" data-page="dashboard"><i class="ti ti-layout-dashboard"></i> لوحة التحكم</div>
+        <div class="nav-item" data-page="visits"><i class="ti ti-calendar"></i> الزيارات</div>
+        <div class="nav-item" data-page="pending"><i class="ti ti-clock-pause"></i> الكشوف المعلقة <span class="nav-badge">4</span></div>
+        <div class="nav-section">الإدارة</div>
+        <div class="nav-item" data-page="new-visit"><i class="ti ti-plus"></i> زيارة جديدة</div>
+        <div class="nav-item" data-page="technicians"><i class="ti ti-users"></i> الفنيون</div>
+        <div class="nav-item" data-page="parts-store"><i class="ti ti-tool"></i> قطع الغيار</div>
+        <div class="nav-item" data-page="clients"><i class="ti ti-building"></i> العملاء</div>
+        <div class="nav-section">التقارير</div>
+        <div class="nav-item" data-page="reports"><i class="ti ti-chart-bar"></i> التقارير</div>
+        <div class="nav-item"><i class="ti ti-history"></i> الأرشيف</div>
+        <div class="nav-item"><i class="ti ti-file-export"></i> تصدير PDF</div>
+        <div class="nav-section">الحساب</div>
+        <div class="nav-item"><i class="ti ti-settings"></i> الإعدادات</div>
+      </div>
+      <div class="sidebar-footer">
+        <div class="user-info">
+          <div class="avatar" style="background:#E6F1FB;color:var(--blue-main);font-size:14px">م</div>
+          <div>
+            <div class="user-name">محمد العتيبي</div>
+            <div class="user-role">مدير الصيانة</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- MAIN -->
+    <div class="main">
+
+      <!-- DASHBOARD PAGE -->
+      <div class="page active" id="page-dashboard">
+        <div class="page-header">
+          <div>
+            <div class="page-title">لوحة التحكم</div>
+            <div class="page-sub">نظرة عامة على عمليات اليوم</div>
+          </div>
+          <button class="btn btn-primary" onclick="showPage('new-visit')"><i class="ti ti-plus"></i> زيارة جديدة</button>
+        </div>
+
+        <div class="stats-grid">
+          <div class="stat-card">
+            <div class="stat-icon" style="background:#E6F1FB"><i class="ti ti-calendar-check" style="color:var(--blue-main)"></i></div>
+            <div class="stat-val">18</div>
+            <div class="stat-lbl">زيارة اليوم</div>
+            <div class="stat-change up"><i class="ti ti-trending-up"></i> +3 من أمس</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-icon" style="background:var(--green-pale)"><i class="ti ti-circle-check" style="color:var(--green)"></i></div>
+            <div class="stat-val">13</div>
+            <div class="stat-lbl">مكتملة</div>
+            <div class="stat-change up"><i class="ti ti-trending-up"></i> 72% إنجاز</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-icon" style="background:var(--orange-pale)"><i class="ti ti-clock-pause" style="color:var(--orange)"></i></div>
+            <div class="stat-val">4</div>
+            <div class="stat-lbl">كشوف معلقة</div>
+            <div class="stat-change warn"><i class="ti ti-alert-triangle"></i> تحتاج متابعة</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-icon" style="background:var(--red-pale)"><i class="ti ti-tool" style="color:var(--red)"></i></div>
+            <div class="stat-val">7</div>
+            <div class="stat-lbl">قطع ناقصة</div>
+            <div class="stat-change down"><i class="ti ti-trending-down"></i> 3 كشوف</div>
+          </div>
+        </div>
+
+        <div class="grid2">
+          <div class="card">
+            <div class="card-header">
+              <div class="card-title"><i class="ti ti-users"></i> حالة الفنيين</div>
+              <button class="card-action">عرض الكل</button>
+            </div>
+            <div class="list-row"><div class="avatar" style="background:#E6F1FB;color:var(--blue-main)">أع</div><div class="row-info"><div class="row-name">أحمد العتيبي</div><div class="row-sub">فندق الريتز — غرفة B3</div></div><span class="badge b-warning">قيد التنفيذ</span></div>
+            <div class="list-row"><div class="avatar" style="background:var(--green-pale);color:var(--green)">مح</div><div class="row-info"><div class="row-name">محمد الحربي</div><div class="row-sub">مطعم الأصيل</div></div><span class="badge b-success">مكتملة</span></div>
+            <div class="list-row"><div class="avatar" style="background:var(--orange-pale);color:var(--orange)">سق</div><div class="row-info"><div class="row-name">سامي القحطاني</div><div class="row-sub">في الطريق — ماكدونالدز</div></div><span class="badge b-info">في الطريق</span></div>
+            <div class="list-row"><div class="avatar" style="background:#F1F5F9;color:#64748B">خر</div><div class="row-info"><div class="row-name">خالد الرشيدي</div><div class="row-sub">لا توجد زيارات</div></div><span class="badge b-gray">متاح</span></div>
+          </div>
+
+          <div class="card">
+            <div class="card-header">
+              <div class="card-title"><i class="ti ti-clock-pause" style="color:var(--orange)"></i> الكشوف المعلقة</div>
+              <button class="card-action" onclick="showPage('pending')">عرض الكل</button>
+            </div>
+            <div class="list-row"><div class="row-info"><div class="row-name">فندق الريتز — B3</div><div class="row-sub">صمام تمدد Danfoss T2</div></div><span style="font-size:11px;color:var(--orange);font-weight:600;flex-shrink:0">يوم 1</span></div>
+            <div class="list-row"><div class="row-info"><div class="row-name">برجر كنج — مطبخ مركزي</div><div class="row-sub">موتور ثلاجة عرض</div></div><span style="font-size:11px;color:var(--orange);font-weight:600;flex-shrink:0">يوم 3</span></div>
+            <div class="list-row"><div class="row-info"><div class="row-name">فندق هيلتون — مخزن</div><div class="row-sub">لوحة تحكم Carel</div></div><span style="font-size:11px;color:var(--red);font-weight:600;flex-shrink:0">يوم 7</span></div>
+            <div class="list-row"><div class="row-info"><div class="row-name">فندق الكبير — مطعم</div><div class="row-sub">ضاغط Embraco</div></div><span style="font-size:11px;color:var(--red);font-weight:600;flex-shrink:0">يوم 5</span></div>
+          </div>
+        </div>
+
+        <div class="grid2">
+          <div class="card">
+            <div class="card-header">
+              <div class="card-title"><i class="ti ti-history"></i> آخر الزيارات</div>
+              <button class="card-action" onclick="showPage('visits')">الأرشيف</button>
+            </div>
+            <div class="list-row" style="cursor:pointer"><div class="avatar" style="background:var(--green-pale);border-radius:var(--radius-sm)"><i class="ti ti-circle-check" style="color:var(--green);font-size:16px"></i></div><div class="row-info"><div class="row-name">مطعم الأصيل — مطبخ مركزي</div><div class="row-sub">محمد الحربي · 10:30 ص</div></div><span class="badge b-success">مكتملة</span></div>
+            <div class="list-row" style="cursor:pointer"><div class="avatar" style="background:var(--orange-pale);border-radius:var(--radius-sm)"><i class="ti ti-clock-pause" style="color:var(--orange);font-size:16px"></i></div><div class="row-info"><div class="row-name">فندق الريتز — غرفة B3</div><div class="row-sub">أحمد العتيبي · 09:00 ص</div></div><span class="badge b-warning">معلقة</span></div>
+            <div class="list-row" style="cursor:pointer"><div class="avatar" style="background:var(--green-pale);border-radius:var(--radius-sm)"><i class="ti ti-circle-check" style="color:var(--green);font-size:16px"></i></div><div class="row-info"><div class="row-name">ماكدونالدز — الفرع الرئيسي</div><div class="row-sub">سامي القحطاني · أمس</div></div><span class="badge b-success">مكتملة</span></div>
+          </div>
+
+          <div class="card">
+            <div class="card-header">
+              <div class="card-title"><i class="ti ti-chart-bar"></i> إنجاز الأسبوع</div>
+              <span style="font-size:11px;color:var(--text-ter)">أحد — سبت</span>
+            </div>
+            <div class="chart-wrap">
+              <div class="bar-group" id="barGroup"></div>
+              <div class="legend">
+                <div class="leg"><div class="leg-dot" style="background:var(--blue-main)"></div> مكتملة</div>
+                <div class="leg"><div class="leg-dot" style="background:#FAC775"></div> معلقة</div>
+              </div>
+            </div>
+            <div class="week-totals">
+              <div class="wt"><div class="wt-val">67</div><div class="wt-lbl">الإجمالي</div></div>
+              <div class="wt"><div class="wt-val" style="color:var(--green)">54</div><div class="wt-lbl">مكتملة</div></div>
+              <div class="wt"><div class="wt-val" style="color:var(--orange)">13</div><div class="wt-lbl">معلقة</div></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- VISITS PAGE -->
+      <div class="page" id="page-visits">
+        <div class="page-header">
+          <div>
+            <div class="page-title">سجل الزيارات</div>
+            <div class="page-sub">جميع الزيارات والكشوف</div>
+          </div>
+          <button class="btn btn-primary" onclick="showPage('new-visit')"><i class="ti ti-plus"></i> زيارة جديدة</button>
+        </div>
+        <div class="visits-toolbar">
+          <div class="search-box"><i class="ti ti-search"></i><input type="text" placeholder="بحث بالعميل أو الفني..."></div>
+          <div class="filter-tabs">
+            <button class="f-tab active">الكل</button>
+            <button class="f-tab">مكتملة</button>
+            <button class="f-tab">معلقة</button>
+            <button class="f-tab">قيد التنفيذ</button>
+          </div>
+        </div>
+        <div class="visits-table">
+          <div class="table-header">
+            <div>العميل / المعدة</div>
+            <div class="h2">الفني</div>
+            <div class="h3">النوع</div>
+            <div class="h4">التاريخ</div>
+            <div>الحالة</div>
+            <div></div>
+          </div>
+          <div class="table-row"><div class="cell">فندق الريتز — غرفة B3</div><div class="cell c2 sec">أحمد العتيبي</div><div class="cell c3 sec">بلاغ عطل</div><div class="cell c4 sec">اليوم 09:00</div><div class="cell"><span class="badge b-warning">معلقة</span></div><div class="row-actions"><button class="row-btn"><i class="ti ti-eye"></i></button><button class="row-btn"><i class="ti ti-edit"></i></button></div></div>
+          <div class="table-row"><div class="cell">مطعم الأصيل — مطبخ مركزي</div><div class="cell c2 sec">محمد الحربي</div><div class="cell c3 sec">صيانة دورية</div><div class="cell c4 sec">اليوم 10:30</div><div class="cell"><span class="badge b-success">مكتملة</span></div><div class="row-actions"><button class="row-btn"><i class="ti ti-eye"></i></button><button class="row-btn"><i class="ti ti-edit"></i></button></div></div>
+          <div class="table-row"><div class="cell">ماكدونالدز — الفرع الرئيسي</div><div class="cell c2 sec">سامي القحطاني</div><div class="cell c3 sec">متابعة</div><div class="cell c4 sec">أمس</div><div class="cell"><span class="badge b-success">مكتملة</span></div><div class="row-actions"><button class="row-btn"><i class="ti ti-eye"></i></button><button class="row-btn"><i class="ti ti-edit"></i></button></div></div>
+          <div class="table-row"><div class="cell">برجر كنج — مطبخ مركزي</div><div class="cell c2 sec">سامي القحطاني</div><div class="cell c3 sec">بلاغ عطل</div><div class="cell c4 sec">3 أيام</div><div class="cell"><span class="badge b-warning">معلقة</span></div><div class="row-actions"><button class="row-btn"><i class="ti ti-eye"></i></button><button class="row-btn"><i class="ti ti-edit"></i></button></div></div>
+          <div class="table-row"><div class="cell">فندق هيلتون — مخزن التبريد</div><div class="cell c2 sec">خالد الرشيدي</div><div class="cell c3 sec">صيانة دورية</div><div class="cell c4 sec">أسبوع</div><div class="cell"><span class="badge b-warning">معلقة</span></div><div class="row-actions"><button class="row-btn"><i class="ti ti-eye"></i></button><button class="row-btn"><i class="ti ti-edit"></i></button></div></div>
+        </div>
+      </div>
+
+      <!-- PENDING PAGE -->
+      <div class="page" id="page-pending">
+        <div class="page-header">
+          <div>
+            <div class="page-title">الكشوف المعلقة</div>
+            <div class="page-sub">تحتاج توفير قطع الغيار</div>
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-header"><div class="card-title"><i class="ti ti-clock-pause" style="color:var(--orange)"></i> قائمة الكشوف المعلقة</div></div>
+          <div class="list-row"><div class="avatar" style="background:var(--orange-pale);border-radius:var(--radius-sm)"><i class="ti ti-clock-pause" style="color:var(--orange);font-size:16px"></i></div><div class="row-info"><div class="row-name">فندق الريتز كارلتون — غرفة B3</div><div class="row-sub">صمام تمدد Danfoss T2 · أحمد العتيبي</div></div><span class="badge b-warning">يوم 1</span></div>
+          <div class="list-row"><div class="avatar" style="background:var(--orange-pale);border-radius:var(--radius-sm)"><i class="ti ti-clock-pause" style="color:var(--orange);font-size:16px"></i></div><div class="row-info"><div class="row-name">برجر كنج — المطبخ المركزي</div><div class="row-sub">موتور ثلاجة عرض · سامي القحطاني</div></div><span class="badge b-warning">يوم 3</span></div>
+          <div class="list-row"><div class="avatar" style="background:var(--red-pale);border-radius:var(--radius-sm)"><i class="ti ti-alert-triangle" style="color:var(--red);font-size:16px"></i></div><div class="row-info"><div class="row-name">فندق هيلتون — مخزن التبريد</div><div class="row-sub">لوحة تحكم Carel pCO · خالد الرشيدي</div></div><span class="badge b-danger">يوم 7</span></div>
+          <div class="list-row"><div class="avatar" style="background:var(--red-pale);border-radius:var(--radius-sm)"><i class="ti ti-alert-triangle" style="color:var(--red);font-size:16px"></i></div><div class="row-info"><div class="row-name">فندق الكبير — مطعم</div><div class="row-sub">ضاغط Embraco NT2192 · محمد الحربي</div></div><span class="badge b-danger">يوم 5</span></div>
+        </div>
+      </div>
+
+      <!-- NEW VISIT PAGE -->
+      <div class="page" id="page-new-visit">
+        <div class="page-header">
+          <div>
+            <div class="page-title">زيارة جديدة</div>
+            <div class="page-sub">إنشاء كشف زيارة صيانة</div>
+          </div>
+        </div>
+        <div class="form-grid">
+          <!-- بيانات العميل -->
+          <div class="form-card">
+            <h3><i class="ti ti-building"></i> بيانات العميل</h3>
+            <div class="field">
+              <label>اسم العميل</label>
+              <div class="field-wrap">
+                <input type="text" id="inp-client" placeholder="ابدأ بالكتابة..." autocomplete="off" oninput="handleAC('client',this.value)" onfocus="showAC('client',this.value)" onblur="hideAC('client')">
+                <div class="autocomplete-dd" id="dd-client"></div>
+              </div>
+            </div>
+            <div class="field">
+              <label>الموقع / الفرع</label>
+              <div class="field-wrap">
+                <input type="text" id="inp-location" placeholder="موقع العميل أو الفرع..." autocomplete="off" oninput="handleAC('location',this.value)" onfocus="showAC('location',this.value)" onblur="hideAC('location')">
+                <div class="autocomplete-dd" id="dd-location"></div>
+              </div>
+            </div>
+            <div class="field">
+              <label>نوع الزيارة</label>
+              <select>
+                <option>زيارة تحت الضمان</option>
+                <option>زيارة مدفوعة</option>
+                <option>زيارة دورية (عقد صيانة)</option>
+              </select>
+            </div>
+            <div class="field">
+              <label>الفني المسؤول</label>
+              <select>
+                <option>أحمد العتيبي</option>
+                <option>محمد الحربي</option>
+                <option>سامي القحطاني</option>
+                <option>خالد الرشيدي</option>
+              </select>
+            </div>
+          </div>
+
+          <!-- بيانات المعدة -->
+          <div class="form-card">
+            <h3><i class="ti ti-tool"></i> بيانات المعدة</h3>
+            <div class="field">
+              <label>اسم المعدة / الجهاز</label>
+              <div class="eq-select-wrap" id="eq-wrap">
+                <div class="eq-selected" id="eq-selected" onclick="toggleEqDD()">
+                  <span id="eq-selected-text" style="color:var(--text-ter)">-- اختر المعدة --</span>
+                  <i class="ti ti-chevron-down" style="font-size:14px;color:var(--text-ter);transition:transform 0.2s" id="eq-chevron"></i>
+                </div>
+                <div class="eq-dropdown" id="eq-dropdown" style="display:none">
+                  <div class="eq-search-wrap">
+                    <i class="ti ti-search" style="font-size:14px;color:var(--text-ter)"></i>
+                    <input type="text" id="eq-search" placeholder="بحث أو إضافة معدة جديدة..." oninput="filterEq(this.value)" autocomplete="off">
+                  </div>
+                  <div class="eq-list" id="eq-list"></div>
+                  <div class="eq-add-row" id="eq-add-row" style="display:none" onclick="addNewEquipment()">
+                    <i class="ti ti-plus" style="font-size:13px;color:var(--blue-light)"></i>
+                    <span id="eq-add-label">إضافة كمعدة جديدة</span>
+                  </div>
+                </div>
+              </div>
+              <input type="hidden" id="inp-equipment">
+            </div>
+
+            <div class="field">
+              <label>الرقم التسلسلي (Serial Number)</label>
+              <div class="scan-input-wrap">
+                <div class="field-wrap" style="flex:1">
+                  <input type="text" id="inp-serial" placeholder="اكتب أو صوّر البطاقة..." autocomplete="off"
+                    oninput="handleAC('serial',this.value)" onfocus="showAC('serial',this.value)" onblur="hideAC('serial')">
+                  <div class="autocomplete-dd" id="dd-serial"></div>
+                </div>
+                <button class="cam-btn" onclick="openCamera('serial')" title="التقاط صورة للبطاقة">
+                  <i class="ti ti-camera"></i>
+                </button>
+              </div>
+              <div id="preview-serial" class="img-preview" style="display:none">
+                <img id="img-serial" src="" alt="صورة الرقم التسلسلي">
+                <div class="img-preview-actions">
+                  <span id="ocr-serial-status" class="ocr-status"></span>
+                  <button class="sm-btn" onclick="removeImage('serial')"><i class="ti ti-trash" style="font-size:12px"></i> حذف</button>
+                </div>
+              </div>
+              <input type="file" id="cam-serial" accept="image/*" capture="environment" style="display:none" onchange="handleImage('serial',this)">
+            </div>
+
+            <div class="field">
+              <label>الموديل (Model)</label>
+              <div class="scan-input-wrap">
+                <div class="field-wrap" style="flex:1">
+                  <input type="text" id="inp-model" placeholder="اكتب أو صوّر البطاقة..." autocomplete="off"
+                    oninput="handleAC('model',this.value)" onfocus="showAC('model',this.value)" onblur="hideAC('model')">
+                  <div class="autocomplete-dd" id="dd-model"></div>
+                </div>
+                <button class="cam-btn" onclick="openCamera('model')" title="التقاط صورة للبطاقة">
+                  <i class="ti ti-camera"></i>
+                </button>
+              </div>
+              <div id="preview-model" class="img-preview" style="display:none">
+                <img id="img-model" src="" alt="صورة الموديل">
+                <div class="img-preview-actions">
+                  <span id="ocr-model-status" class="ocr-status"></span>
+                  <button class="sm-btn" onclick="removeImage('model')"><i class="ti ti-trash" style="font-size:12px"></i> حذف</button>
+                </div>
+              </div>
+              <input type="file" id="cam-model" accept="image/*" capture="environment" style="display:none" onchange="handleImage('model',this)">
+            </div>
+
+            <div class="field">
+              <label>نوع العطل</label>
+              <div class="field-wrap">
+                <input type="text" id="inp-fault" placeholder="وصف العطل..." autocomplete="off" oninput="handleAC('fault',this.value)" onfocus="showAC('fault',this.value)" onblur="hideAC('fault')">
+                <div class="autocomplete-dd" id="dd-fault"></div>
+              </div>
+            </div>
+            <div class="field">
+              <label>قطع الغيار المطلوبة</label>
+              <div class="field-wrap">
+                <input type="text" id="inp-parts" placeholder="ابدأ بكتابة اسم القطعة..." autocomplete="off" oninput="handleAC('parts',this.value)" onfocus="showAC('parts',this.value)" onblur="hideAC('parts')">
+                <div class="autocomplete-dd" id="dd-parts"></div>
+              </div>
+              <div class="tags-wrap" id="tags-parts"></div>
+            </div>
+          </div>
+
+          <!-- الأعمال المنفذة -->
+          <div class="form-card">
+            <h3><i class="ti ti-checklist"></i> الأعمال المنفذة</h3>
+            <div class="checklist" id="checklist">
+              <div class="check-item"><input type="checkbox"> <span>فحص ضغط الغاز</span></div>
+              <div class="check-item"><input type="checkbox"> <span>تنظيف المكثف</span></div>
+              <div class="check-item"><input type="checkbox"> <span>فحص لوحة التحكم</span></div>
+              <div class="check-item"><input type="checkbox"> <span>فحص المروحة</span></div>
+            </div>
+            <button class="add-item-btn" onclick="addCheckItem()"><i class="ti ti-plus" style="font-size:14px"></i> إضافة عمل</button>
+          </div>
+
+          <!-- ملاحظات الفني -->
+          <div class="form-card">
+            <h3><i class="ti ti-notes"></i> ملاحظات الفني</h3>
+            <div class="voice-toolbar">
+              <button class="mic-btn mic-idle" id="micBtn" onclick="toggleMic()">
+                <div class="mic-pulse"></div>
+                <span id="micLbl">إملاء صوتي</span>
+              </button>
+              <div class="lang-pills">
+                <button class="lang-pill active" onclick="setLang('ar',this)">ع</button>
+                <button class="lang-pill" onclick="setLang('en',this)">EN</button>
+                <button class="lang-pill" onclick="setLang('ur',this)">اردو</button>
+                <button class="lang-pill" onclick="setLang('tl',this)">FIL</button>
+              </div>
+            </div>
+            <div class="field">
+              <textarea id="notesArea" placeholder="اكتب أو تحدث لتسجيل الملاحظات...">تم فحص الوحدة ووجدنا انخفاض في ضغط الغاز، تم الشحن بـ 500 جرام R410A. الوحدة الآن تعمل بشكل طبيعي ودرجة الحرارة مستقرة.</textarea>
+            </div>
+            <div class="translate-box">
+              <div class="trans-header">
+                <div class="trans-lbl"><i class="ti ti-language" style="font-size:14px"></i> الترجمة الفورية</div>
+                <div class="trans-tabs">
+                  <button class="t-tab active" onclick="showTrans('en',this)">English</button>
+                  <button class="t-tab" onclick="showTrans('ur',this)">اردو</button>
+                  <button class="t-tab" onclick="showTrans('tl',this)">Filipino</button>
+                </div>
+              </div>
+              <div class="trans-body" id="trans-en">The unit was inspected and a drop in gas pressure was found. It was recharged with 500g of R410A. The unit is now operating normally and the temperature is stable.</div>
+              <div class="trans-body" id="trans-ur" style="display:none;direction:rtl">یونٹ کا معائنہ کیا گیا اور گیس کے دباؤ میں کمی پائی گئی۔ اسے 500 گرام R410A سے ری چارج کیا گیا۔ یونٹ اب معمول کے مطابق کام کر رہا ہے۔</div>
+              <div class="trans-body" id="trans-tl" style="display:none">Ang yunit ay nasuri at natuklasan ang pagbaba ng presyon ng gas. Ito ay na-recharge ng 500g ng R410A. Ang yunit ay gumagana na ngayon nang maayos.</div>
+              <div class="trans-actions">
+                <button class="sm-btn"><i class="ti ti-copy" style="font-size:12px"></i> نسخ</button>
+                <button class="sm-btn"><i class="ti ti-download" style="font-size:12px"></i> إضافة للكشف</button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div style="display:flex;gap:10px;justify-content:flex-end;margin-bottom:20px">
+          <button class="btn btn-outline" onclick="showPage('dashboard')"><i class="ti ti-arrow-right"></i> رجوع</button>
+          <button class="btn btn-outline"><i class="ti ti-device-floppy"></i> حفظ مسودة</button>
+          <button class="btn btn-primary" onclick="showPage('signature')"><i class="ti ti-pencil"></i> التالي: التوقيعات</button>
+        </div>
+      </div>
+
+      <!-- SIGNATURE PAGE -->
+      <div class="page" id="page-signature">
+        <div class="page-header">
+          <div>
+            <div class="page-title">إغلاق الكشف</div>
+            <div class="page-sub">التوقيعات وإتمام الزيارة</div>
+          </div>
+        </div>
+        <div class="sig-layout">
+          <div class="card">
+            <div class="card-header"><div class="card-title"><i class="ti ti-clipboard-list"></i> ملخص الزيارة</div></div>
+            <div class="summary-grid">
+              <div class="sum-card"><div class="sum-lbl">العميل</div><div class="sum-val" style="font-size:13px">فندق الريتز</div></div>
+              <div class="sum-card"><div class="sum-lbl">الأعمال المنفذة</div><div class="sum-val">2 / 3</div></div>
+              <div class="sum-card"><div class="sum-lbl">مدة الزيارة</div><div class="sum-val">1س 45د</div></div>
+              <div class="sum-card"><div class="sum-lbl">قطع ناقصة</div><div class="sum-val" style="color:var(--red)">1 قطعة</div></div>
+            </div>
+            <div class="alert-box">
+              <i class="ti ti-alert-triangle" style="font-size:16px"></i>
+              <div class="alert-txt">الكشف غير مكتمل. يمكنك تعليقه حتى توفير قطع الغيار، أو إغلاقه إن اكتملت جميع الأعمال.</div>
+            </div>
+            <div class="sig-wrap">
+              <div class="sig-person-row">
+                <span class="sig-name"><i class="ti ti-user" style="font-size:14px;color:var(--text-sec)"></i> توقيع الفني — أحمد العتيبي</span>
+                <span class="sig-ts" id="sigTechTS">لم يوقع بعد</span>
+              </div>
+              <div class="sig-canvas-wrap" id="techWrap">
+                <canvas id="techCanvas" height="80"></canvas>
+                <div class="sig-hint" id="techHint"><i class="ti ti-pencil" style="font-size:22px"></i><span>وقّع هنا بإصبعك</span></div>
+              </div>
+              <div class="sig-actions">
+                <button class="sig-btn sig-clear" onclick="clearSig('tech')"><i class="ti ti-trash" style="font-size:13px"></i> مسح</button>
+                <button class="sig-btn sig-confirm" onclick="confirmSig('tech')"><i class="ti ti-check" style="font-size:13px"></i> تأكيد التوقيع</button>
+              </div>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="card-header"><div class="card-title"><i class="ti ti-signature"></i> توقيع العميل</div></div>
+            <div class="progress-bar"><div class="progress-fill" id="progFill" style="width:50%;background:var(--orange)"></div></div>
+            <div class="sig-wrap" style="padding-top:14px">
+              <div class="sig-person-row">
+                <span class="sig-name"><i class="ti ti-building" style="font-size:14px;color:var(--text-sec)"></i> ممثل العميل / المشرف</span>
+                <span class="sig-ts" id="sigClientTS">لم يوقع بعد</span>
+              </div>
+              <div class="sig-canvas-wrap" id="clientWrap">
+                <canvas id="clientCanvas" height="80"></canvas>
+                <div class="sig-hint" id="clientHint"><i class="ti ti-pencil" style="font-size:22px"></i><span>وقّع هنا بإصبعك</span></div>
+              </div>
+              <div class="sig-actions">
+                <button class="sig-btn sig-clear" onclick="clearSig('client')"><i class="ti ti-trash" style="font-size:13px"></i> مسح</button>
+                <button class="sig-btn sig-confirm" onclick="confirmSig('client')"><i class="ti ti-check" style="font-size:13px"></i> تأكيد التوقيع</button>
+              </div>
+            </div>
+            <div class="close-action-bar" id="closeActionBar">
+              <button class="btn btn-outline"><i class="ti ti-file-text"></i> معاينة PDF</button>
+              <button class="btn btn-warning" id="suspendBtn" disabled onclick="suspendVisit()"><i class="ti ti-clock-pause"></i> تعليق الكشف</button>
+              <button class="btn btn-primary" id="closeBtn" disabled onclick="closeVisit()"><i class="ti ti-lock"></i> إغلاق الكشف</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+
+      <!-- TECHNICIANS PAGE -->
+      <div class="page" id="page-technicians">
+        <div class="page-header">
+          <div>
+            <div class="page-title">إدارة الفنيين</div>
+            <div class="page-sub">إدارة الحسابات والأداء والتحليلات</div>
+          </div>
+          <button class="btn btn-primary" onclick="openTechModal()"><i class="ti ti-user-plus"></i> إضافة فني</button>
+        </div>
+
+        <!-- تبويبات -->
+        <div class="tech-tabs">
+          <button class="tech-tab active" onclick="switchTechTab('overview',this)"><i class="ti ti-layout-dashboard"></i> نظرة عامة</button>
+          <button class="tech-tab" onclick="switchTechTab('list',this)"><i class="ti ti-users"></i> قائمة الفنيين</button>
+          <button class="tech-tab" onclick="switchTechTab('analytics',this)"><i class="ti ti-chart-bar"></i> التحليلات</button>
+        </div>
+
+        <!-- نظرة عامة -->
+        <div class="tech-section active" id="tech-overview">
+          <div class="stats-grid" style="margin-bottom:14px">
+            <div class="stat-card">
+              <div class="stat-icon" style="background:#E6F1FB"><i class="ti ti-users" style="color:var(--blue-main)"></i></div>
+              <div class="stat-val">4</div>
+              <div class="stat-lbl">إجمالي الفنيين</div>
+              <div class="stat-change up"><i class="ti ti-trending-up"></i> جميعهم نشطون</div>
+            </div>
+            <div class="stat-card">
+              <div class="stat-icon" style="background:var(--green-pale)"><i class="ti ti-star" style="color:var(--green)"></i></div>
+              <div class="stat-val">4.7</div>
+              <div class="stat-lbl">متوسط التقييم</div>
+              <div class="stat-change up"><i class="ti ti-trending-up"></i> +0.2 هذا الشهر</div>
+            </div>
+            <div class="stat-card">
+              <div class="stat-icon" style="background:var(--orange-pale)"><i class="ti ti-clock" style="color:var(--orange)"></i></div>
+              <div class="stat-val">1.8</div>
+              <div class="stat-lbl">متوسط وقت الزيارة (س)</div>
+              <div class="stat-change up"><i class="ti ti-trending-up"></i> تحسن 12%</div>
+            </div>
+            <div class="stat-card">
+              <div class="stat-icon" style="background:var(--green-pale)"><i class="ti ti-check" style="color:var(--green)"></i></div>
+              <div class="stat-val">89%</div>
+              <div class="stat-lbl">معدل الإنجاز الكلي</div>
+              <div class="stat-change up"><i class="ti ti-trending-up"></i> +5% من الشهر الماضي</div>
+            </div>
+          </div>
+
+          <div class="grid2">
+            <!-- بطاقات الفنيين -->
+            <div class="card">
+              <div class="card-header">
+                <div class="card-title"><i class="ti ti-users"></i> الفنيون الآن</div>
+              </div>
+              <div id="tech-cards-wrap"></div>
+            </div>
+            <!-- أعلى الفنيين أداءً -->
+            <div class="card">
+              <div class="card-header">
+                <div class="card-title"><i class="ti ti-trophy" style="color:#C4A20A"></i> ترتيب الأداء — هذا الشهر</div>
+              </div>
+              <div id="tech-ranking-wrap"></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- قائمة الفنيين -->
+        <div class="tech-section" id="tech-list" style="display:none">
+          <div class="visits-toolbar" style="margin-bottom:14px">
+            <div class="search-box"><i class="ti ti-search"></i><input type="text" placeholder="بحث باسم الفني..." oninput="filterTechs(this.value)"></div>
+            <div class="filter-tabs">
+              <button class="f-tab active" onclick="filterTechStatus('all',this)">الكل</button>
+              <button class="f-tab" onclick="filterTechStatus('active',this)">نشط</button>
+              <button class="f-tab" onclick="filterTechStatus('busy',this)">مشغول</button>
+              <button class="f-tab" onclick="filterTechStatus('off',this)">إجازة</button>
+            </div>
+          </div>
+          <div id="tech-list-wrap"></div>
+        </div>
+
+        <!-- التحليلات -->
+        <div class="tech-section" id="tech-analytics" style="display:none">
+          <div class="grid2" style="margin-bottom:14px">
+            <div class="card">
+              <div class="card-header">
+                <div class="card-title"><i class="ti ti-chart-bar"></i> الزيارات لكل فني — هذا الشهر</div>
+              </div>
+              <div style="padding:16px" id="analytics-bars"></div>
+            </div>
+            <div class="card">
+              <div class="card-header">
+                <div class="card-title"><i class="ti ti-chart-pie"></i> توزيع أنواع الزيارات</div>
+              </div>
+              <div style="padding:16px" id="visit-type-chart"></div>
+            </div>
+          </div>
+          <div class="card">
+            <div class="card-header">
+              <div class="card-title"><i class="ti ti-trending-up"></i> أداء الفنيين التفصيلي</div>
+            </div>
+            <div style="overflow-x:auto">
+              <table class="perf-table" id="perf-table"></table>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- TECH MODAL -->
+
+
+      <!-- TECH PROFILE MODAL -->
+
+
+
+      <!-- TECHNICIANS PAGE -->
+      <div class="page" id="page-technicians">
+        <div class="page-header">
+          <div>
+            <div class="page-title">إدارة الفنيين</div>
+            <div class="page-sub">حسابات الفنيين وتحليل الأداء</div>
+          </div>
+          <button class="btn btn-primary" onclick="openTechModal()"><i class="ti ti-user-plus"></i> إضافة فني</button>
+        </div>
+
+        <!-- KPI Cards -->
+        <div class="stats-grid" style="margin-bottom:18px">
+          <div class="stat-card">
+            <div class="stat-icon" style="background:#E6F1FB"><i class="ti ti-users" style="color:var(--blue-main)"></i></div>
+            <div class="stat-val">4</div>
+            <div class="stat-lbl">إجمالي الفنيين</div>
+            <div class="stat-change up"><i class="ti ti-circle-check"></i> 3 نشطون اليوم</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-icon" style="background:var(--green-pale)"><i class="ti ti-trophy" style="color:var(--green)"></i></div>
+            <div class="stat-val">89%</div>
+            <div class="stat-lbl">متوسط الإنجاز</div>
+            <div class="stat-change up"><i class="ti ti-trending-up"></i> +4% هذا الشهر</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-icon" style="background:var(--orange-pale)"><i class="ti ti-clock" style="color:var(--orange)"></i></div>
+            <div class="stat-val">1.8</div>
+            <div class="stat-lbl">متوسط ساعات الزيارة</div>
+            <div class="stat-change up"><i class="ti ti-trending-down"></i> -12 دقيقة</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-icon" style="background:var(--green-pale)"><i class="ti ti-star" style="color:var(--green)"></i></div>
+            <div class="stat-val">4.7</div>
+            <div class="stat-lbl">متوسط تقييم العملاء</div>
+            <div class="stat-change up"><i class="ti ti-trending-up"></i> من 5 نجوم</div>
+          </div>
+        </div>
+
+        <!-- Technicians Cards Grid -->
+        <div class="tech-cards-grid" id="techCardsGrid"></div>
+
+        <!-- Analytics Section -->
+        <div class="grid2" style="margin-top:16px">
+          <div class="card">
+            <div class="card-header">
+              <div class="card-title"><i class="ti ti-chart-bar"></i> مقارنة الإنجاز الشهري</div>
+              <span style="font-size:11px;color:var(--text-ter)">مايو 2026</span>
+            </div>
+            <div style="padding:16px">
+              <div id="techCompareChart"></div>
+            </div>
+          </div>
+          <div class="card">
+            <div class="card-header">
+              <div class="card-title"><i class="ti ti-clock-check"></i> توزيع أنواع الزيارات</div>
+            </div>
+            <div style="padding:16px" id="visitTypeChart"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- TECH MODAL -->
+      <div id="techModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.45);z-index:500;align-items:center;justify-content:center;padding:16px">
+        <div style="background:var(--bg-card);border-radius:var(--radius);width:100%;max-width:460px;max-height:90vh;overflow-y:auto;box-shadow:var(--shadow-lg)">
+          <div style="background:var(--blue-dark);padding:14px 18px;border-radius:var(--radius) var(--radius) 0 0;display:flex;align-items:center;justify-content:space-between">
+            <div style="color:#fff;font-size:15px;font-weight:600" id="modalTitle">إضافة فني جديد</div>
+            <button onclick="closeTechModal()" style="background:rgba(255,255,255,0.1);border:none;color:#fff;border-radius:99px;width:28px;height:28px;cursor:pointer;font-size:16px;display:flex;align-items:center;justify-content:center"><i class="ti ti-x"></i></button>
+          </div>
+          <div style="padding:18px">
+            <div class="form-grid" style="grid-template-columns:1fr 1fr;gap:12px">
+              <div class="field" style="margin-bottom:0"><label>الاسم الكامل</label><input type="text" id="m-name" placeholder="اسم الفني"></div>
+              <div class="field" style="margin-bottom:0"><label>رقم الجوال</label><input type="text" id="m-phone" placeholder="05xxxxxxxx"></div>
+              <div class="field" style="margin-bottom:0"><label>البريد الإلكتروني</label><input type="text" id="m-email" placeholder="email@example.com"></div>
+              <div class="field" style="margin-bottom:0"><label>الجنسية</label>
+                <select id="m-nationality">
+                  <option>سعودي</option><option>مصري</option><option>باكستاني</option><option>فلبيني</option><option>هندي</option><option>سوداني</option><option>أردني</option>
+                </select>
+              </div>
+              <div class="field" style="margin-bottom:0"><label>التخصص</label>
+                <select id="m-spec">
+                  <option>تبريد وتكييف</option><option>مطابخ مركزية</option><option>كهرباء صناعية</option><option>أجهزة طعام</option>
+                </select>
+              </div>
+              <div class="field" style="margin-bottom:0"><label>الحالة</label>
+                <select id="m-status">
+                  <option>نشط</option><option>إجازة</option><option>موقوف</option>
+                </select>
+              </div>
+              <div class="field" style="margin-bottom:0;grid-column:1/-1"><label>كلمة المرور</label><input type="password" id="m-pass" placeholder="كلمة مرور التطبيق"></div>
+              <div class="field" style="margin-bottom:0;grid-column:1/-1"><label>ملاحظات</label><textarea id="m-notes" style="min-height:55px" placeholder="أي ملاحظات إضافية..."></textarea></div>
+            </div>
+            <div style="display:flex;gap:8px;margin-top:16px">
+              <button class="btn btn-outline" onclick="closeTechModal()" style="flex:1">إلغاء</button>
+              <button class="btn btn-primary" onclick="saveTech()" style="flex:2"><i class="ti ti-device-floppy"></i> حفظ الفني</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+
+      <!-- PARTS STORE PAGE -->
+      <div class="page" id="page-parts-store">
+        <div class="page-header">
+          <div>
+            <div class="page-title">إدارة قطع الغيار</div>
+            <div class="page-sub">المخزون الحالي وسجل الحركات</div>
+          </div>
+          <div style="display:flex;gap:8px">
+            <button class="btn btn-outline" onclick="openAddPartModal()"><i class="ti ti-package-import"></i> إضافة مخزون</button>
+            <button class="btn btn-primary" onclick="openAddPartModal(true)"><i class="ti ti-plus"></i> قطعة جديدة</button>
+          </div>
+        </div>
+
+        <!-- KPI -->
+        <div class="parts-grid">
+          <div class="part-stat-card">
+            <div class="part-stat-icon" style="background:#E6F1FB"><i class="ti ti-packages" style="color:var(--blue-main);font-size:18px"></i></div>
+            <div class="part-stat-val">24</div>
+            <div class="part-stat-lbl">إجمالي أصناف القطع</div>
+          </div>
+          <div class="part-stat-card">
+            <div class="part-stat-icon" style="background:var(--green-pale)"><i class="ti ti-circle-check" style="color:var(--green);font-size:18px"></i></div>
+            <div class="part-stat-val">18</div>
+            <div class="part-stat-lbl">أصناف متوفرة</div>
+          </div>
+          <div class="part-stat-card">
+            <div class="part-stat-icon" style="background:var(--orange-pale)"><i class="ti ti-alert-triangle" style="color:var(--orange);font-size:18px"></i></div>
+            <div class="part-stat-val">4</div>
+            <div class="part-stat-lbl">مخزون منخفض</div>
+          </div>
+          <div class="part-stat-card">
+            <div class="part-stat-icon" style="background:var(--red-pale)"><i class="ti ti-package-off" style="color:var(--red);font-size:18px"></i></div>
+            <div class="part-stat-val">2</div>
+            <div class="part-stat-lbl">نفد المخزون</div>
+          </div>
+        </div>
+
+        <!-- Tabs -->
+        <div class="parts-tabs">
+          <button class="p-tab active" onclick="switchPartsTab('inventory',this)"><i class="ti ti-list" style="font-size:13px;vertical-align:-2px;margin-left:5px"></i> المخزون الحالي</button>
+          <button class="p-tab" onclick="switchPartsTab('history',this)"><i class="ti ti-history" style="font-size:13px;vertical-align:-2px;margin-left:5px"></i> سجل الحركات</button>
+        </div>
+
+        <!-- Inventory Tab -->
+        <div id="tab-inventory">
+          <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px;flex-wrap:wrap">
+            <div class="search-box" style="max-width:300px"><i class="ti ti-search"></i><input type="text" placeholder="بحث عن قطعة..." oninput="filterParts(this.value)"></div>
+            <div class="filter-tabs">
+              <button class="f-tab active" onclick="filterByStock('all',this)">الكل</button>
+              <button class="f-tab" onclick="filterByStock('ok',this)">متوفر</button>
+              <button class="f-tab" onclick="filterByStock('low',this)">منخفض</button>
+              <button class="f-tab" onclick="filterByStock('out',this)">نفد</button>
+            </div>
+          </div>
+          <div class="inventory-table">
+            <div class="inv-header">
+              <div>اسم القطعة</div>
+              <div class="ih2">الفئة</div>
+              <div class="ih3">الكمية</div>
+              <div class="ih4">الحد الأدنى</div>
+              <div>الحالة</div>
+              <div></div>
+            </div>
+            <div id="inventoryList"></div>
+          </div>
+        </div>
+
+        <!-- History Tab -->
+        <div id="tab-history" style="display:none">
+          <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px;flex-wrap:wrap">
+            <div class="search-box" style="max-width:300px"><i class="ti ti-search"></i><input type="text" placeholder="بحث في السجل..." oninput="filterHistory(this.value)"></div>
+            <div class="filter-tabs">
+              <button class="f-tab active" onclick="filterHistType('all',this)">الكل</button>
+              <button class="f-tab" onclick="filterHistType('in',this)">وارد</button>
+              <button class="f-tab" onclick="filterHistType('out',this)">صادر</button>
+            </div>
+          </div>
+          <div class="history-table">
+            <div class="hist-header">
+              <div>القطعة</div>
+              <div>النوع</div>
+              <div class="hh3">الكمية</div>
+              <div class="hh4">صُرفت في</div>
+              <div class="hh5">الفني</div>
+              <div>التاريخ</div>
+            </div>
+            <div id="historyList"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ADD PART MODAL -->
+      <div class="part-detail-modal" id="addPartModal" style="display:none">
+        <div class="part-modal-box">
+          <div style="background:var(--blue-dark);padding:13px 18px;border-radius:var(--radius) var(--radius) 0 0;display:flex;align-items:center;justify-content:space-between">
+            <div style="color:#fff;font-size:14px;font-weight:600" id="addPartTitle">إضافة قطعة جديدة</div>
+            <button onclick="closeAddPartModal()" style="background:rgba(255,255,255,0.1);border:none;color:#fff;border-radius:99px;width:28px;height:28px;cursor:pointer;font-size:16px;display:flex;align-items:center;justify-content:center"><i class="ti ti-x"></i></button>
+          </div>
+          <div style="padding:18px">
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+              <div class="field" style="margin-bottom:0;grid-column:1/-1"><label>اسم القطعة</label><input type="text" id="ap-name" placeholder="اسم القطعة..."></div>
+              <div class="field" style="margin-bottom:0"><label>الفئة</label>
+                <select id="ap-cat">
+                  <option>غازات التبريد</option><option>صمامات</option><option>ضواغط</option><option>لوحات تحكم</option>
+                  <option>موتورات ومراوح</option><option>مرشحات</option><option>حساسات</option><option>أخرى</option>
+                </select>
+              </div>
+              <div class="field" style="margin-bottom:0"><label>الوحدة</label>
+                <select id="ap-unit"><option>قطعة</option><option>كيلو</option><option>متر</option><option>لتر</option><option>علبة</option></select>
+              </div>
+              <div class="field" style="margin-bottom:0"><label>الكمية المضافة</label><input type="number" id="ap-qty" placeholder="0" min="0"></div>
+              <div class="field" style="margin-bottom:0"><label>الحد الأدنى للتنبيه</label><input type="number" id="ap-min" placeholder="2" min="0"></div>
+              <div class="field" style="margin-bottom:0"><label>المورد</label><input type="text" id="ap-supplier" placeholder="اسم المورد..."></div>
+              <div class="field" style="margin-bottom:0;grid-column:1/-1"><label>ملاحظات</label><textarea id="ap-notes" style="min-height:50px" placeholder="أي ملاحظات..."></textarea></div>
+            </div>
+            <div style="display:flex;gap:8px;margin-top:16px">
+              <button class="btn btn-outline" onclick="closeAddPartModal()" style="flex:1">إلغاء</button>
+              <button class="btn btn-primary" onclick="saveNewPart()" style="flex:2"><i class="ti ti-device-floppy"></i> حفظ</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- CLIENTS PAGE -->
+      <div class="page" id="page-clients">
+        <div class="page-header">
+          <div>
+            <div class="page-title">إدارة العملاء</div>
+            <div class="page-sub">تحليل الزيارات وحالة كل عميل</div>
+          </div>
+          <button class="btn btn-primary" onclick="openAddClientModal()"><i class="ti ti-building-plus"></i> إضافة عميل</button>
+        </div>
+
+        <!-- KPI -->
+        <div class="clients-kpi">
+          <div class="stat-card">
+            <div class="stat-icon" style="background:#E6F1FB"><i class="ti ti-building" style="color:var(--blue-main)"></i></div>
+            <div class="stat-val" id="kpi-total-clients">0</div>
+            <div class="stat-lbl">إجمالي العملاء</div>
+            <div class="stat-change up"><i class="ti ti-trending-up"></i> نشطون</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-icon" style="background:var(--green-pale)"><i class="ti ti-calendar-check" style="color:var(--green)"></i></div>
+            <div class="stat-val" id="kpi-total-visits">0</div>
+            <div class="stat-lbl">إجمالي الزيارات</div>
+            <div class="stat-change up"><i class="ti ti-trending-up"></i> هذا العام</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-icon" style="background:var(--green-pale)"><i class="ti ti-circle-check" style="color:var(--green)"></i></div>
+            <div class="stat-val" id="kpi-completed">0</div>
+            <div class="stat-lbl">زيارات مكتملة</div>
+            <div class="stat-change up"><i class="ti ti-chart-pie"></i> <span id="kpi-done-pct">0</span>% إنجاز</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-icon" style="background:var(--orange-pale)"><i class="ti ti-clock-pause" style="color:var(--orange)"></i></div>
+            <div class="stat-val" id="kpi-pending">0</div>
+            <div class="stat-lbl">زيارات معلقة</div>
+            <div class="stat-change warn"><i class="ti ti-tool"></i> تحتاج قطع غيار</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-icon" style="background:#EDE9FE"><i class="ti ti-shield-check" style="color:#7C3AED"></i></div>
+            <div class="stat-val" id="kpi-warranty">0</div>
+            <div class="stat-lbl">تحت الضمان</div>
+            <div class="stat-change" style="color:#7C3AED"><i class="ti ti-shield"></i> زيارة نشطة</div>
+          </div>
+        </div>
+
+        <!-- Search + Filter -->
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px;flex-wrap:wrap">
+          <div class="search-box" style="max-width:300px"><i class="ti ti-search"></i><input type="text" placeholder="بحث عن عميل..." oninput="filterClients(this.value)"></div>
+          <div class="filter-tabs" id="clientFilterTabs">
+            <button class="f-tab active" onclick="filterClientStatus('all',this)">الكل</button>
+            <button class="f-tab" onclick="filterClientStatus('completed',this)">مكتمل</button>
+            <button class="f-tab" onclick="filterClientStatus('pending',this)">معلق</button>
+            <button class="f-tab" onclick="filterClientStatus('warranty',this)">ضمان</button>
+          </div>
+          <div style="margin-right:auto;display:flex;gap:6px">
+            <button class="btn btn-outline" style="padding:6px 12px;font-size:12px" onclick="setClientView('grid')"><i class="ti ti-layout-grid"></i></button>
+            <button class="btn btn-outline" style="padding:6px 12px;font-size:12px" onclick="setClientView('list')"><i class="ti ti-list"></i></button>
+          </div>
+        </div>
+
+        <!-- Clients Grid -->
+        <div class="clients-grid" id="clientsGrid" style="display:grid;grid-template-columns:repeat(3,1fr);gap:14px"></div>
+
+        <!-- Client Detail Panel -->
+        <div class="client-detail-panel" id="clientDetailPanel">
+          <div class="cdp-header">
+            <div class="cdp-title" id="cdpTitle">تفاصيل العميل</div>
+            <button onclick="closeClientDetail()" style="background:rgba(255,255,255,0.1);border:none;color:#fff;border-radius:99px;width:28px;height:28px;cursor:pointer;font-size:16px;display:flex;align-items:center;justify-content:center"><i class="ti ti-x"></i></button>
+          </div>
+          <div class="cdp-tabs">
+            <button class="cdp-tab active" onclick="switchCDP('overview',this)"><i class="ti ti-chart-pie" style="font-size:12px;vertical-align:-1px;margin-left:4px"></i>نظرة عامة</button>
+            <button class="cdp-tab" onclick="switchCDP('timeline',this)"><i class="ti ti-history" style="font-size:12px;vertical-align:-1px;margin-left:4px"></i>سجل الزيارات</button>
+            <button class="cdp-tab" onclick="switchCDP('warranty',this)"><i class="ti ti-shield" style="font-size:12px;vertical-align:-1px;margin-left:4px"></i>الضمان والعقود</button>
+          </div>
+          <div id="cdp-overview" style="padding:18px">
+            <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:16px" id="cdpStats"></div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px">
+              <div>
+                <div style="font-size:12px;font-weight:600;color:var(--text);margin-bottom:10px">توزيع الزيارات</div>
+                <div id="cdpVisitBars"></div>
+              </div>
+              <div>
+                <div style="font-size:12px;font-weight:600;color:var(--text);margin-bottom:10px">قطع الغيار المستخدمة</div>
+                <div id="cdpParts"></div>
+              </div>
+            </div>
+          </div>
+          <div id="cdp-timeline" style="display:none"><div id="cdpTimeline"></div></div>
+          <div id="cdp-warranty" style="display:none"><div id="cdpWarranty" style="padding:14px"></div></div>
+        </div>
+      </div>
+
+      <!-- ADD CLIENT MODAL -->
+      <div style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.45);z-index:500;align-items:center;justify-content:center;padding:16px" id="addClientModal">
+        <div style="background:var(--bg-card);border-radius:var(--radius);width:100%;max-width:460px;box-shadow:var(--shadow-lg)">
+          <div style="background:var(--blue-dark);padding:13px 18px;border-radius:var(--radius) var(--radius) 0 0;display:flex;align-items:center;justify-content:space-between">
+            <div style="color:#fff;font-size:14px;font-weight:600">إضافة عميل جديد</div>
+            <button onclick="closeAddClientModal()" style="background:rgba(255,255,255,0.1);border:none;color:#fff;border-radius:99px;width:28px;height:28px;cursor:pointer;font-size:16px;display:flex;align-items:center;justify-content:center"><i class="ti ti-x"></i></button>
+          </div>
+          <div style="padding:18px;display:grid;grid-template-columns:1fr 1fr;gap:12px">
+            <div class="field" style="margin:0;grid-column:1/-1"><label>اسم العميل</label><input type="text" id="ac-name" placeholder="اسم الشركة أو المطعم..."></div>
+            <div class="field" style="margin:0"><label>القطاع</label>
+              <select id="ac-sector"><option>فنادق</option><option>مطاعم</option><option>مستشفيات</option><option>مصانع</option><option>حكومي</option><option>أخرى</option></select>
+            </div>
+            <div class="field" style="margin:0"><label>المدينة</label><input type="text" id="ac-city" placeholder="الرياض..."></div>
+            <div class="field" style="margin:0"><label>جوال المسؤول</label><input type="text" id="ac-phone" placeholder="05xxxxxxxx"></div>
+            <div class="field" style="margin:0"><label>نوع العقد</label>
+              <select id="ac-contract"><option>بدون عقد</option><option>عقد صيانة سنوي</option><option>عقد صيانة نصف سنوي</option></select>
+            </div>
+            <div class="field" style="margin:0;grid-column:1/-1;display:flex;align-items:center;gap:8px">
+              <input type="checkbox" id="ac-warranty" style="width:16px;height:16px;accent-color:var(--blue-main)">
+              <label for="ac-warranty" style="font-size:13px;color:var(--text);cursor:pointer">تحت الضمان</label>
+            </div>
+            <div style="grid-column:1/-1;display:flex;gap:8px;margin-top:4px">
+              <button class="btn btn-outline" onclick="closeAddClientModal()" style="flex:1">إلغاء</button>
+              <button class="btn btn-primary" onclick="saveNewClient()" style="flex:2"><i class="ti ti-device-floppy"></i> حفظ</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- CLIENTS PAGE -->
+      <div class="page" id="page-clients">
+        <div class="page-header">
+          <div>
+            <div class="page-title">إدارة العملاء</div>
+            <div class="page-sub">تحليل الزيارات والأداء لكل عميل</div>
+          </div>
+          <button class="btn btn-primary" onclick="openAddClientModal()"><i class="ti ti-building-plus"></i> إضافة عميل</button>
+        </div>
+
+        <!-- KPI -->
+        <div class="clients-kpi">
+          <div class="stat-card">
+            <div class="stat-icon" style="background:#E6F1FB"><i class="ti ti-building" style="color:var(--blue-main)"></i></div>
+            <div class="stat-val">8</div><div class="stat-lbl">إجمالي العملاء</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-icon" style="background:var(--green-pale)"><i class="ti ti-circle-check" style="color:var(--green)"></i></div>
+            <div class="stat-val">54</div><div class="stat-lbl">زيارات مكتملة</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-icon" style="background:var(--orange-pale)"><i class="ti ti-clock-pause" style="color:var(--orange)"></i></div>
+            <div class="stat-val">13</div><div class="stat-lbl">زيارات معلقة</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-icon" style="background:#DBEAFE"><i class="ti ti-shield-check" style="color:#1D4ED8"></i></div>
+            <div class="stat-val">5</div><div class="stat-lbl">عملاء تحت الضمان</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-icon" style="background:var(--green-pale)"><i class="ti ti-file-invoice" style="color:var(--green)"></i></div>
+            <div class="stat-val">6</div><div class="stat-lbl">عقود صيانة نشطة</div>
+          </div>
+        </div>
+
+        <!-- Search + Filter -->
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px;flex-wrap:wrap">
+          <div class="search-box" style="max-width:280px"><i class="ti ti-search"></i><input type="text" placeholder="بحث عن عميل..." oninput="filterClients(this.value)"></div>
+          <div class="filter-tabs">
+            <button class="f-tab active" onclick="filterClientType('all',this)">الكل</button>
+            <button class="f-tab" onclick="filterClientType('contract',this)">عقد صيانة</button>
+            <button class="f-tab" onclick="filterClientType('warranty',this)">ضمان</button>
+            <button class="f-tab" onclick="filterClientType('paid',this)">مدفوع</button>
+          </div>
+        </div>
+
+        <!-- Client Cards -->
+        <div class="client-cards-grid" id="clientCardsGrid"></div>
+
+        <!-- Analytics -->
+        <div class="analytics-grid">
+          <div class="card">
+            <div class="card-header">
+              <div class="card-title"><i class="ti ti-chart-donut"></i> توزيع حالات الزيارات</div>
+            </div>
+            <div class="donut-wrap" id="donutWrap"></div>
+          </div>
+          <div class="card">
+            <div class="card-header">
+              <div class="card-title"><i class="ti ti-trophy"></i> أكثر العملاء زيارات</div>
+              <button class="card-action">عرض الكل</button>
+            </div>
+            <div id="topClientsList"></div>
+          </div>
+        </div>
+
+        <!-- Pending Parts per Client -->
+        <div class="card" style="margin-bottom:14px">
+          <div class="card-header">
+            <div class="card-title"><i class="ti ti-tool" style="color:var(--orange)"></i> عملاء ينتظرون قطع غيار</div>
+            <span class="badge b-warning">4 عملاء</span>
+          </div>
+          <div id="pendingPartsList"></div>
+        </div>
+      </div>
+
+      <!-- ADD CLIENT MODAL -->
+      <div id="addClientModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.45);z-index:500;align-items:center;justify-content:center;padding:16px">
+        <div style="background:var(--bg-card);border-radius:var(--radius);width:100%;max-width:480px;max-height:90vh;overflow-y:auto;box-shadow:var(--shadow-lg)">
+          <div style="background:var(--blue-dark);padding:13px 18px;border-radius:var(--radius) var(--radius) 0 0;display:flex;align-items:center;justify-content:space-between">
+            <div style="color:#fff;font-size:14px;font-weight:600">إضافة عميل جديد</div>
+            <button onclick="closeAddClientModal()" style="background:rgba(255,255,255,0.1);border:none;color:#fff;border-radius:99px;width:28px;height:28px;cursor:pointer;font-size:16px;display:flex;align-items:center;justify-content:center"><i class="ti ti-x"></i></button>
+          </div>
+          <div style="padding:18px">
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+              <div class="field" style="margin-bottom:0;grid-column:1/-1"><label>اسم العميل</label><input type="text" id="cl-name" placeholder="اسم الشركة أو المطعم..."></div>
+              <div class="field" style="margin-bottom:0"><label>نوع العميل</label>
+                <select id="cl-type"><option>فندق</option><option>مطعم</option><option>سلسلة مطاعم</option><option>مستشفى</option><option>شركة</option><option>مطار</option></select>
+              </div>
+              <div class="field" style="margin-bottom:0"><label>رقم التواصل</label><input type="text" id="cl-phone" placeholder="05xxxxxxxx"></div>
+              <div class="field" style="margin-bottom:0"><label>الموقع</label><input type="text" id="cl-location" placeholder="المدينة / الحي..."></div>
+              <div class="field" style="margin-bottom:0"><label>نوع الاتفاقية</label>
+                <select id="cl-contract"><option>عقد صيانة</option><option>ضمان</option><option>مدفوع</option><option>بدون عقد</option></select>
+              </div>
+              <div class="field" style="margin-bottom:0"><label>تاريخ انتهاء العقد</label><input type="date" id="cl-expiry"></div>
+            </div>
+            <div style="display:flex;gap:8px;margin-top:16px">
+              <button class="btn btn-outline" onclick="closeAddClientModal()" style="flex:1">إلغاء</button>
+              <button class="btn btn-primary" onclick="saveClient()" style="flex:2"><i class="ti ti-device-floppy"></i> حفظ العميل</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- REPORTS PAGE -->
+      <div class="page" id="page-reports">
+        <div class="page-header">
+          <div>
+            <div class="page-title">التقارير والبحث</div>
+            <div class="page-sub">ابحث في جميع الكشوف والزيارات</div>
+          </div>
+          <div style="display:flex;gap:8px">
+            <button class="btn btn-outline" onclick="exportReports()"><i class="ti ti-file-export"></i> تصدير Excel</button>
+            <button class="btn btn-primary" onclick="printReports()"><i class="ti ti-printer"></i> طباعة</button>
+          </div>
+        </div>
+
+        <!-- Search Card -->
+        <div class="reports-search-card">
+          <div class="reports-search-title"><i class="ti ti-filter" style="color:var(--blue-main)"></i> فلاتر البحث</div>
+          <div class="reports-filters">
+            <div class="filter-field">
+              <div class="filter-label"><i class="ti ti-building" style="font-size:12px"></i> اسم العميل</div>
+              <input class="filter-input" type="text" id="rf-client" placeholder="ابحث باسم العميل..." oninput="applyReportFilters()" list="clients-list">
+              <datalist id="clients-list">
+                <option>فندق الريتز كارلتون</option>
+                <option>مطعم الأصيل</option>
+                <option>سلسلة ماكدونالدز</option>
+                <option>فندق هيلتون</option>
+                <option>برجر كنج</option>
+                <option>مستشفى الملك فيصل</option>
+                <option>KFC السعودية</option>
+                <option>مطار الملك خالد</option>
+              </datalist>
+            </div>
+            <div class="filter-field">
+              <div class="filter-label"><i class="ti ti-user" style="font-size:12px"></i> اسم الفني</div>
+              <input class="filter-input" type="text" id="rf-tech" placeholder="ابحث باسم الفني..." oninput="applyReportFilters()" list="techs-list">
+              <datalist id="techs-list">
+                <option>أحمد العتيبي</option>
+                <option>محمد الحربي</option>
+                <option>سامي القحطاني</option>
+                <option>خالد الرشيدي</option>
+              </datalist>
+            </div>
+            <div class="filter-field">
+              <div class="filter-label"><i class="ti ti-package" style="font-size:12px"></i> قطعة الغيار</div>
+              <input class="filter-input" type="text" id="rf-part" placeholder="ابحث بقطعة الغيار..." oninput="applyReportFilters()" list="parts-list-report">
+              <datalist id="parts-list-report">
+                <option>غاز R410A</option>
+                <option>غاز R404A</option>
+                <option>صمام تمدد Danfoss T2</option>
+                <option>ضاغط Embraco NT2192GK</option>
+                <option>لوحة تحكم Carel pCO5</option>
+                <option>موتور مروحة 220V</option>
+              </datalist>
+            </div>
+            <div class="filter-field">
+              <div class="filter-label"><i class="ti ti-calendar" style="font-size:12px"></i> نطاق التاريخ</div>
+              <div style="display:flex;gap:5px">
+                <input class="filter-input" type="date" id="rf-date-from" onchange="applyReportFilters()" style="flex:1;padding:7px 8px">
+                <input class="filter-input" type="date" id="rf-date-to" onchange="applyReportFilters()" style="flex:1;padding:7px 8px">
+              </div>
+            </div>
+          </div>
+          <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+            <div class="filter-field" style="flex:1;min-width:160px">
+              <div class="filter-label"><i class="ti ti-adjustments" style="font-size:12px"></i> حالة الكشف</div>
+              <select class="filter-input" id="rf-status" onchange="applyReportFilters()">
+                <option value="">الكل</option>
+                <option value="مكتملة">مكتملة</option>
+                <option value="معلقة">معلقة</option>
+                <option value="قيد التنفيذ">قيد التنفيذ</option>
+              </select>
+            </div>
+            <div class="filter-field" style="flex:1;min-width:160px">
+              <div class="filter-label"><i class="ti ti-file-invoice" style="font-size:12px"></i> نوع الزيارة</div>
+              <select class="filter-input" id="rf-type" onchange="applyReportFilters()">
+                <option value="">الكل</option>
+                <option value="ضمان">زيارة تحت الضمان</option>
+                <option value="مدفوعة">زيارة مدفوعة</option>
+                <option value="عقد">زيارة دورية (عقد صيانة)</option>
+              </select>
+            </div>
+            <div style="display:flex;gap:8px;align-self:flex-end;padding-bottom:1px">
+              <button class="btn btn-primary" onclick="applyReportFilters()"><i class="ti ti-search"></i> بحث</button>
+              <button class="btn btn-outline" onclick="clearReportFilters()"><i class="ti ti-x"></i> مسح الفلاتر</button>
+            </div>
+          </div>
+          <!-- Active Filters Tags -->
+          <div class="active-filters" id="activeFilterTags"></div>
+        </div>
+
+        <!-- Summary Cards (dynamic) -->
+        <div class="report-summary-cards" id="reportSummaryCards"></div>
+
+        <!-- Results -->
+        <div class="reports-results-header">
+          <div class="results-count" id="resultsCount"><strong>0</strong> نتيجة</div>
+          <div style="display:flex;gap:8px;align-items:center">
+            <span style="font-size:12px;color:var(--text-sec)">ترتيب حسب:</span>
+            <select class="filter-input" id="rf-sort" onchange="applyReportFilters()" style="padding:5px 10px;font-size:12px">
+              <option value="date-desc">التاريخ (الأحدث)</option>
+              <option value="date-asc">التاريخ (الأقدم)</option>
+              <option value="client">اسم العميل</option>
+              <option value="tech">اسم الفني</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="report-table">
+          <div class="rt-header">
+            <div>العميل / المعدة</div>
+            <div class="rh2">الفني</div>
+            <div class="rh3">قطع الغيار</div>
+            <div class="rh4">نوع الزيارة</div>
+            <div class="rh5">الحالة</div>
+            <div>التاريخ</div>
+            <div></div>
+          </div>
+          <div id="reportTableBody"></div>
+        </div>
+      </div>
+    </div><!-- end main -->
+  </div><!-- end body -->
+
+  <!-- BOTTOM NAV -->
+  <div class="bottom-nav">
+    <div class="bnav">
+      <button class="bn-item active" onclick="showPage('dashboard');setActiveNav(this)"><i class="ti ti-layout-dashboard"></i>الرئيسية</button>
+      <button class="bn-item" onclick="showPage('visits');setActiveNav(this)"><i class="ti ti-calendar"></i>الزيارات</button>
+      <button class="bn-item" onclick="showPage('technicians');setActiveNav(this)"><i class="ti ti-users"></i>الفنيون</button>
+      <button class="bn-item" onclick="showPage('pending');setActiveNav(this)"><i class="ti ti-clock-pause"></i><span class="bn-badge">4</span>معلقة</button>
+      <button class="bn-item" onclick="showPage('technicians');setActiveNav(this)"><i class="ti ti-users"></i>الفنيون</button>
+      <button class="bn-item"><i class="ti ti-menu-2"></i>المزيد</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ===== PRINT DATE =====
+var printDateEl = document.getElementById('printDate');
+if(printDateEl) printDateEl.textContent = 'تاريخ الطباعة: ' + new Date().toLocaleDateString('ar-SA', {year:'numeric',month:'long',day:'numeric',hour:'2-digit',minute:'2-digit'});
+
+// ===== DATE =====
+var days = ['الأحد','الاثنين','الثلاثاء','الأربعاء','الخميس','الجمعة','السبت'];
+var months = ['يناير','فبراير','مارس','أبريل','مايو','يونيو','يوليو','أغسطس','سبتمبر','أكتوبر','نوفمبر','ديسمبر'];
+var now = new Date();
+document.getElementById('dateChip').textContent = days[now.getDay()] + '، ' + now.getDate() + ' ' + months[now.getMonth()] + ' ' + now.getFullYear();
+
+// ===== CHART =====
+var daysW=['أحد','اثن','ثلا','أرب','خمس','جمع','سبت'];
+var comp=[12,9,14,11,8,6,13], pend=[2,3,1,4,2,1,3], maxV=18;
+var grp = document.getElementById('barGroup');
+daysW.forEach(function(d,i){
+  var col=document.createElement('div'); col.className='bar-col';
+  var cH=Math.round((comp[i]/maxV)*72), pH=Math.round((pend[i]/maxV)*72);
+  col.innerHTML='<div class="bar-v">'+(comp[i]+pend[i])+'</div><div style="display:flex;align-items:flex-end;gap:2px;height:72px"><div class="bar" style="background:var(--blue-main);height:'+cH+'px;width:12px"></div><div class="bar" style="background:#FAC775;height:'+pH+'px;width:12px"></div></div><div class="bar-lbl">'+d+'</div>';
+  grp.appendChild(col);
+});
+
+// ===== NAVIGATION =====
+function showPage(id) {
+  document.querySelectorAll('.page').forEach(function(p){ p.classList.remove('active'); });
+  document.getElementById('page-'+id).classList.add('active');
+  document.querySelectorAll('.nav-item').forEach(function(n){ n.classList.remove('active'); });
+  var nav = document.querySelector('[data-page="'+id+'"]');
+  if(nav) nav.classList.add('active');
+  document.querySelector('.main').scrollTop = 0;
+  closeSidebar();
+  if(id==='signature') { setTimeout(function(){ initCanvas('tech'); initCanvas('client'); }, 100); }
+}
+function setActiveNav(btn) {
+  document.querySelectorAll('.bn-item').forEach(function(b){ b.classList.remove('active'); });
+  btn.classList.add('active');
+}
+document.querySelectorAll('.nav-item[data-page]').forEach(function(item){
+  item.addEventListener('click', function(){ showPage(this.dataset.page); });
+});
+
+// ===== SIDEBAR =====
+document.getElementById('hamburger').addEventListener('click', function(){
+  document.getElementById('sidebar').classList.toggle('open');
+  document.getElementById('sidebarOverlay').classList.toggle('show');
+});
+function closeSidebar(){
+  document.getElementById('sidebar').classList.remove('open');
+  document.getElementById('sidebarOverlay').classList.remove('show');
+}
+
+// ===== AUTOCOMPLETE =====
+var DB = {
+  serial: [],
+  model: ['Danfoss TL5G','Embraco NT2192GK','Carel pCO5','Bitzer 4PCS-15.2','Frascold D4-15.1','Tecumseh CAJ4519Z','Copeland ZR61KCE','LG ZNWA360LHS0'],
+  client: ['فندق الريتز كارلتون','فندق هيلتون الرياض','مطعم الأصيل','سلسلة ماكدونالدز','برجر كنج','KFC السعودية','فندق إنتركونتيننتال','فندق كراون بلازا','مستشفى الملك فيصل','مطار الملك خالد'],
+  location: ['الفرع الرئيسي — الرياض','غرفة التبريد B3','المطبخ المركزي — الطابق 2','مخزن المواد الغذائية','الفرع الشمالي','مطبخ الفندق — الطابق 1'],
+  equipment: ['غرفة تبريد مركزية','مطبخ مركزي صناعي','ثلاجة عرض كبيرة','فريزر صناعي أفقي','وحدة تبريد هواء','ثلاجة ووك إن كولر','مجمد صناعي','مطبخ مركزي سريع'],
+  fault: ['انخفاض ضغط الغاز','تسريب غاز التبريد','ارتفاع درجة الحرارة','عطل في الضاغط','تلف لوحة التحكم','ضوضاء غير طبيعية','توقف الوحدة عن العمل','عطل في المروحة'],
+  parts: ['غاز R410A','غاز R22','غاز R404A','صمام تمدد Danfoss T2','ضاغط Embraco NT2192','لوحة تحكم Carel pCO','موتور مروحة 220V','كابينيتور 35μF','مرشح جفاف 3/8','فالو سولينويد 24V','ترموستات رقمي','تايمر ذوبان الجليد','مضخة مياه تصريف']
+};
+var selectedParts = [];
+var closeTimers = {};
+
+async function loadSaved(){
+  if(!DB_READY){ console.warn('Supabase غير مربوط — يعمل بالبيانات المحلية'); return; }
+  try {
+    var res = await supabase.from('autocomplete').select('*');
+    if(res.data){ res.data.forEach(function(row){
+      if(DB[row.field_key]) { var v=row.field_value; if(DB[row.field_key].indexOf(v)<0) DB[row.field_key].unshift(v); }
+    }); }
+  } catch(e){ console.error('خطأ في تحميل Autocomplete:', e); }
+}
+loadSaved();
+
+async function saveToDB(key, val){
+  val = val.trim(); if(!val) return;
+  if(DB[key].indexOf(val)<0){
+    DB[key].unshift(val);
+    if(!DB_READY) return;
+    try {
+      await supabase.from('autocomplete').upsert({ field_key: key, field_value: val }, { onConflict: 'field_key,field_value' });
+    } catch(e){ console.error('خطأ في حفظ Autocomplete:', e); }
+  }
+}
+function filterDB(key, q){ if(!q) return DB[key].slice(0,7); q=q.toLowerCase(); return DB[key].filter(function(v){ return v.toLowerCase().indexOf(q)>=0; }).slice(0,7); }
+function renderDD(key, items, q){
+  var dd = document.getElementById('dd-'+key); dd.innerHTML='';
+  if(!items.length && !q){ dd.classList.remove('open'); return; }
+  if(items.length){ var h=document.createElement('div'); h.className='dd-head'; h.innerHTML='<i class="ti ti-history" style="font-size:11px"></i> من السجلات السابقة'; dd.appendChild(h); }
+  items.forEach(function(item){
+    var d=document.createElement('div'); d.className='dd-opt';
+    d.innerHTML='<i class="ti ti-history" style="font-size:13px"></i>'+item;
+    d.addEventListener('mousedown',function(e){ e.preventDefault(); selectItem(key,item); });
+    dd.appendChild(d);
+  });
+  if(q && DB[key].indexOf(q.trim())<0 && q.trim()){
+    var nd=document.createElement('div'); nd.className='dd-new';
+    nd.innerHTML='<i class="ti ti-plus" style="font-size:13px"></i> إضافة "'+q.trim()+'" كسجل جديد';
+    nd.addEventListener('mousedown',function(e){ e.preventDefault(); selectItem(key,q.trim(),true); });
+    dd.appendChild(nd);
+  }
+  dd.classList.add('open');
+}
+function selectItem(key, val){
+  if(key==='parts'){
+    if(selectedParts.indexOf(val)<0){ selectedParts.push(val); saveToDB(key,val); renderTags(); }
+    document.getElementById('inp-'+key).value='';
+  } else {
+    document.getElementById('inp-'+key).value=val;
+    saveToDB(key,val);
+  }
+  document.getElementById('dd-'+key).classList.remove('open');
+}
+function renderTags(){
+  var w=document.getElementById('tags-parts'); w.innerHTML='';
+  selectedParts.forEach(function(p,i){
+    var t=document.createElement('div'); t.className='tag';
+    t.innerHTML=p+'<button onclick="removePart('+i+')" aria-label="حذف">×</button>';
+    w.appendChild(t);
+  });
+}
+function removePart(i){ selectedParts.splice(i,1); renderTags(); }
+function handleAC(key,val){ renderDD(key,filterDB(key,val),val); }
+function showAC(key,val){ clearTimeout(closeTimers[key]); renderDD(key,filterDB(key,val),val); }
+function hideAC(key){ closeTimers[key]=setTimeout(function(){ document.getElementById('dd-'+key).classList.remove('open'); var v=document.getElementById('inp-'+key).value.trim(); if(v&&key!=='parts') saveToDB(key,v); },200); }
+
+// ===== FILTER TABS =====
+document.querySelectorAll('.f-tab').forEach(function(tab){
+  tab.addEventListener('click',function(){ document.querySelectorAll('.f-tab').forEach(function(t){ t.classList.remove('active'); }); this.classList.add('active'); });
+});
+
+// ===== VOICE / LANG =====
+var micOn=false;
+function toggleMic(){
+  micOn=!micOn;
+  var btn=document.getElementById('micBtn'), lbl=document.getElementById('micLbl');
+  btn.className='mic-btn '+(micOn?'mic-rec':'mic-idle');
+  lbl.textContent=micOn?'جاري التسجيل...':'إملاء صوتي';
+}
+function setLang(lang,el){ document.querySelectorAll('.lang-pill').forEach(function(p){ p.classList.remove('active'); }); el.classList.add('active'); document.getElementById('notesArea').dir=(lang==='en'||lang==='tl')?'ltr':'rtl'; }
+function showTrans(lang,el){ document.querySelectorAll('.t-tab').forEach(function(t){ t.classList.remove('active'); }); el.classList.add('active'); ['en','ur','tl'].forEach(function(l){ document.getElementById('trans-'+l).style.display='none'; }); document.getElementById('trans-'+lang).style.display='block'; }
+
+// ===== CHECKLIST =====
+function addCheckItem(){ var c=document.getElementById('checklist'); var text=prompt('اسم العمل الجديد:'); if(text){ var d=document.createElement('div'); d.className='check-item'; d.innerHTML='<input type="checkbox"> <span>'+text+'</span>'; c.appendChild(d); } }
+
+
+// ===== TECHNICIANS =====
+var technicians = [
+  { id:1, name:'أحمد العتيبي',   initials:'أع', color:'#1D4E89', bg:'#E6F1FB', phone:'0501234567', email:'ahmed@co.com',  nationality:'سعودي',  spec:'تبريد وتكييف',    status:'active',  visits:142, completed:128, pending:14, rating:4.8, avgTime:1.7, monthly:[12,14,10,15,13,11,14] },
+  { id:2, name:'محمد الحربي',    initials:'مح', color:'#2D7D3A', bg:'#EAF3DE', phone:'0507654321', email:'mohamad@co.com', nationality:'سعودي',  spec:'مطابخ مركزية',    status:'active',  visits:118, completed:105, pending:13, rating:4.6, avgTime:2.0, monthly:[10,11,9,12,10,8,11] },
+  { id:3, name:'سامي القحطاني',  initials:'سق', color:'#C4680A', bg:'#FDF0E0', phone:'0559876543', email:'sami@co.com',   nationality:'سعودي',  spec:'كهرباء صناعية',   status:'active',  visits:97,  completed:82,  pending:15, rating:4.5, avgTime:2.2, monthly:[8,9,7,11,8,6,8]  },
+  { id:4, name:'خالد الرشيدي',   initials:'خر', color:'#64748B', bg:'#F1F5F9', phone:'0551122334', email:'khalid@co.com', nationality:'مصري',   spec:'تبريد وتكييف',    status:'vacation',visits:76,  completed:70,  pending:6,  rating:4.9, avgTime:1.5, monthly:[7,8,6,9,7,5,0]   },
+];
+var editingTechId = null;
+
+function renderTechCards(){
+  var grid = document.getElementById('techCardsGrid'); grid.innerHTML = '';
+  technicians.forEach(function(t){
+    var pct = Math.round((t.completed/t.visits)*100);
+    var statusColor = t.status==='active'?'#22C55E':t.status==='vacation'?'#F59E0B':'#EF4444';
+    var statusLabel = t.status==='active'?'نشط':t.status==='vacation'?'إجازة':'موقوف';
+    var stars = '';
+    for(var i=1;i<=5;i++) stars += i<=Math.floor(t.rating)?'★':'☆';
+    var card = document.createElement('div'); card.className='tech-card';
+    card.innerHTML =
+      '<div class="tech-card-header">' +
+        '<div class="tech-status-dot" style="background:'+statusColor+'" title="'+statusLabel+'"></div>' +
+        '<div class="tech-big-avatar" style="background:'+t.bg+';color:'+t.color+'">'+t.initials+'</div>' +
+        '<div class="tech-card-name">'+t.name+'</div>' +
+        '<div class="tech-card-spec">'+t.spec+'</div>' +
+        '<div style="margin-top:5px"><span class="badge" style="background:'+t.bg+';color:'+t.color+'">'+statusLabel+'</span></div>' +
+      '</div>' +
+      '<div class="tech-card-body">' +
+        '<div class="tech-stat-row">' +
+          '<div class="tech-stat"><div class="tech-stat-val">'+t.visits+'</div><div class="tech-stat-lbl">إجمالي</div></div>' +
+          '<div class="tech-stat" style="border-right:1px solid var(--border);border-left:1px solid var(--border)"><div class="tech-stat-val" style="color:var(--green)">'+t.completed+'</div><div class="tech-stat-lbl">مكتملة</div></div>' +
+          '<div class="tech-stat"><div class="tech-stat-val" style="color:var(--orange)">'+t.pending+'</div><div class="tech-stat-lbl">معلقة</div></div>' +
+        '</div>' +
+        '<div class="perf-bar-wrap">' +
+          '<div class="perf-bar-label"><span>معدل الإنجاز</span><span style="font-weight:600;color:var(--text)">'+pct+'%</span></div>' +
+          '<div class="perf-bar-bg"><div class="perf-bar-fill" style="width:'+pct+'%;background:'+(pct>=85?'var(--green)':pct>=70?'var(--orange)':'var(--red)')+'"></div></div>' +
+        '</div>' +
+        '<div class="perf-bar-wrap">' +
+          '<div class="perf-bar-label"><span>متوسط الزيارة</span><span style="font-weight:600;color:var(--text)">'+t.avgTime+'س</span></div>' +
+          '<div class="perf-bar-bg"><div class="perf-bar-fill" style="width:'+Math.min(100,Math.round((t.avgTime/3)*100))+'%;background:var(--blue-main)"></div></div>' +
+        '</div>' +
+        '<div style="display:flex;align-items:center;justify-content:space-between;margin-top:4px">' +
+          '<div class="stars">'+stars+'</div>' +
+          '<span style="font-size:12px;font-weight:600;color:var(--text)">'+t.rating+' / 5</span>' +
+        '</div>' +
+        '<div style="font-size:11px;color:var(--text-ter);margin-top:4px">'+t.phone+' · '+t.nationality+'</div>' +
+      '</div>' +
+      '<div class="tech-card-actions">' +
+        '<button class="tech-action-btn" onclick="editTech('+t.id+')"><i class="ti ti-edit" style="font-size:13px"></i> تعديل</button>' +
+        '<button class="tech-action-btn" onclick="viewTechStats('+t.id+')"><i class="ti ti-chart-line" style="font-size:13px"></i> تحليل</button>' +
+        '<button class="tech-action-btn danger" onclick="toggleTechStatus('+t.id+')"><i class="ti ti-'+(t.status==='active'?'player-pause':'player-play')+'" style="font-size:13px"></i></button>' +
+      '</div>';
+    grid.appendChild(card);
+  });
+  renderCompareChart();
+  renderVisitTypeChart();
+}
+
+function renderCompareChart(){
+  var el = document.getElementById('techCompareChart'); el.innerHTML='';
+  var colors = ['var(--blue-main)','var(--green)','var(--orange)','#64748B'];
+  technicians.forEach(function(t,i){
+    var pct = Math.round((t.completed/t.visits)*100);
+    el.innerHTML += '<div class="compare-bar">' +
+      '<div class="compare-name">'+t.name.split(' ')[0]+'</div>' +
+      '<div class="compare-bar-bg"><div class="compare-bar-fill" style="width:'+pct+'%;background:'+colors[i]+'">'+pct+'%</div></div>' +
+      '<div style="font-size:11px;color:var(--text-sec);min-width:36px;text-align:left">'+t.visits+' زيارة</div>' +
+    '</div>';
+  });
+}
+
+function renderVisitTypeChart(){
+  var el = document.getElementById('visitTypeChart'); el.innerHTML='';
+  var types = [
+    {label:'تحت الضمان', count:87,  color:'var(--blue-main)'},
+    {label:'مدفوعة',      count:134, color:'var(--green)'},
+    {label:'عقد صيانة',   count:212, color:'var(--orange)'},
+  ];
+  var total = types.reduce(function(s,t){return s+t.count;},0);
+  types.forEach(function(t){
+    var pct = Math.round((t.count/total)*100);
+    el.innerHTML += '<div class="visit-type-row">' +
+      '<div class="vt-dot" style="background:'+t.color+'"></div>' +
+      '<div class="vt-label">'+t.label+'</div>' +
+      '<div class="vt-bar-bg"><div class="vt-bar-fill" style="width:'+pct+'%;background:'+t.color+'"></div></div>' +
+      '<div class="vt-count" style="font-size:11px;color:var(--text-sec)">'+t.count+'</div>' +
+      '<div style="font-size:10px;color:var(--text-ter);min-width:28px">'+pct+'%</div>' +
+    '</div>';
+  });
+}
+
+function openTechModal(){ editingTechId=null; document.getElementById('modalTitle').textContent='إضافة فني جديد'; ['name','phone','email','pass','notes'].forEach(function(f){ document.getElementById('m-'+f).value=''; }); document.getElementById('techModal').style.display='flex'; }
+function closeTechModal(){ document.getElementById('techModal').style.display='none'; }
+
+function editTech(id){
+  var t = technicians.find(function(x){return x.id===id;});
+  if(!t) return;
+  editingTechId = id;
+  document.getElementById('modalTitle').textContent = 'تعديل بيانات الفني';
+  document.getElementById('m-name').value = t.name;
+  document.getElementById('m-phone').value = t.phone;
+  document.getElementById('m-email').value = t.email;
+  document.getElementById('m-nationality').value = t.nationality;
+  document.getElementById('m-spec').value = t.spec;
+  document.getElementById('m-status').value = t.status==='active'?'نشط':t.status==='vacation'?'إجازة':'موقوف';
+  document.getElementById('m-pass').value = '';
+  document.getElementById('m-notes').value = '';
+  document.getElementById('techModal').style.display = 'flex';
+}
+
+function saveTech(){
+  var name = document.getElementById('m-name').value.trim();
+  if(!name){ alert('يرجى إدخال اسم الفني'); return; }
+  if(editingTechId){
+    var t = technicians.find(function(x){return x.id===editingTechId;});
+    if(t){ t.name=name; t.phone=document.getElementById('m-phone').value; t.email=document.getElementById('m-email').value; t.nationality=document.getElementById('m-nationality').value; t.spec=document.getElementById('m-spec').value; }
+  } else {
+    var initials = name.split(' ').map(function(w){return w[0];}).join('').slice(0,2);
+    var colors2 = ['#7C3AED','#0891B2','#BE185D','#047857'];
+    var bgs = ['#EDE9FE','#CFFAFE','#FCE7F3','#D1FAE5'];
+    var ci = technicians.length % 4;
+    technicians.push({ id: Date.now(), name:name, initials:initials, color:colors2[ci], bg:bgs[ci], phone:document.getElementById('m-phone').value, email:document.getElementById('m-email').value, nationality:document.getElementById('m-nationality').value, spec:document.getElementById('m-spec').value, status:'active', visits:0, completed:0, pending:0, rating:0, avgTime:0, monthly:[0,0,0,0,0,0,0] });
+  }
+  closeTechModal();
+  renderTechCards();
+}
+
+function toggleTechStatus(id){
+  var t = technicians.find(function(x){return x.id===id;});
+  if(!t) return;
+  t.status = t.status==='active'?'vacation':'active';
+  renderTechCards();
+}
+
+function viewTechStats(id){
+  var t = technicians.find(function(x){return x.id===id;});
+  if(!t) return;
+  var pct = t.visits>0?Math.round((t.completed/t.visits)*100):0;
+  alert('📊 تحليل أداء: ' + t.name + '\n\n' + '✅ معدل الإنجاز: ' + pct + '%\n' + '📅 إجمالي الزيارات: ' + t.visits + '\n' + '⏱ متوسط مدة الزيارة: ' + t.avgTime + ' ساعة\n' + '⭐ تقييم العملاء: ' + t.rating + ' / 5\n' + '📞 الجوال: ' + t.phone);
+}
+
+// init on page load
+document.addEventListener('DOMContentLoaded', function(){ renderTechCards(); });
+
+// ===== EQUIPMENT DROPDOWN =====
+var equipmentList = [
+  'Cold Room',
+  'Custom-fab',
+  'Dishwasher Machine',
+  'Exhaust Hood',
+  'Ice Maker',
+  'Kitchen Equipment',
+  'Under Counter Refrigerator',
+  'Upright Refrigerator'
+];
+async function loadEqList(){
+  if(DB_READY){
+    try {
+      var res = await supabase.from('equipment_types').select('name').order('name');
+      if(res.data){ res.data.forEach(function(r){ if(equipmentList.indexOf(r.name)<0) equipmentList.push(r.name); }); equipmentList.sort(function(a,b){return a.localeCompare(b,'en');}); }
+    } catch(e){ console.error('خطأ في تحميل المعدات:', e); }
+  }
+  renderEqList('');
+}
+loadEqList();
+function renderEqList(q){
+  var list=document.getElementById('eq-list'); list.innerHTML='';
+  var filtered=equipmentList.filter(function(v){ return !q||v.toLowerCase().indexOf(q.toLowerCase())>=0; });
+  var current=document.getElementById('inp-equipment').value;
+  filtered.forEach(function(item){
+    var d=document.createElement('div'); d.className='eq-item'+(item===current?' selected':'');
+    d.innerHTML='<i class="ti ti-'+(item===current?'check':'tool')+'"></i>'+item;
+    d.addEventListener('click',function(){ selectEquipment(item); });
+    list.appendChild(d);
+  });
+  if(!filtered.length){ var empty=document.createElement('div'); empty.className='eq-item'; empty.style.color='var(--text-ter)'; empty.textContent='لا توجد نتائج'; list.appendChild(empty); }
+}
+function filterEq(q){
+  renderEqList(q);
+  var addRow=document.getElementById('eq-add-row');
+  var lbl=document.getElementById('eq-add-label');
+  if(q.trim() && equipmentList.map(function(v){return v.toLowerCase();}).indexOf(q.trim().toLowerCase())<0){
+    lbl.textContent='إضافة "'+q.trim()+'" كمعدة جديدة';
+    addRow.style.display='flex';
+  } else { addRow.style.display='none'; }
+}
+async function addNewEquipment(){
+  var q=document.getElementById('eq-search').value.trim();
+  if(!q) return;
+  equipmentList.push(q);
+  equipmentList.sort(function(a,b){ return a.localeCompare(b,'en'); });
+  if(DB_READY){ try{ await supabase.from('equipment_types').insert({ name: q }); }catch(e){ console.error('خطأ في حفظ المعدة:', e); } }
+  selectEquipment(q);
+}
+function selectEquipment(val){
+  document.getElementById('inp-equipment').value=val;
+  document.getElementById('eq-selected-text').textContent=val;
+  document.getElementById('eq-selected-text').style.color='var(--text)';
+  document.getElementById('eq-dropdown').style.display='none';
+  document.getElementById('eq-selected').classList.remove('open');
+  document.getElementById('eq-chevron').style.transform='';
+  document.getElementById('eq-search').value='';
+  renderEqList('');
+  document.getElementById('eq-add-row').style.display='none';
+}
+function toggleEqDD(){
+  var dd=document.getElementById('eq-dropdown');
+  var sel=document.getElementById('eq-selected');
+  var chev=document.getElementById('eq-chevron');
+  var open=dd.style.display==='none';
+  dd.style.display=open?'block':'none';
+  sel.classList.toggle('open',open);
+  chev.style.transform=open?'rotate(180deg)':'';
+  if(open){ setTimeout(function(){ document.getElementById('eq-search').focus(); },50); }
+}
+document.addEventListener('click',function(e){ var wrap=document.getElementById('eq-wrap'); if(wrap&&!wrap.contains(e.target)){ document.getElementById('eq-dropdown').style.display='none'; document.getElementById('eq-selected').classList.remove('open'); document.getElementById('eq-chevron').style.transform=''; } });
+
+// ===== CAMERA & IMAGE =====
+function openCamera(field) {
+  document.getElementById('cam-' + field).value = '';
+  document.getElementById('cam-' + field).click();
+}
+
+function handleImage(field, input) {
+  if (!input.files || !input.files[0]) return;
+  var file = input.files[0];
+  var reader = new FileReader();
+  reader.onload = function(e) {
+    document.getElementById('img-' + field).src = e.target.result;
+    document.getElementById('preview-' + field).style.display = 'block';
+    var status = document.getElementById('ocr-' + field + '-status');
+    status.className = 'ocr-status';
+    status.innerHTML = '<i class="ti ti-loader spin"></i> جاري قراءة النص...';
+    // Simulate OCR reading after 1.8s
+    setTimeout(function() {
+      var fakeResults = {
+        serial: ['SN-4X8A2019-KSA', 'S/N: 2024-KR-88421', 'SN: ABX-992341-C'],
+        model:  ['Danfoss TL5G', 'Embraco NT2192GK', 'Carel pCO5+']
+      };
+      var result = fakeResults[field][Math.floor(Math.random() * fakeResults[field].length)];
+      document.getElementById('inp-' + field).value = result;
+      saveToDB(field, result);
+      status.className = 'ocr-status done';
+      status.innerHTML = '<i class="ti ti-check"></i> تم قراءة النص: <strong>' + result + '</strong>';
+    }, 1800);
+  };
+  reader.readAsDataURL(file);
+}
+
+function removeImage(field) {
+  document.getElementById('preview-' + field).style.display = 'none';
+  document.getElementById('img-' + field).src = '';
+  document.getElementById('cam-' + field).value = '';
+}
+
+// ===== SIGNATURES =====
+var sigState={tech:false,client:false}, sigDrawing={};
+function initCanvas(id){
+  var canvas=document.getElementById(id+'Canvas');
+  var wrap=document.getElementById(id+'Wrap');
+  if(!canvas||!wrap) return;
+  canvas.width=wrap.offsetWidth||400;
+  var drawing=false, lx=0, ly=0;
+  var ctx=canvas.getContext('2d');
+  ctx.strokeStyle='#0F3460'; ctx.lineWidth=2; ctx.lineCap='round'; ctx.lineJoin='round';
+  sigDrawing[id]=false;
+  function pos(e){ var r=canvas.getBoundingClientRect(); var s=e.touches?e.touches[0]:e; return{x:(s.clientX-r.left)*(canvas.width/r.width),y:(s.clientY-r.top)*(canvas.height/r.height)}; }
+  function start(e){ e.preventDefault(); drawing=true; sigDrawing[id]=true; var p=pos(e); lx=p.x; ly=p.y; document.getElementById(id+'Hint').style.display='none'; }
+  function move(e){ e.preventDefault(); if(!drawing)return; var p=pos(e); ctx.beginPath(); ctx.moveTo(lx,ly); ctx.lineTo(p.x,p.y); ctx.stroke(); lx=p.x; ly=p.y; }
+  function end(){ drawing=false; }
+  canvas.addEventListener('mousedown',start); canvas.addEventListener('mousemove',move); canvas.addEventListener('mouseup',end);
+  canvas.addEventListener('touchstart',start,{passive:false}); canvas.addEventListener('touchmove',move,{passive:false}); canvas.addEventListener('touchend',end);
+}
+function clearSig(who){
+  var c=document.getElementById(who+'Canvas'); c.getContext('2d').clearRect(0,0,c.width,c.height);
+  sigDrawing[who]=false; sigState[who]=false;
+  document.getElementById(who+'Hint').style.display='flex';
+  var ts=document.getElementById('sig'+who.charAt(0).toUpperCase()+who.slice(1)+'TS');
+  ts.textContent='لم يوقع بعد'; ts.style.color='';
+  updateSigBtns();
+}
+function confirmSig(who){
+  if(!sigDrawing[who]) return;
+  sigState[who]=true;
+  var n=new Date(); var h=n.getHours(),m=n.getMinutes(); var ap=h>=12?'م':'ص'; h=h%12||12;
+  var ts=document.getElementById('sig'+who.charAt(0).toUpperCase()+who.slice(1)+'TS');
+  ts.textContent='وقّع · '+h+':'+(m<10?'0':'')+m+' '+ap; ts.style.color='var(--green)';
+  updateSigBtns();
+}
+function updateSigBtns(){
+  var both=sigState.tech&&sigState.client;
+  document.getElementById('suspendBtn').disabled=!both;
+  document.getElementById('closeBtn').disabled=!both;
+  var f=document.getElementById('progFill');
+  f.style.width=both?'100%':(sigState.tech||sigState.client?'75%':'50%');
+  f.style.background=both?'var(--orange)':'var(--blue-main)';
+}
+function suspendVisit(){ document.getElementById('closeActionBar').innerHTML='<div style="padding:10px 0;color:var(--orange);font-size:13px;font-weight:600;display:flex;align-items:center;gap:8px;width:100%"><i class="ti ti-circle-check" style="font-size:18px"></i>تم تعليق الكشف — في انتظار توفير قطع الغيار</div>'; document.getElementById('progFill').style.background='var(--orange)'; }
+function closeVisit(){ document.getElementById('closeActionBar').innerHTML='<div style="padding:10px 0;color:var(--green);font-size:13px;font-weight:600;display:flex;align-items:center;gap:8px;width:100%"><i class="ti ti-circle-check" style="font-size:18px"></i>تم إغلاق الكشف بنجاح وحفظه في الأرشيف ✓</div>'; document.getElementById('progFill').style.width='100%'; document.getElementById('progFill').style.background='var(--green)'; }
+</script>
+</body>
+</html>
