@@ -5,7 +5,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>نظام صيانة المطابخ المركزية وغرف التبريد</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@300;400;500;700&display=swap" rel="stylesheet">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@300;400;500;700&family=Noto+Nastaliq+Urdu:wght@400;500;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@2.44.0/tabler-icons.min.css">
 <style>
 :root {
@@ -410,6 +411,18 @@ html, body { height: 100%; font-family: 'Tajawal', sans-serif; background: var(-
 @media(max-width:960px){ .parts-grid{grid-template-columns:repeat(2,1fr)} .inv-header,.inv-row{grid-template-columns:2fr 1fr 1fr 80px} .inv-header .ih3,.inv-row .ic3,.inv-header .ih4,.inv-row .ic4{display:none} .hist-header,.hist-row{grid-template-columns:1.5fr 1fr 1fr 0.8fr} .hist-header .hh4,.hist-row .hc4,.hist-header .hh5,.hist-row .hc5{display:none} }
 @media(max-width:520px){ .inv-header,.inv-row{grid-template-columns:2fr 1fr 70px} .inv-header .ih2,.inv-row .ic2,.inv-header .ih3,.inv-row .ic3,.inv-header .ih4,.inv-row .ic4{display:none} }
 
+
+/* ===== LANGUAGE SWITCHER ===== */
+.lang-switcher { display:flex; align-items:center; gap:4px; background:rgba(255,255,255,0.1); border-radius:99px; padding:3px; flex-shrink:0; }
+.lang-btn-sw { padding:4px 10px; border-radius:99px; font-size:11px; font-weight:600; cursor:pointer; border:none; background:transparent; color:rgba(255,255,255,0.7); font-family:'Tajawal',sans-serif; transition:all .15s; letter-spacing:.3px; }
+.lang-btn-sw.active { background:#fff; color:var(--blue-dark); }
+.lang-btn-sw:hover:not(.active) { color:#fff; background:rgba(255,255,255,0.15); }
+[dir="rtl"] .sidebar { border-right:1px solid var(--border); border-left:none; }
+[dir="rtl"] .nav-item { border-left:3px solid transparent; border-right:none; }
+[dir="rtl"] .nav-item.active { border-left-color:var(--blue-main); border-right:none; }
+[dir="ltr"] .topbar { direction:ltr; }
+[dir="rtl"] .topbar { direction:rtl; }
+
 .eq-select-wrap { position: relative; }
 .eq-selected { display: flex; align-items: center; justify-content: space-between; padding: 8px 12px; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--bg-card); cursor: pointer; transition: border-color 0.15s; min-height: 38px; }
 .eq-selected:hover { border-color: var(--blue-light); }
@@ -525,20 +538,24 @@ html, body { height: 100%; font-family: 'Tajawal', sans-serif; background: var(-
   .page-title { font-size: 15px; }
 }
 
-@media print {
-  .sidebar, .bottom-nav, .topbar, .btn, .row-btn, .tech-action-btn,
-  .client-btn, .filter-tabs, .search-box, .page-header button,
-  .card-action, .sig-actions, .close-action-bar, .action-bar { display:none !important; }
-  .main { padding: 0 !important; overflow:visible !important; }
-  .body { overflow:visible !important; }
-  .app { height:auto !important; overflow:visible !important; }
-  .page { display:block !important; }
-  .page:not(.active) { display:none !important; }
-  .hrco-print-header { display:flex !important; }
-  body { background:#fff !important; }
-  .card, .stat-card, .inventory-table, .report-table, .visits-table,
-  .history-table { box-shadow:none !important; border:1px solid #E2E8F0 !important; }
-}
+
+
+[dir="ltr"] .sidebar { border-left: 1px solid var(--border); border-right: none; }
+[dir="rtl"] .sidebar { border-right: 1px solid var(--border); border-left: none; }
+[dir="ltr"] .nav-item { border-right: 3px solid transparent; border-left: none; }
+[dir="ltr"] .nav-item.active { border-right-color: var(--blue-main); }
+[dir="rtl"] .nav-item { border-left: 3px solid transparent; border-right: none; }
+[dir="rtl"] .nav-item.active { border-left-color: var(--blue-main); }
+[dir="ltr"] .topbar { flex-direction: row; }
+[dir="rtl"] .topbar { flex-direction: row-reverse; }
+[dir="ltr"] .body { flex-direction: row-reverse; }
+[dir="rtl"] .body { flex-direction: row; }
+[dir="ltr"] .main { direction: ltr; }
+[dir="rtl"] .main { direction: rtl; }
+[dir="ltr"] .field input, [dir="ltr"] .field textarea, [dir="ltr"] .field select,
+[dir="ltr"] .filter-input, [dir="ltr"] .search-box input { direction: ltr; text-align: left; }
+[dir="rtl"] .field input, [dir="rtl"] .field textarea, [dir="rtl"] .field select,
+[dir="rtl"] .filter-input, [dir="rtl"] .search-box input { direction: rtl; text-align: right; }
 
 </style>
   <!-- Supabase SDK -->
@@ -547,37 +564,403 @@ html, body { height: 100%; font-family: 'Tajawal', sans-serif; background: var(-
     // =============================================
     // ضع هنا بياناتك من Supabase Dashboard
     // =============================================
-    var SUPABASE_URL = 'https://XXXXXXXXXXXXXXXX.supabase.co';
-    var SUPABASE_ANON_KEY = 'eyXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX';
+    var SUPABASE_URL = 'https://luuvvbevhdtpzywlrtux.supabase.co';
+    var SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imx1dXZ2YmV2aGR0cHp5d2xydHV4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzg2NjQyMjUsImV4cCI6MjA5NDI0MDIyNX0.AuIn2FChEWEeAeKG_SLJf8H_AptwXBibNWKoQFgNb18';
     var supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
     var DB_READY = (SUPABASE_URL.indexOf('XXXX') === -1);
   </script>
+
+  <!-- ============================================================
+       i18n — نظام الترجمة الثلاثي (EN / AR / UR)
+  ============================================================ -->
+  <script>
+  var LANGS = {
+    en: {
+      dir: 'ltr', fontClass: 'font-en',
+      // --- Topbar ---
+      appName: 'Maintenance Management System',
+      appSub:  'Central Kitchens & Cold Rooms',
+      // --- Sidebar sections ---
+      navHome: 'Home', navVisits: 'Visits', navPending: 'Pending',
+      navNewVisit: 'New Visit', navTechs: 'Technicians', navParts: 'Spare Parts',
+      navClients: 'Clients', navReports: 'Reports', navArchive: 'Archive',
+      navExport: 'Export PDF', navSettings: 'Settings',
+      secHome: 'MAIN', secManage: 'MANAGEMENT', secReports: 'REPORTS', secAccount: 'ACCOUNT',
+      // --- Dashboard ---
+      dashTitle: 'Dashboard', dashSub: 'Today's operations overview',
+      todayVisits: 'Today's Visits', completed: 'Completed', pending: 'Pending',
+      missingParts: 'Missing Parts', completionRate: 'completion rate',
+      needsFollowup: 'Needs follow-up', affectedVisits: 'visits affected',
+      techStatus: 'Technician Status', viewAll: 'View All',
+      pendingVisits: 'Pending Visits', recentVisits: 'Recent Visits',
+      fullArchive: 'Full Archive', weeklyProgress: 'Weekly Progress',
+      sunToSat: 'Sun — Sat', total: 'Total',
+      // --- Visit status badges ---
+      inProgress: 'In Progress', done: 'Completed', suspended: 'Suspended',
+      onTheWay: 'On the Way', available: 'Available',
+      // --- Visits page ---
+      visitsTitle: 'Visit Log', visitsSub: 'All visits and reports',
+      searchClient: 'Search by client or technician...', all: 'All',
+      visitType: 'Visit Type', client: 'Client / Equipment',
+      technician: 'Technician', type: 'Type', date: 'Date', status: 'Status',
+      // --- New Visit ---
+      newVisitTitle: 'New Visit', newVisitSub: 'Create a maintenance visit report',
+      clientData: 'Client Information', clientName: 'Client Name',
+      clientNamePh: 'Start typing client name...',
+      locationBranch: 'Location / Branch', locationPh: 'Client location or branch...',
+      visitTypeLbl: 'Visit Type',
+      warrantyVisit: 'Warranty Visit', paidVisit: 'Paid Visit', contractVisit: 'Periodic Visit (Contract)',
+      techResponsible: 'Assigned Technician',
+      equipmentData: 'Equipment Details', equipmentLbl: 'Equipment / Device',
+      selectEquipment: '-- Select Equipment --',
+      serialNumber: 'Serial Number', serialPh: 'Type or photograph the plate...',
+      modelLbl: 'Model', modelPh: 'Type or photograph the plate...',
+      faultType: 'Fault Type', faultPh: 'Describe the fault...',
+      spareParts: 'Required Spare Parts', partsAddPh: 'Start typing part name...',
+      tasksTitle: 'Tasks Performed', addTask: 'Add Task',
+      notesTitle: 'Technician Notes', voiceInput: 'Voice Input', recording: 'Recording...',
+      liveTranslation: 'Live Translation', copy: 'Copy', addToReport: 'Add to Report',
+      back: 'Back', saveDraft: 'Save Draft', nextSignatures: 'Next: Signatures',
+      // --- Signature page ---
+      closeReport: 'Close Report', closeReportSub: 'Signatures & visit completion',
+      visitSummary: 'Visit Summary', clientLbl: 'Client', tasksDone: 'Tasks Done',
+      duration: 'Duration', missingPartsLbl: 'Missing Parts',
+      piece: 'part', incomplete: 'Incomplete visit. You can suspend until parts arrive, or close if all tasks are done.',
+      techSignature: 'Technician Signature', clientSignature: 'Client Signature',
+      signHere: 'Sign here with your finger', signed: 'Signed',
+      clear: 'Clear', confirm: 'Confirm',
+      previewPDF: 'Preview PDF', suspendReport: 'Suspend Report', closeBtn: 'Close Report',
+      suspended_msg: 'Report suspended — awaiting spare parts',
+      closed_msg: 'Report closed and archived successfully ✓',
+      // --- Technicians ---
+      techsTitle: 'Technicians Management', techsSub: 'Accounts and performance analysis',
+      addTech: 'Add Technician', totalTechs: 'Total Technicians',
+      activeToday: 'active today', avgCompletion: 'Avg. Completion',
+      thisMonth: 'this month', avgVisitTime: 'Avg. Visit Time',
+      avgRating: 'Avg. Customer Rating', outOf5: 'out of 5',
+      completionRate2: 'Completion Rate', visitDuration: 'Visit Duration',
+      totalVisits: 'Total', completedVisits: 'Completed', pendingVisits2: 'Pending',
+      editTech: 'Edit', analysisTech: 'Analysis', fullName: 'Full Name',
+      mobile: 'Mobile', emailLbl: 'Email', nationality: 'Nationality',
+      specialization: 'Specialization', statusLbl: 'Status',
+      active: 'Active', vacation: 'Vacation', suspended2: 'Suspended',
+      password: 'Password', notes: 'Notes',
+      cancel: 'Cancel', save: 'Save Technician',
+      monthlyComparison: 'Monthly Completion Comparison',
+      visitTypesDist: 'Visit Type Distribution',
+      // --- Parts ---
+      partsTitle: 'Spare Parts Management', partsSub: 'Inventory & movement history',
+      addInventory: 'Add Stock', newPart: 'New Part',
+      totalParts: 'Total Parts', availableParts: 'Available',
+      lowStock: 'Low Stock', outOfStock: 'Out of Stock',
+      currentInventory: 'Current Inventory', movementHistory: 'Movement History',
+      partName: 'Part Name', category: 'Category', quantity: 'Qty',
+      minLevel: 'Min. Level', stockStatus: 'Status',
+      inStock: 'In Stock', low: 'Low', out: 'Out',
+      incoming: 'Incoming', outgoing: 'Outgoing',
+      usedIn: 'Used In', tech2: 'Technician',
+      partNamePh: 'Part name...', unitLbl: 'Unit',
+      supplier: 'Supplier', supplierPh: 'Supplier name...',
+      // --- Clients ---
+      clientsTitle: 'Clients Management', clientsSub: 'Visit analysis & performance per client',
+      addClient: 'Add Client', totalClients: 'Total Clients',
+      completedVisits2: 'Completed Visits', pendingVisits3: 'Pending Visits',
+      warrantyClients: 'Warranty Clients', activeContracts: 'Active Contracts',
+      searchClientPh: 'Search client...', contract: 'Contract',
+      warranty: 'Warranty', paid: 'Paid', noContract: 'No Contract',
+      needsParts: 'Needs Parts', warrantyTag: 'Under Warranty', noWarranty: 'No Warranty',
+      reports2: 'Reports', history: 'History', edit: 'Edit',
+      visitDistribution: 'Visit Status Distribution', topClients: 'Top Clients by Visits',
+      awaitingParts: 'Clients Awaiting Spare Parts', details: 'Details',
+      clientType: 'Client Type', location: 'Location', contractExpiry: 'Contract Expiry',
+      // --- Reports ---
+      reportsTitle: 'Reports & Search', reportsSub: 'Search all visits and reports',
+      exportExcel: 'Export Excel', print: 'Print',
+      filterTitle: 'Search Filters', clientNameFilter: 'Client Name',
+      techFilter: 'Technician', partFilter: 'Spare Part',
+      dateRange: 'Date Range', dateFrom: 'From', dateTo: 'To',
+      reportStatus: 'Report Status', visitTypeFilter: 'Visit Type',
+      search: 'Search', clearFilters: 'Clear Filters',
+      sortBy: 'Sort by:', dateNewest: 'Date (Newest)', dateOldest: 'Date (Oldest)',
+      byClient: 'Client Name', byTech: 'Technician',
+      results: 'results', noResults: 'No results match your search',
+      tryChanging: 'Try changing or clearing the filters',
+      pendingMgmt: 'Pending Reports', pendingMgmtSub: 'Awaiting spare parts',
+      pendingList: 'Pending Reports List',
+    },
+
+    ar: {
+      dir: 'rtl', fontClass: 'font-ar',
+      appName: 'نظام إدارة الصيانة',
+      appSub:  'المطابخ المركزية وغرف التبريد',
+      navHome: 'الرئيسية', navVisits: 'الزيارات', navPending: 'المعلقة',
+      navNewVisit: 'زيارة جديدة', navTechs: 'الفنيون', navParts: 'قطع الغيار',
+      navClients: 'العملاء', navReports: 'التقارير', navArchive: 'الأرشيف',
+      navExport: 'تصدير PDF', navSettings: 'الإعدادات',
+      secHome: 'الرئيسية', secManage: 'الإدارة', secReports: 'التقارير', secAccount: 'الحساب',
+      dashTitle: 'لوحة التحكم', dashSub: 'نظرة عامة على عمليات اليوم',
+      todayVisits: 'زيارة اليوم', completed: 'مكتملة', pending: 'معلقة',
+      missingParts: 'قطع ناقصة', completionRate: 'معدل الإنجاز',
+      needsFollowup: '<span data-i18n="needsFollowup">Needs follow-up</span>', affectedVisits: 'كشوف',
+      techStatus: 'حالة الفنيين', viewAll: 'عرض الكل',
+      pendingVisits: 'الكشوف المعلقة', recentVisits: 'آخر الزيارات',
+      fullArchive: 'الأرشيف', weeklyProgress: 'إنجاز الأسبوع',
+      sunToSat: 'أحد — سبت', total: 'الإجمالي',
+      inProgress: 'قيد التنفيذ', done: 'مكتملة', suspended: 'معلقة',
+      onTheWay: 'في الطريق', available: 'متاح',
+      visitsTitle: 'سجل الزيارات', visitsSub: 'جميع الزيارات والكشوف',
+      searchClient: 'بحث بالعميل أو الفني...', all: 'الكل',
+      visitType: 'نوع الزيارة', client: 'العميل / المعدة',
+      technician: 'الفني', type: 'النوع', date: 'التاريخ', status: 'الحالة',
+      newVisitTitle: 'زيارة جديدة', newVisitSub: 'إنشاء كشف زيارة صيانة',
+      clientData: 'بيانات العميل', clientName: 'اسم العميل',
+      clientNamePh: 'ابدأ بكتابة اسم العميل...',
+      locationBranch: 'الموقع / الفرع', locationPh: 'موقع العميل أو الفرع...',
+      visitTypeLbl: 'نوع الزيارة',
+      warrantyVisit: 'زيارة تحت الضمان', paidVisit: 'زيارة مدفوعة', contractVisit: 'زيارة دورية (عقد صيانة)',
+      techResponsible: 'الفني المسؤول',
+      equipmentData: 'بيانات المعدة', equipmentLbl: 'اسم المعدة / الجهاز',
+      selectEquipment: '-- اختر المعدة --',
+      serialNumber: 'الرقم التسلسلي', serialPh: 'اكتب أو صوّر البطاقة...',
+      modelLbl: 'الموديل', modelPh: 'اكتب أو صوّر البطاقة...',
+      faultType: 'نوع العطل', faultPh: 'وصف العطل...',
+      spareParts: 'قطع الغيار المطلوبة', partsAddPh: 'ابدأ بكتابة اسم القطعة...',
+      tasksTitle: 'الأعمال المنفذة', addTask: 'إضافة عمل',
+      notesTitle: 'ملاحظات الفني', voiceInput: 'إملاء صوتي', recording: 'جاري التسجيل...',
+      liveTranslation: 'الترجمة الفورية', copy: 'نسخ', addToReport: 'إضافة للكشف',
+      back: 'رجوع', saveDraft: 'حفظ مسودة', nextSignatures: 'التالي: التوقيعات',
+      closeReport: 'إغلاق الكشف', closeReportSub: 'التوقيعات وإتمام الزيارة',
+      visitSummary: 'ملخص الزيارة', clientLbl: 'العميل', tasksDone: 'الأعمال المنفذة',
+      duration: 'مدة الزيارة', missingPartsLbl: 'قطع ناقصة',
+      piece: 'قطعة', incomplete: 'الكشف غير مكتمل. يمكنك تعليقه حتى توفير قطع الغيار، أو إغلاقه إن اكتملت جميع الأعمال.',
+      techSignature: 'توقيع الفني', clientSignature: 'توقيع العميل / المشرف',
+      signHere: 'Sign here with your finger', signed: 'وقّع',
+      clear: 'مسح', confirm: 'تأكيد',
+      previewPDF: 'معاينة PDF', suspendReport: 'تعليق الكشف', closeBtn: 'إغلاق الكشف',
+      suspended_msg: 'تم تعليق الكشف — في انتظار توفير قطع الغيار',
+      closed_msg: 'تم إغلاق الكشف بنجاح وحفظه في الأرشيف ✓',
+      techsTitle: 'إدارة الفنيين', techsSub: 'حسابات الفنيين وتحليل الأداء',
+      addTech: 'إضافة فني', totalTechs: 'إجمالي الفنيين',
+      activeToday: 'نشطون اليوم', avgCompletion: 'متوسط الإنجاز',
+      thisMonth: 'هذا الشهر', avgVisitTime: 'متوسط ساعات الزيارة',
+      avgRating: 'متوسط تقييم العملاء', outOf5: 'من 5 نجوم',
+      completionRate2: 'معدل الإنجاز', visitDuration: 'متوسط الزيارة',
+      totalVisits: 'إجمالي', completedVisits: 'مكتملة', pendingVisits2: 'معلقة',
+      editTech: 'تعديل', analysisTech: 'تحليل', fullName: 'الاسم الكامل',
+      mobile: 'رقم الجوال', emailLbl: 'البريد الإلكتروني', nationality: 'الجنسية',
+      specialization: 'التخصص', statusLbl: 'الحالة',
+      active: 'نشط', vacation: 'إجازة', suspended2: 'موقوف',
+      password: 'كلمة المرور', notes: 'ملاحظات',
+      cancel: 'إلغاء', save: 'حفظ الفني',
+      monthlyComparison: 'مقارنة الإنجاز الشهري',
+      visitTypesDist: 'توزيع أنواع الزيارات',
+      partsTitle: 'إدارة قطع الغيار', partsSub: 'المخزون الحالي وسجل الحركات',
+      addInventory: 'إضافة مخزون', newPart: 'قطعة جديدة',
+      totalParts: 'إجمالي أصناف القطع', availableParts: 'أصناف متوفرة',
+      lowStock: 'مخزون منخفض', outOfStock: 'نفد المخزون',
+      currentInventory: 'المخزون الحالي', movementHistory: 'سجل الحركات',
+      partName: 'اسم القطعة', category: 'الفئة', quantity: 'الكمية',
+      minLevel: 'الحد الأدنى', stockStatus: 'الحالة',
+      inStock: 'متوفر', low: 'منخفض', out: 'نفد',
+      incoming: 'وارد', outgoing: 'صادر',
+      usedIn: 'صُرفت في', tech2: 'الفني',
+      partNamePh: 'اسم القطعة...', unitLbl: 'الوحدة',
+      supplier: 'المورد', supplierPh: 'اسم المورد...',
+      clientsTitle: 'إدارة العملاء', clientsSub: 'تحليل الزيارات والأداء لكل عميل',
+      addClient: 'إضافة عميل', totalClients: 'إجمالي العملاء',
+      completedVisits2: 'زيارات مكتملة', pendingVisits3: 'زيارات معلقة',
+      warrantyClients: 'عملاء تحت الضمان', activeContracts: 'عقود صيانة نشطة',
+      searchClientPh: 'بحث عن عميل...', contract: 'عقد صيانة',
+      warranty: 'ضمان', paid: 'مدفوع', noContract: 'بدون عقد',
+      needsParts: 'تحتاج قطع', warrantyTag: 'تحت الضمان', noWarranty: 'بدون ضمان',
+      reports2: 'الكشوف', history: 'السجل', edit: 'تعديل',
+      visitDistribution: 'توزيع حالات الزيارات', topClients: 'أكثر العملاء زيارات',
+      awaitingParts: 'عملاء ينتظرون قطع غيار', details: 'التفاصيل',
+      clientType: 'نوع العميل', location: 'الموقع', contractExpiry: 'تاريخ انتهاء العقد',
+      reportsTitle: 'التقارير والبحث', reportsSub: 'ابحث في جميع الكشوف والزيارات',
+      exportExcel: 'تصدير Excel', print: 'طباعة',
+      filterTitle: 'فلاتر البحث', clientNameFilter: 'اسم العميل',
+      techFilter: 'اسم الفني', partFilter: 'قطعة الغيار',
+      dateRange: 'نطاق التاريخ', dateFrom: 'من تاريخ', dateTo: 'إلى تاريخ',
+      reportStatus: 'حالة الكشف', visitTypeFilter: 'نوع الزيارة',
+      search: 'بحث', clearFilters: 'مسح الفلاتر',
+      sortBy: 'ترتيب حسب:', dateNewest: 'التاريخ (الأحدث)', dateOldest: 'التاريخ (الأقدم)',
+      byClient: 'اسم العميل', byTech: 'اسم الفني',
+      results: 'نتيجة', noResults: 'لا توجد نتائج تطابق بحثك',
+      tryChanging: 'جرّب تغيير الفلاتر أو مسحها',
+      pendingMgmt: 'الكشوف المعلقة', pendingMgmtSub: 'تحتاج توفير قطع الغيار',
+      pendingList: 'قائمة الكشوف المعلقة',
+    },
+
+    ur: {
+      dir: 'rtl', fontClass: 'font-ur',
+      appName: 'دیکھ بھال مینجمنٹ سسٹم',
+      appSub:  'سنٹرل کچن اور کولڈ روم',
+      navHome: 'ہوم', navVisits: 'وزٹ', navPending: 'زیر التواء',
+      navNewVisit: 'نئی وزٹ', navTechs: 'ٹیکنیشنز', navParts: 'اسپیئر پارٹس',
+      navClients: 'کلائنٹس', navReports: 'رپورٹس', navArchive: 'آرکائیو',
+      navExport: 'PDF ایکسپورٹ', navSettings: 'سیٹنگز',
+      secHome: 'مین', secManage: 'مینجمنٹ', secReports: 'رپورٹس', secAccount: 'اکاؤنٹ',
+      dashTitle: 'ڈیش بورڈ', dashSub: 'آج کی کارروائیوں کا جائزہ',
+      todayVisits: 'آج کی وزٹ', completed: 'مکمل', pending: 'زیر التواء',
+      missingParts: 'غائب پارٹس', completionRate: 'تکمیل کی شرح',
+      needsFollowup: 'فالو اپ درکار', affectedVisits: 'کیسز',
+      techStatus: 'ٹیکنیشن کی حیثیت', viewAll: 'سب دیکھیں',
+      pendingVisits: 'زیر التواء رپورٹس', recentVisits: 'حالیہ وزٹ',
+      fullArchive: 'آرکائیو', weeklyProgress: 'ہفتہ وار پیشرفت',
+      sunToSat: 'اتوار — ہفتہ', total: 'کل',
+      inProgress: 'جاری ہے', done: 'مکمل', suspended: 'معطل',
+      onTheWay: 'راستے میں', available: 'دستیاب',
+      visitsTitle: 'وزٹ لاگ', visitsSub: 'تمام وزٹ اور رپورٹس',
+      searchClient: 'کلائنٹ یا ٹیکنیشن سے تلاش...', all: 'سب',
+      visitType: 'وزٹ کی قسم', client: 'کلائنٹ / آلہ',
+      technician: 'ٹیکنیشن', type: 'قسم', date: 'تاریخ', status: 'حیثیت',
+      newVisitTitle: 'نئی وزٹ', newVisitSub: 'دیکھ بھال وزٹ رپورٹ بنائیں',
+      clientData: 'کلائنٹ کی معلومات', clientName: 'کلائنٹ کا نام',
+      clientNamePh: 'کلائنٹ کا نام ٹائپ کریں...',
+      locationBranch: 'مقام / برانچ', locationPh: 'مقام یا برانچ...',
+      visitTypeLbl: 'وزٹ کی قسم',
+      warrantyVisit: 'وارنٹی وزٹ', paidVisit: 'ادائیگی والی وزٹ', contractVisit: 'وقتاً فوقتاً (معاہدہ)',
+      techResponsible: 'ذمہ دار ٹیکنیشن',
+      equipmentData: 'آلہ کی تفصیلات', equipmentLbl: 'آلہ / مشین',
+      selectEquipment: '-- آلہ منتخب کریں --',
+      serialNumber: 'سیریل نمبر', serialPh: 'ٹائپ کریں یا تصویر لیں...',
+      modelLbl: 'ماڈل', modelPh: 'ٹائپ کریں یا تصویر لیں...',
+      faultType: 'خرابی کی قسم', faultPh: 'خرابی بیان کریں...',
+      spareParts: 'ضروری اسپیئر پارٹس', partsAddPh: 'پارٹ کا نام ٹائپ کریں...',
+      tasksTitle: 'انجام دیے گئے کام', addTask: 'کام شامل کریں',
+      notesTitle: 'ٹیکنیشن نوٹس', voiceInput: 'آواز سے لکھیں', recording: 'ریکارڈنگ جاری...',
+      liveTranslation: 'فوری ترجمہ', copy: 'کاپی', addToReport: 'رپورٹ میں شامل کریں',
+      back: 'واپس', saveDraft: 'مسودہ محفوظ کریں', nextSignatures: 'اگلا: دستخط',
+      closeReport: 'رپورٹ بند کریں', closeReportSub: 'دستخط اور وزٹ کی تکمیل',
+      visitSummary: 'وزٹ کا خلاصہ', clientLbl: 'کلائنٹ', tasksDone: 'مکمل کام',
+      duration: 'دورانیہ', missingPartsLbl: 'غائب پارٹس',
+      piece: 'پارٹ', incomplete: 'رپورٹ نامکمل ہے۔ پارٹس آنے تک معطل کریں یا سب کام مکمل ہونے پر بند کریں۔',
+      techSignature: 'ٹیکنیشن کے دستخط', clientSignature: 'کلائنٹ / سپروائزر کے دستخط',
+      signHere: 'یہاں انگلی سے دستخط کریں', signed: 'دستخط ہو گئے',
+      clear: 'مٹائیں', confirm: 'تصدیق کریں',
+      previewPDF: 'PDF پیش نظارہ', suspendReport: 'رپورٹ معطل کریں', closeBtn: 'رپورٹ بند کریں',
+      suspended_msg: 'رپورٹ معطل — اسپیئر پارٹس کا انتظار',
+      closed_msg: 'رپورٹ کامیابی سے بند اور آرکائیو ہو گئی ✓',
+      techsTitle: 'ٹیکنیشنز مینجمنٹ', techsSub: 'اکاؤنٹس اور کارکردگی کا تجزیہ',
+      addTech: 'ٹیکنیشن شامل کریں', totalTechs: 'کل ٹیکنیشنز',
+      activeToday: 'آج فعال', avgCompletion: 'اوسط تکمیل',
+      thisMonth: 'اس ماہ', avgVisitTime: 'اوسط وزٹ وقت',
+      avgRating: 'اوسط کسٹمر ریٹنگ', outOf5: '5 میں سے',
+      completionRate2: 'تکمیل کی شرح', visitDuration: 'وزٹ کا دورانیہ',
+      totalVisits: 'کل', completedVisits: 'مکمل', pendingVisits2: 'زیر التواء',
+      editTech: 'ترمیم', analysisTech: 'تجزیہ', fullName: 'پورا نام',
+      mobile: 'موبائل', emailLbl: 'ای میل', nationality: 'قومیت',
+      specialization: 'تخصص', statusLbl: 'حیثیت',
+      active: 'فعال', vacation: 'چھٹی', suspended2: 'معطل',
+      password: 'پاس ورڈ', notes: 'نوٹس',
+      cancel: 'منسوخ', save: 'ٹیکنیشن محفوظ کریں',
+      monthlyComparison: 'ماہانہ تکمیل کا موازنہ',
+      visitTypesDist: 'وزٹ کی اقسام کی تقسیم',
+      partsTitle: 'اسپیئر پارٹس مینجمنٹ', partsSub: 'انوینٹری اور حرکت کی تاریخ',
+      addInventory: 'اسٹاک شامل کریں', newPart: 'نیا پارٹ',
+      totalParts: 'کل پارٹس', availableParts: 'دستیاب',
+      lowStock: 'کم اسٹاک', outOfStock: 'ختم',
+      currentInventory: 'موجودہ انوینٹری', movementHistory: 'حرکت کی تاریخ',
+      partName: 'پارٹ کا نام', category: 'زمرہ', quantity: 'مقدار',
+      minLevel: 'کم از کم سطح', stockStatus: 'حیثیت',
+      inStock: 'موجود', low: 'کم', out: 'ختم',
+      incoming: 'آنے والا', outgoing: 'جانے والا',
+      usedIn: 'استعمال ہوا', tech2: 'ٹیکنیشن',
+      partNamePh: 'پارٹ کا نام...', unitLbl: 'اکائی',
+      supplier: 'سپلائر', supplierPh: 'سپلائر کا نام...',
+      clientsTitle: 'کلائنٹس مینجمنٹ', clientsSub: 'ہر کلائنٹ کی وزٹ اور کارکردگی کا تجزیہ',
+      addClient: 'کلائنٹ شامل کریں', totalClients: 'کل کلائنٹس',
+      completedVisits2: 'مکمل وزٹ', pendingVisits3: 'زیر التواء وزٹ',
+      warrantyClients: 'وارنٹی کلائنٹس', activeContracts: 'فعال معاہدے',
+      searchClientPh: 'کلائنٹ تلاش کریں...', contract: 'معاہدہ',
+      warranty: 'وارنٹی', paid: 'ادائیگی', noContract: 'کوئی معاہدہ نہیں',
+      needsParts: 'پارٹس درکار', warrantyTag: 'وارنٹی میں', noWarranty: 'وارنٹی نہیں',
+      reports2: 'رپورٹس', history: 'تاریخ', edit: 'ترمیم',
+      visitDistribution: 'وزٹ کی حیثیت کی تقسیم', topClients: 'سب سے زیادہ وزٹ والے',
+      awaitingParts: 'پارٹس کے منتظر کلائنٹس', details: 'تفصیلات',
+      clientType: 'کلائنٹ کی قسم', location: 'مقام', contractExpiry: 'معاہدہ ختم ہونے کی تاریخ',
+      reportsTitle: 'رپورٹس اور تلاش', reportsSub: 'تمام وزٹ اور رپورٹس میں تلاش کریں',
+      exportExcel: 'Excel ایکسپورٹ', print: 'پرنٹ',
+      filterTitle: 'تلاش فلٹرز', clientNameFilter: 'کلائنٹ کا نام',
+      techFilter: 'ٹیکنیشن', partFilter: 'اسپیئر پارٹ',
+      dateRange: 'تاریخ کی حد', dateFrom: 'سے', dateTo: 'تک',
+      reportStatus: 'رپورٹ کی حیثیت', visitTypeFilter: 'وزٹ کی قسم',
+      search: 'تلاش', clearFilters: 'فلٹرز صاف کریں',
+      sortBy: 'ترتیب:', dateNewest: 'تاریخ (نیا)', dateOldest: 'تاریخ (پرانا)',
+      byClient: 'کلائنٹ کا نام', byTech: 'ٹیکنیشن',
+      results: 'نتائج', noResults: 'کوئی نتیجہ نہیں ملا',
+      tryChanging: 'فلٹرز تبدیل یا صاف کریں',
+      pendingMgmt: 'زیر التواء رپورٹس', pendingMgmtSub: 'اسپیئر پارٹس درکار',
+      pendingList: 'زیر التواء رپورٹس کی فہرست',
+    }
+  };
+
+  var currentLang = 'en';
+
+  function t(key) {
+    return (LANGS[currentLang] && LANGS[currentLang][key]) || (LANGS['en'][key]) || key;
+  }
+
+  function applyLang(lang) {
+    currentLang = lang;
+    var L = LANGS[lang];
+    document.documentElement.dir = L.dir;
+    document.documentElement.lang = lang;
+
+    // Font
+    document.body.classList.remove('font-en','font-ar','font-ur');
+    document.body.classList.add(L.fontClass);
+
+    // Update all [data-i18n] elements
+    document.querySelectorAll('[data-i18n]').forEach(function(el) {
+      var key = el.getAttribute('data-i18n');
+      var attr = el.getAttribute('data-i18n-attr') || 'text';
+      if (attr === 'text') el.textContent = t(key);
+      else if (attr === 'placeholder') el.placeholder = t(key);
+      else if (attr === 'title') el.title = t(key);
+    });
+
+    // Update lang switcher buttons
+    document.querySelectorAll('.lang-switch-btn').forEach(function(btn) {
+      btn.classList.toggle('active', btn.dataset.lang === lang);
+    });
+
+    // Re-render dynamic pages if active
+    var activePage = document.querySelector('.page.active');
+    if (activePage) {
+      var pid = activePage.id.replace('page-','');
+      if (pid === 'technicians')  renderTechCards();
+      if (pid === 'parts-store') { renderInventory('','all'); renderHistory('','all'); }
+      if (pid === 'clients')      renderClientCards();
+      if (pid === 'reports')      applyReportFilters();
+    }
+  }
+  </script>
+
 </head>
 <body>
 <div class="app">
-  <!-- Print Header — يظهر فقط عند الطباعة -->
-  <div class="hrco-print-header" id="printHeader">
-    <img src="data:image/png;base64,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" alt="HRCO" class="hrco-print-logo">
-    <div class="hrco-print-info">
-      <div class="hrco-print-title">شركة هركو — نظام إدارة الصيانة</div>
-      <div class="hrco-print-sub">المطابخ المركزية · غرف التبريد · الثلاجات الصناعية</div>
-      <div class="hrco-print-date" id="printDate"></div>
-    </div>
+
+</div>
   </div>
   <!-- TOP BAR -->
   <div class="topbar">
     <button class="hamburger" id="hamburger" aria-label="فتح القائمة"><i class="ti ti-menu-2"></i></button>
-    <div class="hrco-logo-wrap">
-      <img src="data:image/png;base64,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" alt="HRCO Logo" class="hrco-logo-img">
-    </div>
+        <div class="logo"><i class="ti ti-snowflake"></i></div>
     <div class="brand">
-      <div class="brand-name">نظام إدارة الصيانة</div>
-      <div class="brand-sub">هركو — للمطابخ المركزية وغرف التبريد</div>
+      <div class="brand-name" data-i18n="appName">Maintenance Management System</div>
+      <div class="brand-sub" data-i18n="appSub">Central Kitchens & Cold Rooms</div>
     </div>
     <div class="topbar-right">
+      <div class="lang-switcher">
+        <button class="lang-switch-btn active" data-lang="en" onclick="applyLang('en')">EN</button>
+        <button class="lang-switch-btn" data-lang="ar" onclick="applyLang('ar')">عر</button>
+        <button class="lang-switch-btn" data-lang="ur" onclick="applyLang('ur')">اردو</button>
+      </div>
       <span class="date-pill" id="dateChip"></span>
       <button class="notif-btn"><div class="notif-dot"></div><i class="ti ti-bell"></i> 3</button>
-      <div class="user-avatar">م</div>
+      <div class="user-avatar">M</div>
     </div>
   </div>
 
@@ -589,27 +972,27 @@ html, body { height: 100%; font-family: 'Tajawal', sans-serif; background: var(-
     <div class="sidebar" id="sidebar">
       <div class="sidebar-inner">
         <div class="nav-section">الرئيسية</div>
-        <div class="nav-item active" data-page="dashboard"><i class="ti ti-layout-dashboard"></i> لوحة التحكم</div>
-        <div class="nav-item" data-page="visits"><i class="ti ti-calendar"></i> الزيارات</div>
-        <div class="nav-item" data-page="pending"><i class="ti ti-clock-pause"></i> الكشوف المعلقة <span class="nav-badge">4</span></div>
+        <div class="nav-item active" data-page="dashboard"><i class="ti ti-layout-dashboard"></i>  data-i18n="navHome">Dashboard
+        <div class="nav-item" data-page="visits"><i class="ti ti-calendar"></i> <span data-i18n="navVisits">Visits</span></div>
+        <div class="nav-item" data-page="pending"><i class="ti ti-clock-pause"></i data-i18n="navPending">Pending <span class="nav-badge">4</span></div>
         <div class="nav-section">الإدارة</div>
-        <div class="nav-item" data-page="new-visit"><i class="ti ti-plus"></i> زيارة جديدة</div>
-        <div class="nav-item" data-page="technicians"><i class="ti ti-users"></i> الفنيون</div>
-        <div class="nav-item" data-page="parts-store"><i class="ti ti-tool"></i> قطع الغيار</div>
-        <div class="nav-item" data-page="clients"><i class="ti ti-building"></i> العملاء</div>
-        <div class="nav-section">التقارير</div>
-        <div class="nav-item" data-page="reports"><i class="ti ti-chart-bar"></i> التقارير</div>
-        <div class="nav-item"><i class="ti ti-history"></i> الأرشيف</div>
-        <div class="nav-item"><i class="ti ti-file-export"></i> تصدير PDF</div>
+        <div class="nav-item" data-page="new-visit"><i class="ti ti-plus"></i data-i18n="navNewVisit">New Visit/div>
+        <div class="nav-item" data-page="technicians"><i class="ti ti-users"></i data-i18n="navTechs">Technicians/div>
+        <div class="nav-item" data-page="parts-store"><i class="ti ti-tool"></i data-i18n="navParts">Spare Parts/div>
+        <div class="nav-item" data-page="clients"><i class="ti ti-building"></i data-i18n="navClients">Clients/div>
+        <div class="nav-section"><span data-i18n="secReports">Reports</span></div>
+        <div class="nav-item" data-page="reports"><i class="ti ti-chart-bar"></i> <span data-i18n="navReports">Reports</span></div>
+        <div class="nav-item"><i class="ti ti-history"></i data-i18n="navArchive">Archive/div>
+        <div class="nav-item"><i class="ti ti-file-export"></i data-i18n="navExport">Export PDF/div>
         <div class="nav-section">الحساب</div>
-        <div class="nav-item"><i class="ti ti-settings"></i> الإعدادات</div>
+        <div class="nav-item"><i class="ti ti-settings"></i data-i18n="navSettings">Settings/div>
       </div>
       <div class="sidebar-footer">
         <div class="user-info">
           <div class="avatar" style="background:#E6F1FB;color:var(--blue-main);font-size:14px">م</div>
           <div>
-            <div class="user-name">محمد العتيبي</div>
-            <div class="user-role">مدير الصيانة</div>
+            <div class="user-name">Mohammed Al-Otaibi</div>
+            <div class="user-role" data-i18n="techsTitle">Maintenance Manager</div>
           </div>
         </div>
       </div>
@@ -622,24 +1005,24 @@ html, body { height: 100%; font-family: 'Tajawal', sans-serif; background: var(-
       <div class="page active" id="page-dashboard">
         <div class="page-header">
           <div>
-            <div class="page-title">لوحة التحكم</div>
-            <div class="page-sub">نظرة عامة على عمليات اليوم</div>
+            <div class="page-title"> data-i18n="navHome">Dashboard
+            <div class="page-sub" data-i18n="dashSub">Today's operations overview</div>
           </div>
-          <button class="btn btn-primary" onclick="showPage('new-visit')"><i class="ti ti-plus"></i> زيارة جديدة</button>
+          <button class="btn btn-primary" onclick="showPage('new-visit')"><i class="ti ti-plus"></i data-i18n="navNewVisit">New Visit/button>
         </div>
 
         <div class="stats-grid">
           <div class="stat-card">
             <div class="stat-icon" style="background:#E6F1FB"><i class="ti ti-calendar-check" style="color:var(--blue-main)"></i></div>
             <div class="stat-val">18</div>
-            <div class="stat-lbl">زيارة اليوم</div>
-            <div class="stat-change up"><i class="ti ti-trending-up"></i> +3 من أمس</div>
+            <div class="stat-lbl" data-i18n="todayVisits">Today's Visits</div>
+            <div class="stat-change up"><i class="ti ti-trending-up"></i> <span data-i18n="fromYest">+3 from yesterday</span></div>
           </div>
           <div class="stat-card">
             <div class="stat-icon" style="background:var(--green-pale)"><i class="ti ti-circle-check" style="color:var(--green)"></i></div>
             <div class="stat-val">13</div>
-            <div class="stat-lbl">مكتملة</div>
-            <div class="stat-change up"><i class="ti ti-trending-up"></i> 72% إنجاز</div>
+            <div class="stat-lbl" data-i18n="completed">Completed</div>
+            <div class="stat-change up"><i class="ti ti-trending-up"></i> <span data-i18n="completion72">72% completion</span></div>
           </div>
           <div class="stat-card">
             <div class="stat-icon" style="background:var(--orange-pale)"><i class="ti ti-clock-pause" style="color:var(--orange)"></i></div>
@@ -650,26 +1033,26 @@ html, body { height: 100%; font-family: 'Tajawal', sans-serif; background: var(-
           <div class="stat-card">
             <div class="stat-icon" style="background:var(--red-pale)"><i class="ti ti-tool" style="color:var(--red)"></i></div>
             <div class="stat-val">7</div>
-            <div class="stat-lbl">قطع ناقصة</div>
-            <div class="stat-change down"><i class="ti ti-trending-down"></i> 3 كشوف</div>
+            <div class="stat-lbl" data-i18n="missingParts">Missing Parts</div>
+            <div class="stat-change down"><i class="ti ti-trending-down"></i> <span data-i18n="threeReports">3 reports</span></div>
           </div>
         </div>
 
         <div class="grid2">
           <div class="card">
             <div class="card-header">
-              <div class="card-title"><i class="ti ti-users"></i> حالة الفنيين</div>
-              <button class="card-action">عرض الكل</button>
+              <div class="card-title"><i class="ti ti-users"></i> <span data-i18n="techStatus">Technician Status</span></div>
+              <button class="card-action" data-i18n="viewAll">View All</button>
             </div>
-            <div class="list-row"><div class="avatar" style="background:#E6F1FB;color:var(--blue-main)">أع</div><div class="row-info"><div class="row-name">أحمد العتيبي</div><div class="row-sub">فندق الريتز — غرفة B3</div></div><span class="badge b-warning">قيد التنفيذ</span></div>
-            <div class="list-row"><div class="avatar" style="background:var(--green-pale);color:var(--green)">مح</div><div class="row-info"><div class="row-name">محمد الحربي</div><div class="row-sub">مطعم الأصيل</div></div><span class="badge b-success">مكتملة</span></div>
+            <div class="list-row"><div class="avatar" style="background:#E6F1FB;color:var(--blue-main)">أع</div><div class="row-info"><div class="row-name">أحمد العتيبي</div><div class="row-sub">فندق الريتز — غرفة B3</div></div><span class="badge b-warning" data-i18n="inProgress">In Progress</span></div>
+            <div class="list-row"><div class="avatar" style="background:var(--green-pale);color:var(--green)">مح</div><div class="row-info"><div class="row-name">محمد الحربي</div><div class="row-sub">مطعم الأصيل</div></div><span class="badge b-success" data-i18n="done">Completed</span></div>
             <div class="list-row"><div class="avatar" style="background:var(--orange-pale);color:var(--orange)">سق</div><div class="row-info"><div class="row-name">سامي القحطاني</div><div class="row-sub">في الطريق — ماكدونالدز</div></div><span class="badge b-info">في الطريق</span></div>
             <div class="list-row"><div class="avatar" style="background:#F1F5F9;color:#64748B">خر</div><div class="row-info"><div class="row-name">خالد الرشيدي</div><div class="row-sub">لا توجد زيارات</div></div><span class="badge b-gray">متاح</span></div>
           </div>
 
           <div class="card">
             <div class="card-header">
-              <div class="card-title"><i class="ti ti-clock-pause" style="color:var(--orange)"></i> الكشوف المعلقة</div>
+              <div class="card-title"><i class="ti ti-clock-pause" style="color:var(--orange)"></i> <span data-i18n="pendingVisits">Pending Visits</span></div>
               <button class="card-action" onclick="showPage('pending')">عرض الكل</button>
             </div>
             <div class="list-row"><div class="row-info"><div class="row-name">فندق الريتز — B3</div><div class="row-sub">صمام تمدد Danfoss T2</div></div><span style="font-size:11px;color:var(--orange);font-weight:600;flex-shrink:0">يوم 1</span></div>
@@ -682,18 +1065,18 @@ html, body { height: 100%; font-family: 'Tajawal', sans-serif; background: var(-
         <div class="grid2">
           <div class="card">
             <div class="card-header">
-              <div class="card-title"><i class="ti ti-history"></i> آخر الزيارات</div>
-              <button class="card-action" onclick="showPage('visits')">الأرشيف</button>
+              <div class="card-title"><i class="ti ti-history"></i> <span data-i18n="recentVisits">Recent Visits</span></div>
+              <button class="card-action" onclick="showPage('visits')" data-i18n="fullArchive">Archive</button>
             </div>
             <div class="list-row" style="cursor:pointer"><div class="avatar" style="background:var(--green-pale);border-radius:var(--radius-sm)"><i class="ti ti-circle-check" style="color:var(--green);font-size:16px"></i></div><div class="row-info"><div class="row-name">مطعم الأصيل — مطبخ مركزي</div><div class="row-sub">محمد الحربي · 10:30 ص</div></div><span class="badge b-success">مكتملة</span></div>
-            <div class="list-row" style="cursor:pointer"><div class="avatar" style="background:var(--orange-pale);border-radius:var(--radius-sm)"><i class="ti ti-clock-pause" style="color:var(--orange);font-size:16px"></i></div><div class="row-info"><div class="row-name">فندق الريتز — غرفة B3</div><div class="row-sub">أحمد العتيبي · 09:00 ص</div></div><span class="badge b-warning">معلقة</span></div>
+            <div class="list-row" style="cursor:pointer"><div class="avatar" style="background:var(--orange-pale);border-radius:var(--radius-sm)"><i class="ti ti-clock-pause" style="color:var(--orange);font-size:16px"></i></div><div class="row-info"><div class="row-name">فندق الريتز — غرفة B3</div><div class="row-sub">أحمد العتيبي · 09:00 ص</div></div><span class="badge b-warning" data-i18n="pending">Pending</span></div>
             <div class="list-row" style="cursor:pointer"><div class="avatar" style="background:var(--green-pale);border-radius:var(--radius-sm)"><i class="ti ti-circle-check" style="color:var(--green);font-size:16px"></i></div><div class="row-info"><div class="row-name">ماكدونالدز — الفرع الرئيسي</div><div class="row-sub">سامي القحطاني · أمس</div></div><span class="badge b-success">مكتملة</span></div>
           </div>
 
           <div class="card">
             <div class="card-header">
-              <div class="card-title"><i class="ti ti-chart-bar"></i> إنجاز الأسبوع</div>
-              <span style="font-size:11px;color:var(--text-ter)">أحد — سبت</span>
+              <div class="card-title"><i class="ti ti-chart-bar"></i> <span data-i18n="weeklyProgress">Weekly Progress</span></div>
+              <span style="font-size:11px;color:var(--text-ter)" data-i18n="sunToSat">Sun — Sat</span>
             </div>
             <div class="chart-wrap">
               <div class="bar-group" id="barGroup"></div>
@@ -703,9 +1086,9 @@ html, body { height: 100%; font-family: 'Tajawal', sans-serif; background: var(-
               </div>
             </div>
             <div class="week-totals">
-              <div class="wt"><div class="wt-val">67</div><div class="wt-lbl">الإجمالي</div></div>
-              <div class="wt"><div class="wt-val" style="color:var(--green)">54</div><div class="wt-lbl">مكتملة</div></div>
-              <div class="wt"><div class="wt-val" style="color:var(--orange)">13</div><div class="wt-lbl">معلقة</div></div>
+              <div class="wt"><div class="wt-val">67</div><div class="wt-lbl" data-i18n="total">Total</div></div>
+              <div class="wt"><div class="wt-val" style="color:var(--green)">54</div><div class="wt-lbl" data-i18n="completed">Completed</div></div>
+              <div class="wt"><div class="wt-val" style="color:var(--orange)">13</div><div class="wt-lbl" data-i18n="pending">Pending</div></div>
             </div>
           </div>
         </div>
@@ -715,15 +1098,15 @@ html, body { height: 100%; font-family: 'Tajawal', sans-serif; background: var(-
       <div class="page" id="page-visits">
         <div class="page-header">
           <div>
-            <div class="page-title">سجل الزيارات</div>
-            <div class="page-sub">جميع الزيارات والكشوف</div>
+            <div class="page-title" data-i18n="visitsTitle">Visit Log</div>
+            <div class="page-sub" data-i18n="visitsSub">All visits and reports</div>
           </div>
-          <button class="btn btn-primary" onclick="showPage('new-visit')"><i class="ti ti-plus"></i> زيارة جديدة</button>
+          <button class="btn btn-primary" onclick="showPage('new-visit')"><i class="ti ti-plus"></i data-i18n="navNewVisit">New Visit/button>
         </div>
         <div class="visits-toolbar">
-          <div class="search-box"><i class="ti ti-search"></i><input type="text" placeholder="بحث بالعميل أو الفني..."></div>
+          <div class="search-box"><i class="ti ti-search"></i><input type="text" placeholder="Search by client or technician..." data-i18n-attr="placeholder" data-i18n="searchClient"></div>
           <div class="filter-tabs">
-            <button class="f-tab active">الكل</button>
+            <button class="f-tab active" data-i18n="all">All</button>
             <button class="f-tab">مكتملة</button>
             <button class="f-tab">معلقة</button>
             <button class="f-tab">قيد التنفيذ</button>
@@ -731,11 +1114,11 @@ html, body { height: 100%; font-family: 'Tajawal', sans-serif; background: var(-
         </div>
         <div class="visits-table">
           <div class="table-header">
-            <div>العميل / المعدة</div>
-            <div class="h2">الفني</div>
-            <div class="h3">النوع</div>
-            <div class="h4">التاريخ</div>
-            <div>الحالة</div>
+            <div data-i18n="client">Client / Equipment</div>
+            <div class="h2" data-i18n="technician">Technician</div>
+            <div class="h3" data-i18n="type">Type</div>
+            <div class="h4" data-i18n="date">Date</div>
+            <div data-i18n="status">Status</div>
             <div></div>
           </div>
           <div class="table-row"><div class="cell">فندق الريتز — غرفة B3</div><div class="cell c2 sec">أحمد العتيبي</div><div class="cell c3 sec">بلاغ عطل</div><div class="cell c4 sec">اليوم 09:00</div><div class="cell"><span class="badge b-warning">معلقة</span></div><div class="row-actions"><button class="row-btn"><i class="ti ti-eye"></i></button><button class="row-btn"><i class="ti ti-edit"></i></button></div></div>
@@ -750,8 +1133,8 @@ html, body { height: 100%; font-family: 'Tajawal', sans-serif; background: var(-
       <div class="page" id="page-pending">
         <div class="page-header">
           <div>
-            <div class="page-title">الكشوف المعلقة</div>
-            <div class="page-sub">تحتاج توفير قطع الغيار</div>
+            <div class="page-title" data-i18n="pendingMgmt">Pending Reports</div>
+            <div class="page-sub" data-i18n="pendingMgmtSub">Awaiting spare parts</div>
           </div>
         </div>
         <div class="card">
@@ -767,8 +1150,8 @@ html, body { height: 100%; font-family: 'Tajawal', sans-serif; background: var(-
       <div class="page" id="page-new-visit">
         <div class="page-header">
           <div>
-            <div class="page-title">زيارة جديدة</div>
-            <div class="page-sub">إنشاء كشف زيارة صيانة</div>
+            <div class="page-title" data-i18n="newVisitTitle">New Visit</div>
+            <div class="page-sub" data-i18n="newVisitSub">Create a maintenance visit report</div>
           </div>
         </div>
         <div class="form-grid">
@@ -776,29 +1159,29 @@ html, body { height: 100%; font-family: 'Tajawal', sans-serif; background: var(-
           <div class="form-card">
             <h3><i class="ti ti-building"></i> بيانات العميل</h3>
             <div class="field">
-              <label>اسم العميل</label>
+              <label data-i18n="clientName">Client Name</label>
               <div class="field-wrap">
                 <input type="text" id="inp-client" placeholder="ابدأ بالكتابة..." autocomplete="off" oninput="handleAC('client',this.value)" onfocus="showAC('client',this.value)" onblur="hideAC('client')">
                 <div class="autocomplete-dd" id="dd-client"></div>
               </div>
             </div>
             <div class="field">
-              <label>الموقع / الفرع</label>
+              <label data-i18n="locationBranch">Location / Branch</label>
               <div class="field-wrap">
-                <input type="text" id="inp-location" placeholder="موقع العميل أو الفرع..." autocomplete="off" oninput="handleAC('location',this.value)" onfocus="showAC('location',this.value)" onblur="hideAC('location')">
+                <input type="text" id="inp-location" placeholder="Client location or branch..." data-i18n="locationPh" data-i18n-attr="placeholder" autocomplete="off" oninput="handleAC('location',this.value)" onfocus="showAC('location',this.value)" onblur="hideAC('location')">
                 <div class="autocomplete-dd" id="dd-location"></div>
               </div>
             </div>
             <div class="field">
-              <label>نوع الزيارة</label>
+              <label data-i18n="visitTypeLbl">Visit Type</label>
               <select>
-                <option>زيارة تحت الضمان</option>
-                <option>زيارة مدفوعة</option>
-                <option>زيارة دورية (عقد صيانة)</option>
+                <option data-i18n="warrantyVisit">Warranty Visit</option>
+                <option data-i18n="paidVisit">Paid Visit</option>
+                <option data-i18n="contractVisit">Periodic Visit (Contract)</option>
               </select>
             </div>
             <div class="field">
-              <label>الفني المسؤول</label>
+              <label data-i18n="techResponsible">Assigned Technician</label>
               <select>
                 <option>أحمد العتيبي</option>
                 <option>محمد الحربي</option>
@@ -812,10 +1195,10 @@ html, body { height: 100%; font-family: 'Tajawal', sans-serif; background: var(-
           <div class="form-card">
             <h3><i class="ti ti-tool"></i> بيانات المعدة</h3>
             <div class="field">
-              <label>اسم المعدة / الجهاز</label>
+              <label data-i18n="equipmentLbl">Equipment / Device</label>
               <div class="eq-select-wrap" id="eq-wrap">
                 <div class="eq-selected" id="eq-selected" onclick="toggleEqDD()">
-                  <span id="eq-selected-text" style="color:var(--text-ter)">-- اختر المعدة --</span>
+                  <span id="eq-selected-text" style="color:var(--text-ter)" data-i18n="selectEquipment">-- Select Equipment --</span>
                   <i class="ti ti-chevron-down" style="font-size:14px;color:var(--text-ter);transition:transform 0.2s" id="eq-chevron"></i>
                 </div>
                 <div class="eq-dropdown" id="eq-dropdown" style="display:none">
@@ -834,7 +1217,7 @@ html, body { height: 100%; font-family: 'Tajawal', sans-serif; background: var(-
             </div>
 
             <div class="field">
-              <label>الرقم التسلسلي (Serial Number)</label>
+              <label data-i18n="serialNumber">Serial Number</label>
               <div class="scan-input-wrap">
                 <div class="field-wrap" style="flex:1">
                   <input type="text" id="inp-serial" placeholder="اكتب أو صوّر البطاقة..." autocomplete="off"
@@ -856,7 +1239,7 @@ html, body { height: 100%; font-family: 'Tajawal', sans-serif; background: var(-
             </div>
 
             <div class="field">
-              <label>الموديل (Model)</label>
+              <label data-i18n="modelLbl">Model</label>
               <div class="scan-input-wrap">
                 <div class="field-wrap" style="flex:1">
                   <input type="text" id="inp-model" placeholder="اكتب أو صوّر البطاقة..." autocomplete="off"
@@ -878,14 +1261,14 @@ html, body { height: 100%; font-family: 'Tajawal', sans-serif; background: var(-
             </div>
 
             <div class="field">
-              <label>نوع العطل</label>
+              <label data-i18n="faultType">Fault Type</label>
               <div class="field-wrap">
-                <input type="text" id="inp-fault" placeholder="وصف العطل..." autocomplete="off" oninput="handleAC('fault',this.value)" onfocus="showAC('fault',this.value)" onblur="hideAC('fault')">
+                <input type="text" id="inp-fault" placeholder="Describe the fault..." data-i18n="faultPh" data-i18n-attr="placeholder" autocomplete="off" oninput="handleAC('fault',this.value)" onfocus="showAC('fault',this.value)" onblur="hideAC('fault')">
                 <div class="autocomplete-dd" id="dd-fault"></div>
               </div>
             </div>
             <div class="field">
-              <label>قطع الغيار المطلوبة</label>
+              <label data-i18n="spareParts">Required Spare Parts</label>
               <div class="field-wrap">
                 <input type="text" id="inp-parts" placeholder="ابدأ بكتابة اسم القطعة..." autocomplete="off" oninput="handleAC('parts',this.value)" onfocus="showAC('parts',this.value)" onblur="hideAC('parts')">
                 <div class="autocomplete-dd" id="dd-parts"></div>
@@ -912,7 +1295,7 @@ html, body { height: 100%; font-family: 'Tajawal', sans-serif; background: var(-
             <div class="voice-toolbar">
               <button class="mic-btn mic-idle" id="micBtn" onclick="toggleMic()">
                 <div class="mic-pulse"></div>
-                <span id="micLbl">إملاء صوتي</span>
+                <span id="micLbl" data-i18n="voiceInput">Voice Input</span>
               </button>
               <div class="lang-pills">
                 <button class="lang-pill active" onclick="setLang('ar',this)">ع</button>
@@ -955,8 +1338,8 @@ html, body { height: 100%; font-family: 'Tajawal', sans-serif; background: var(-
       <div class="page" id="page-signature">
         <div class="page-header">
           <div>
-            <div class="page-title">إغلاق الكشف</div>
-            <div class="page-sub">التوقيعات وإتمام الزيارة</div>
+            <div class="page-title" data-i18n="closeReport">Close Report</div>
+            <div class="page-sub" data-i18n="closeReportSub">Signatures & visit completion</div>
           </div>
         </div>
         <div class="sig-layout">
@@ -964,9 +1347,9 @@ html, body { height: 100%; font-family: 'Tajawal', sans-serif; background: var(-
             <div class="card-header"><div class="card-title"><i class="ti ti-clipboard-list"></i> ملخص الزيارة</div></div>
             <div class="summary-grid">
               <div class="sum-card"><div class="sum-lbl">العميل</div><div class="sum-val" style="font-size:13px">فندق الريتز</div></div>
-              <div class="sum-card"><div class="sum-lbl">الأعمال المنفذة</div><div class="sum-val">2 / 3</div></div>
-              <div class="sum-card"><div class="sum-lbl">مدة الزيارة</div><div class="sum-val">1س 45د</div></div>
-              <div class="sum-card"><div class="sum-lbl">قطع ناقصة</div><div class="sum-val" style="color:var(--red)">1 قطعة</div></div>
+              <div class="sum-card"><div class="sum-lbl" data-i18n="tasksTitle">Tasks Performed</div><div class="sum-val">2 / 3</div></div>
+              <div class="sum-card"><div class="sum-lbl" data-i18n="duration">Duration</div><div class="sum-val">1س 45د</div></div>
+              <div class="sum-card"><div class="sum-lbl" data-i18n="missingPartsLbl">Missing Parts</div><div class="sum-val" style="color:var(--red)">1 قطعة</div></div>
             </div>
             <div class="alert-box">
               <i class="ti ti-alert-triangle" style="font-size:16px"></i>
@@ -979,7 +1362,7 @@ html, body { height: 100%; font-family: 'Tajawal', sans-serif; background: var(-
               </div>
               <div class="sig-canvas-wrap" id="techWrap">
                 <canvas id="techCanvas" height="80"></canvas>
-                <div class="sig-hint" id="techHint"><i class="ti ti-pencil" style="font-size:22px"></i><span>وقّع هنا بإصبعك</span></div>
+                <div class="sig-hint" id="techHint"><i class="ti ti-pencil" style="font-size:22px"></i><span><span data-i18n="signHere">Sign here with your finger</span></span></div>
               </div>
               <div class="sig-actions">
                 <button class="sig-btn sig-clear" onclick="clearSig('tech')"><i class="ti ti-trash" style="font-size:13px"></i> مسح</button>
@@ -998,7 +1381,7 @@ html, body { height: 100%; font-family: 'Tajawal', sans-serif; background: var(-
               </div>
               <div class="sig-canvas-wrap" id="clientWrap">
                 <canvas id="clientCanvas" height="80"></canvas>
-                <div class="sig-hint" id="clientHint"><i class="ti ti-pencil" style="font-size:22px"></i><span>وقّع هنا بإصبعك</span></div>
+                <div class="sig-hint" id="clientHint"><i class="ti ti-pencil" style="font-size:22px"></i><span><span data-i18n="signHere">Sign here with your finger</span></span></div>
               </div>
               <div class="sig-actions">
                 <button class="sig-btn sig-clear" onclick="clearSig('client')"><i class="ti ti-trash" style="font-size:13px"></i> مسح</button>
@@ -1019,7 +1402,7 @@ html, body { height: 100%; font-family: 'Tajawal', sans-serif; background: var(-
       <div class="page" id="page-technicians">
         <div class="page-header">
           <div>
-            <div class="page-title">إدارة الفنيين</div>
+            <div class="page-title" data-i18n="techsTitle">Technicians Management</div>
             <div class="page-sub">إدارة الحسابات والأداء والتحليلات</div>
           </div>
           <button class="btn btn-primary" onclick="openTechModal()"><i class="ti ti-user-plus"></i> إضافة فني</button>
@@ -1038,7 +1421,7 @@ html, body { height: 100%; font-family: 'Tajawal', sans-serif; background: var(-
             <div class="stat-card">
               <div class="stat-icon" style="background:#E6F1FB"><i class="ti ti-users" style="color:var(--blue-main)"></i></div>
               <div class="stat-val">4</div>
-              <div class="stat-lbl">إجمالي الفنيين</div>
+              <div class="stat-lbl" data-i18n="totalTechs">Total Technicians</div>
               <div class="stat-change up"><i class="ti ti-trending-up"></i> جميعهم نشطون</div>
             </div>
             <div class="stat-card">
@@ -1131,8 +1514,8 @@ html, body { height: 100%; font-family: 'Tajawal', sans-serif; background: var(-
       <div class="page" id="page-technicians">
         <div class="page-header">
           <div>
-            <div class="page-title">إدارة الفنيين</div>
-            <div class="page-sub">حسابات الفنيين وتحليل الأداء</div>
+            <div class="page-title" data-i18n="techsTitle">Technicians Management</div>
+            <div class="page-sub" data-i18n="techsSub">Accounts and performance analysis</div>
           </div>
           <button class="btn btn-primary" onclick="openTechModal()"><i class="ti ti-user-plus"></i> إضافة فني</button>
         </div>
@@ -1148,19 +1531,19 @@ html, body { height: 100%; font-family: 'Tajawal', sans-serif; background: var(-
           <div class="stat-card">
             <div class="stat-icon" style="background:var(--green-pale)"><i class="ti ti-trophy" style="color:var(--green)"></i></div>
             <div class="stat-val">89%</div>
-            <div class="stat-lbl">متوسط الإنجاز</div>
+            <div class="stat-lbl" data-i18n="avgCompletion">Avg. Completion</div>
             <div class="stat-change up"><i class="ti ti-trending-up"></i> +4% هذا الشهر</div>
           </div>
           <div class="stat-card">
             <div class="stat-icon" style="background:var(--orange-pale)"><i class="ti ti-clock" style="color:var(--orange)"></i></div>
             <div class="stat-val">1.8</div>
-            <div class="stat-lbl">متوسط ساعات الزيارة</div>
+            <div class="stat-lbl" data-i18n="avgVisitTime">Avg. Visit Time</div>
             <div class="stat-change up"><i class="ti ti-trending-down"></i> -12 دقيقة</div>
           </div>
           <div class="stat-card">
             <div class="stat-icon" style="background:var(--green-pale)"><i class="ti ti-star" style="color:var(--green)"></i></div>
             <div class="stat-val">4.7</div>
-            <div class="stat-lbl">متوسط تقييم العملاء</div>
+            <div class="stat-lbl" data-i18n="avgRating">Avg. Customer Rating</div>
             <div class="stat-change up"><i class="ti ti-trending-up"></i> من 5 نجوم</div>
           </div>
         </div>
@@ -1192,34 +1575,34 @@ html, body { height: 100%; font-family: 'Tajawal', sans-serif; background: var(-
       <div id="techModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.45);z-index:500;align-items:center;justify-content:center;padding:16px">
         <div style="background:var(--bg-card);border-radius:var(--radius);width:100%;max-width:460px;max-height:90vh;overflow-y:auto;box-shadow:var(--shadow-lg)">
           <div style="background:var(--blue-dark);padding:14px 18px;border-radius:var(--radius) var(--radius) 0 0;display:flex;align-items:center;justify-content:space-between">
-            <div style="color:#fff;font-size:15px;font-weight:600" id="modalTitle">إضافة فني جديد</div>
+            <div style="color:#fff;font-size:15px;font-weight:600" id="modalTitle" data-i18n="addTech">Add Technician</div>
             <button onclick="closeTechModal()" style="background:rgba(255,255,255,0.1);border:none;color:#fff;border-radius:99px;width:28px;height:28px;cursor:pointer;font-size:16px;display:flex;align-items:center;justify-content:center"><i class="ti ti-x"></i></button>
           </div>
           <div style="padding:18px">
             <div class="form-grid" style="grid-template-columns:1fr 1fr;gap:12px">
-              <div class="field" style="margin-bottom:0"><label>الاسم الكامل</label><input type="text" id="m-name" placeholder="اسم الفني"></div>
-              <div class="field" style="margin-bottom:0"><label>رقم الجوال</label><input type="text" id="m-phone" placeholder="05xxxxxxxx"></div>
-              <div class="field" style="margin-bottom:0"><label>البريد الإلكتروني</label><input type="text" id="m-email" placeholder="email@example.com"></div>
-              <div class="field" style="margin-bottom:0"><label>الجنسية</label>
+              <div class="field" style="margin-bottom:0"><label data-i18n="fullName">Full Name</label><input type="text" id="m-name" placeholder="اسم الفني"></div>
+              <div class="field" style="margin-bottom:0"><label data-i18n="mobile">Mobile</label><input type="text" id="m-phone" placeholder="05xxxxxxxx"></div>
+              <div class="field" style="margin-bottom:0"><label data-i18n="emailLbl">Email</label><input type="text" id="m-email" placeholder="email@example.com"></div>
+              <div class="field" style="margin-bottom:0"><label data-i18n="nationality">Nationality</label>
                 <select id="m-nationality">
                   <option>سعودي</option><option>مصري</option><option>باكستاني</option><option>فلبيني</option><option>هندي</option><option>سوداني</option><option>أردني</option>
                 </select>
               </div>
-              <div class="field" style="margin-bottom:0"><label>التخصص</label>
+              <div class="field" style="margin-bottom:0"><label data-i18n="specialization">Specialization</label>
                 <select id="m-spec">
                   <option>تبريد وتكييف</option><option>مطابخ مركزية</option><option>كهرباء صناعية</option><option>أجهزة طعام</option>
                 </select>
               </div>
-              <div class="field" style="margin-bottom:0"><label>الحالة</label>
+              <div class="field" style="margin-bottom:0"><label data-i18n="statusLbl">Status</label>
                 <select id="m-status">
-                  <option>نشط</option><option>إجازة</option><option>موقوف</option>
+                  <option data-i18n="techActive">Active</option><option data-i18n="techVacation">On Leave</option><option data-i18n="techSuspended">Suspended</option>
                 </select>
               </div>
-              <div class="field" style="margin-bottom:0;grid-column:1/-1"><label>كلمة المرور</label><input type="password" id="m-pass" placeholder="كلمة مرور التطبيق"></div>
-              <div class="field" style="margin-bottom:0;grid-column:1/-1"><label>ملاحظات</label><textarea id="m-notes" style="min-height:55px" placeholder="أي ملاحظات إضافية..."></textarea></div>
+              <div class="field" style="margin-bottom:0;grid-column:1/-1"><label data-i18n="password">Password</label><input type="password" id="m-pass" placeholder="كلمة مرور التطبيق"></div>
+              <div class="field" style="margin-bottom:0;grid-column:1/-1"><label data-i18n="notes">Notes</label><textarea id="m-notes" style="min-height:55px" placeholder="أي ملاحظات إضافية..."></textarea></div>
             </div>
             <div style="display:flex;gap:8px;margin-top:16px">
-              <button class="btn btn-outline" onclick="closeTechModal()" style="flex:1">إلغاء</button>
+              <button class="btn btn-outline" onclick="closeTechModal()" style="flex:1" data-i18n="cancel">Cancel</button>
               <button class="btn btn-primary" onclick="saveTech()" style="flex:2"><i class="ti ti-device-floppy"></i> حفظ الفني</button>
             </div>
           </div>
@@ -1231,8 +1614,8 @@ html, body { height: 100%; font-family: 'Tajawal', sans-serif; background: var(-
       <div class="page" id="page-parts-store">
         <div class="page-header">
           <div>
-            <div class="page-title">إدارة قطع الغيار</div>
-            <div class="page-sub">المخزون الحالي وسجل الحركات</div>
+            <div class="page-title" data-i18n="partsTitle">Spare Parts Management</div>
+            <div class="page-sub" data-i18n="partsSub">Inventory & movement history</div>
           </div>
           <div style="display:flex;gap:8px">
             <button class="btn btn-outline" onclick="openAddPartModal()"><i class="ti ti-package-import"></i> إضافة مخزون</button>
@@ -1245,22 +1628,22 @@ html, body { height: 100%; font-family: 'Tajawal', sans-serif; background: var(-
           <div class="part-stat-card">
             <div class="part-stat-icon" style="background:#E6F1FB"><i class="ti ti-packages" style="color:var(--blue-main);font-size:18px"></i></div>
             <div class="part-stat-val">24</div>
-            <div class="part-stat-lbl">إجمالي أصناف القطع</div>
+            <div class="part-stat-lbl" data-i18n="totalParts">Total Parts</div>
           </div>
           <div class="part-stat-card">
             <div class="part-stat-icon" style="background:var(--green-pale)"><i class="ti ti-circle-check" style="color:var(--green);font-size:18px"></i></div>
             <div class="part-stat-val">18</div>
-            <div class="part-stat-lbl">أصناف متوفرة</div>
+            <div class="part-stat-lbl" data-i18n="availableParts">Available</div>
           </div>
           <div class="part-stat-card">
             <div class="part-stat-icon" style="background:var(--orange-pale)"><i class="ti ti-alert-triangle" style="color:var(--orange);font-size:18px"></i></div>
             <div class="part-stat-val">4</div>
-            <div class="part-stat-lbl">مخزون منخفض</div>
+            <div class="part-stat-lbl" data-i18n="lowStock">Low Stock</div>
           </div>
           <div class="part-stat-card">
             <div class="part-stat-icon" style="background:var(--red-pale)"><i class="ti ti-package-off" style="color:var(--red);font-size:18px"></i></div>
             <div class="part-stat-val">2</div>
-            <div class="part-stat-lbl">نفد المخزون</div>
+            <div class="part-stat-lbl" data-i18n="outOfStock">Out of Stock</div>
           </div>
         </div>
 
@@ -1283,11 +1666,11 @@ html, body { height: 100%; font-family: 'Tajawal', sans-serif; background: var(-
           </div>
           <div class="inventory-table">
             <div class="inv-header">
-              <div>اسم القطعة</div>
-              <div class="ih2">الفئة</div>
-              <div class="ih3">الكمية</div>
-              <div class="ih4">الحد الأدنى</div>
-              <div>الحالة</div>
+              <div data-i18n="partName">Part Name</div>
+              <div class="ih2" data-i18n="category">Category</div>
+              <div class="ih3" data-i18n="quantity">Qty</div>
+              <div class="ih4" data-i18n="minLevel">Min. Level</div>
+              <div data-i18n="stockStatus">Status</div>
               <div></div>
             </div>
             <div id="inventoryList"></div>
@@ -1306,12 +1689,12 @@ html, body { height: 100%; font-family: 'Tajawal', sans-serif; background: var(-
           </div>
           <div class="history-table">
             <div class="hist-header">
-              <div>القطعة</div>
-              <div>النوع</div>
-              <div class="hh3">الكمية</div>
-              <div class="hh4">صُرفت في</div>
-              <div class="hh5">الفني</div>
-              <div>التاريخ</div>
+              <div data-i18n="partName">Part</div>
+              <div data-i18n="type">Type</div>
+              <div class="hh3" data-i18n="quantity">Qty</div>
+              <div class="hh4" data-i18n="usedIn">Used In</div>
+              <div class="hh5" data-i18n="tech2">Technician</div>
+              <div data-i18n="date">Date</div>
             </div>
             <div id="historyList"></div>
           </div>
@@ -1343,7 +1726,7 @@ html, body { height: 100%; font-family: 'Tajawal', sans-serif; background: var(-
               <div class="field" style="margin-bottom:0;grid-column:1/-1"><label>ملاحظات</label><textarea id="ap-notes" style="min-height:50px" placeholder="أي ملاحظات..."></textarea></div>
             </div>
             <div style="display:flex;gap:8px;margin-top:16px">
-              <button class="btn btn-outline" onclick="closeAddPartModal()" style="flex:1">إلغاء</button>
+              <button class="btn btn-outline" onclick="closeAddPartModal()" style="flex:1"><span data-i18n="cancel">Cancel</span></button>
               <button class="btn btn-primary" onclick="saveNewPart()" style="flex:2"><i class="ti ti-device-floppy"></i> حفظ</button>
             </div>
           </div>
@@ -1354,7 +1737,7 @@ html, body { height: 100%; font-family: 'Tajawal', sans-serif; background: var(-
       <div class="page" id="page-clients">
         <div class="page-header">
           <div>
-            <div class="page-title">إدارة العملاء</div>
+            <div class="page-title" data-i18n="clientsTitle">Clients Management</div>
             <div class="page-sub">تحليل الزيارات وحالة كل عميل</div>
           </div>
           <button class="btn btn-primary" onclick="openAddClientModal()"><i class="ti ti-building-plus"></i> إضافة عميل</button>
@@ -1365,7 +1748,7 @@ html, body { height: 100%; font-family: 'Tajawal', sans-serif; background: var(-
           <div class="stat-card">
             <div class="stat-icon" style="background:#E6F1FB"><i class="ti ti-building" style="color:var(--blue-main)"></i></div>
             <div class="stat-val" id="kpi-total-clients">0</div>
-            <div class="stat-lbl">إجمالي العملاء</div>
+            <div class="stat-lbl" data-i18n="totalClients">Total Clients</div>
             <div class="stat-change up"><i class="ti ti-trending-up"></i> نشطون</div>
           </div>
           <div class="stat-card">
@@ -1377,13 +1760,13 @@ html, body { height: 100%; font-family: 'Tajawal', sans-serif; background: var(-
           <div class="stat-card">
             <div class="stat-icon" style="background:var(--green-pale)"><i class="ti ti-circle-check" style="color:var(--green)"></i></div>
             <div class="stat-val" id="kpi-completed">0</div>
-            <div class="stat-lbl">زيارات مكتملة</div>
+            <div class="stat-lbl" data-i18n="completedVisits2">Completed Visits</div>
             <div class="stat-change up"><i class="ti ti-chart-pie"></i> <span id="kpi-done-pct">0</span>% إنجاز</div>
           </div>
           <div class="stat-card">
             <div class="stat-icon" style="background:var(--orange-pale)"><i class="ti ti-clock-pause" style="color:var(--orange)"></i></div>
             <div class="stat-val" id="kpi-pending">0</div>
-            <div class="stat-lbl">زيارات معلقة</div>
+            <div class="stat-lbl" data-i18n="pendingVisits3">Pending Visits</div>
             <div class="stat-change warn"><i class="ti ti-tool"></i> تحتاج قطع غيار</div>
           </div>
           <div class="stat-card">
@@ -1449,7 +1832,7 @@ html, body { height: 100%; font-family: 'Tajawal', sans-serif; background: var(-
             <button onclick="closeAddClientModal()" style="background:rgba(255,255,255,0.1);border:none;color:#fff;border-radius:99px;width:28px;height:28px;cursor:pointer;font-size:16px;display:flex;align-items:center;justify-content:center"><i class="ti ti-x"></i></button>
           </div>
           <div style="padding:18px;display:grid;grid-template-columns:1fr 1fr;gap:12px">
-            <div class="field" style="margin:0;grid-column:1/-1"><label>اسم العميل</label><input type="text" id="ac-name" placeholder="اسم الشركة أو المطعم..."></div>
+            <div class="field" style="margin:0;grid-column:1/-1"><label data-i18n="clientNameFilter">Client Name</label><input type="text" id="ac-name" placeholder="اسم الشركة أو المطعم..."></div>
             <div class="field" style="margin:0"><label>القطاع</label>
               <select id="ac-sector"><option>فنادق</option><option>مطاعم</option><option>مستشفيات</option><option>مصانع</option><option>حكومي</option><option>أخرى</option></select>
             </div>
@@ -1463,7 +1846,7 @@ html, body { height: 100%; font-family: 'Tajawal', sans-serif; background: var(-
               <label for="ac-warranty" style="font-size:13px;color:var(--text);cursor:pointer">تحت الضمان</label>
             </div>
             <div style="grid-column:1/-1;display:flex;gap:8px;margin-top:4px">
-              <button class="btn btn-outline" onclick="closeAddClientModal()" style="flex:1">إلغاء</button>
+              <button class="btn btn-outline" onclick="closeAddClientModal()" style="flex:1"><span data-i18n="cancel">Cancel</span></button>
               <button class="btn btn-primary" onclick="saveNewClient()" style="flex:2"><i class="ti ti-device-floppy"></i> حفظ</button>
             </div>
           </div>
@@ -1474,8 +1857,8 @@ html, body { height: 100%; font-family: 'Tajawal', sans-serif; background: var(-
       <div class="page" id="page-clients">
         <div class="page-header">
           <div>
-            <div class="page-title">إدارة العملاء</div>
-            <div class="page-sub">تحليل الزيارات والأداء لكل عميل</div>
+            <div class="page-title" data-i18n="clientsTitle">Clients Management</div>
+            <div class="page-sub" data-i18n="clientsSub">Visit analysis & performance per client</div>
           </div>
           <button class="btn btn-primary" onclick="openAddClientModal()"><i class="ti ti-building-plus"></i> إضافة عميل</button>
         </div>
@@ -1496,11 +1879,11 @@ html, body { height: 100%; font-family: 'Tajawal', sans-serif; background: var(-
           </div>
           <div class="stat-card">
             <div class="stat-icon" style="background:#DBEAFE"><i class="ti ti-shield-check" style="color:#1D4ED8"></i></div>
-            <div class="stat-val">5</div><div class="stat-lbl">عملاء تحت الضمان</div>
+            <div class="stat-val">5</div><div class="stat-lbl" data-i18n="warrantyClients">Warranty Clients</div>
           </div>
           <div class="stat-card">
             <div class="stat-icon" style="background:var(--green-pale)"><i class="ti ti-file-invoice" style="color:var(--green)"></i></div>
-            <div class="stat-val">6</div><div class="stat-lbl">عقود صيانة نشطة</div>
+            <div class="stat-val">6</div><div class="stat-lbl" data-i18n="activeContracts">Active Contracts</div>
           </div>
         </div>
 
@@ -1554,7 +1937,7 @@ html, body { height: 100%; font-family: 'Tajawal', sans-serif; background: var(-
           </div>
           <div style="padding:18px">
             <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
-              <div class="field" style="margin-bottom:0;grid-column:1/-1"><label>اسم العميل</label><input type="text" id="cl-name" placeholder="اسم الشركة أو المطعم..."></div>
+              <div class="field" style="margin-bottom:0;grid-column:1/-1"><label data-i18n="labelClient">Client Name</label><input type="text" id="cl-name" placeholder="اسم الشركة أو المطعم..."></div>
               <div class="field" style="margin-bottom:0"><label>نوع العميل</label>
                 <select id="cl-type"><option>فندق</option><option>مطعم</option><option>سلسلة مطاعم</option><option>مستشفى</option><option>شركة</option><option>مطار</option></select>
               </div>
@@ -1566,7 +1949,7 @@ html, body { height: 100%; font-family: 'Tajawal', sans-serif; background: var(-
               <div class="field" style="margin-bottom:0"><label>تاريخ انتهاء العقد</label><input type="date" id="cl-expiry"></div>
             </div>
             <div style="display:flex;gap:8px;margin-top:16px">
-              <button class="btn btn-outline" onclick="closeAddClientModal()" style="flex:1">إلغاء</button>
+              <button class="btn btn-outline" onclick="closeAddClientModal()" style="flex:1"><span data-i18n="cancel">Cancel</span></button>
               <button class="btn btn-primary" onclick="saveClient()" style="flex:2"><i class="ti ti-device-floppy"></i> حفظ العميل</button>
             </div>
           </div>
@@ -1577,8 +1960,8 @@ html, body { height: 100%; font-family: 'Tajawal', sans-serif; background: var(-
       <div class="page" id="page-reports">
         <div class="page-header">
           <div>
-            <div class="page-title">التقارير والبحث</div>
-            <div class="page-sub">ابحث في جميع الكشوف والزيارات</div>
+            <div class="page-title" data-i18n="reportsTitle">Reports & Search</div>
+            <div class="page-sub" data-i18n="reportsSub">Search all visits and reports</div>
           </div>
           <div style="display:flex;gap:8px">
             <button class="btn btn-outline" onclick="exportReports()"><i class="ti ti-file-export"></i> تصدير Excel</button>
@@ -1669,12 +2052,12 @@ html, body { height: 100%; font-family: 'Tajawal', sans-serif; background: var(-
         <div class="reports-results-header">
           <div class="results-count" id="resultsCount"><strong>0</strong> نتيجة</div>
           <div style="display:flex;gap:8px;align-items:center">
-            <span style="font-size:12px;color:var(--text-sec)">ترتيب حسب:</span>
+            <span style="font-size:12px;color:var(--text-sec)" data-i18n="sortBy">Sort by:</span>
             <select class="filter-input" id="rf-sort" onchange="applyReportFilters()" style="padding:5px 10px;font-size:12px">
-              <option value="date-desc">التاريخ (الأحدث)</option>
-              <option value="date-asc">التاريخ (الأقدم)</option>
+              <option value="date-desc" data-i18n="dateNewest">Date (Newest)</option>
+              <option value="date-asc" data-i18n="dateOldest">Date (Oldest)</option>
               <option value="client">اسم العميل</option>
-              <option value="tech">اسم الفني</option>
+              <option value="tech" data-i18n="techFilter">Technician</option>
             </select>
           </div>
         </div>
@@ -1684,7 +2067,7 @@ html, body { height: 100%; font-family: 'Tajawal', sans-serif; background: var(-
             <div>العميل / المعدة</div>
             <div class="rh2">الفني</div>
             <div class="rh3">قطع الغيار</div>
-            <div class="rh4">نوع الزيارة</div>
+            <div class="rh4" data-i18n="visitTypeFilter">Visit Type</div>
             <div class="rh5">الحالة</div>
             <div>التاريخ</div>
             <div></div>
@@ -1698,20 +2081,365 @@ html, body { height: 100%; font-family: 'Tajawal', sans-serif; background: var(-
   <!-- BOTTOM NAV -->
   <div class="bottom-nav">
     <div class="bnav">
-      <button class="bn-item active" onclick="showPage('dashboard');setActiveNav(this)"><i class="ti ti-layout-dashboard"></i>الرئيسية</button>
-      <button class="bn-item" onclick="showPage('visits');setActiveNav(this)"><i class="ti ti-calendar"></i>الزيارات</button>
+      <button class="bn-item active" onclick="showPage('dashboard');setActiveNav(this)"><i class="ti ti-layout-dashboard"></i data-i18n="navHome">Home/button>
+      <button class="bn-item" onclick="showPage('visits');setActiveNav(this)"><i class="ti ti-calendar"></i data-i18n="navVisits">Visits/button>
       <button class="bn-item" onclick="showPage('technicians');setActiveNav(this)"><i class="ti ti-users"></i>الفنيون</button>
-      <button class="bn-item" onclick="showPage('pending');setActiveNav(this)"><i class="ti ti-clock-pause"></i><span class="bn-badge">4</span>معلقة</button>
+      <button class="bn-item" onclick="showPage('pending');setActiveNav(this)"><i class="ti ti-clock-pause"></i><span class="bn-badge">4</span data-i18n="navPending">Pending/button>
       <button class="bn-item" onclick="showPage('technicians');setActiveNav(this)"><i class="ti ti-users"></i>الفنيون</button>
-      <button class="bn-item"><i class="ti ti-menu-2"></i>المزيد</button>
+      <button class="bn-item"><i class="ti ti-menu-2"></i data-i18n="navSettings">More/button>
     </div>
   </div>
 </div>
 
 <script>
-// ===== PRINT DATE =====
-var printDateEl = document.getElementById('printDate');
-if(printDateEl) printDateEl.textContent = 'تاريخ الطباعة: ' + new Date().toLocaleDateString('ar-SA', {year:'numeric',month:'long',day:'numeric',hour:'2-digit',minute:'2-digit'});
+
+// =============================================
+// MULTILINGUAL SYSTEM — EN (default) / AR / UR
+// =============================================
+var i18n = {
+  en: {
+    appName:'Maintenance Management System', appSub:'Central Kitchens & Cold Rooms',
+    secMain:'Main', secMgmt:'Management', secReports:'Reports', secAccount:'Account',
+    navDashboard:'Dashboard', navVisits:'Visits', navPending:'Pending Reports',
+    navNewVisit:'New Visit', navTechs:'Technicians', navParts:'Spare Parts',
+    navClients:'Clients', navReports:'Reports', navArchive:'Archive',
+    navExport:'Export PDF', navSettings:'Settings', navMore:'More',
+    userName:'Mohammed Al-Otaibi', userRole:'Maintenance Manager',
+    // Dashboard
+    dashSub:"Today's operations overview",
+    statToday:"Today's Visits", statCompleted:'Completed', statPending:'Pending', statMissingParts:'Missing Parts',
+    fromYest:'+3 from yesterday', completion72:'72% completion', needsFollowup:'Needs follow-up', threeReports:'3 reports',
+    techStatus:'Technician Status', pendingVisits:'Pending Visits', recentVisits:'Recent Visits', weeklyProgress:'Weekly Progress',
+    viewAll:'View All', fullArchive:'Full Archive',
+    // Visits
+    visitsTitle:'Visit Log', visitsSub:'All visits and reports',
+    searchPlaceholder:'Search by client or technician...',
+    allFilter:'All', completedFilter:'Completed', pendingFilter:'Pending', inProgressFilter:'In Progress',
+    colClient:'Client / Equipment', colTech:'Technician', colType:'Type', colDate:'Date', colStatus:'Status',
+    // Pending
+    pendingMgmt:'Pending Reports', pendingSub:'Waiting for spare parts',
+    pendingList:'Pending Reports List',
+    // New Visit
+    newVisitTitle:'New Visit', newVisitSub:'Create a maintenance visit report',
+    clientData:'Client Information', equipmentData:'Equipment Details',
+    tasksTitle:'Tasks Performed', notesTitle:'Technician Notes',
+    labelClient:'Client Name', labelLocation:'Location / Branch',
+    labelVisitType:'Visit Type', labelTech:'Assigned Technician',
+    labelEquipment:'Equipment / Device', labelSerial:'Serial Number',
+    labelModel:'Model', labelFault:'Fault Type',
+    labelParts:'Required Spare Parts', labelNotes:'Notes',
+    typeWarranty:'Warranty Visit', typePaid:'Paid Visit', typeContract:'Periodic Visit (Contract)',
+    voiceIdle:'Voice Input', voiceRec:'Recording...',
+    translateNow:'Live Translation',
+    back:'Back', saveDraft:'Save Draft', nextSign:'Next: Signatures',
+    scanHere:'Tap to capture nameplate',
+    addWork:'Add Task',
+    // Signatures
+    closeReport:'Close Report', closeSub:'Signatures & finalize visit',
+    visitSummary:'Visit Summary', labelDuration:'Duration', labelTasksDone:'Tasks Done',
+    labelMissingParts:'Missing Parts', labelFinalStatus:'Final Status',
+    techSignature:'Technician Signature — ', clientSignature:'Client Representative / Supervisor',
+    signHere:'Sign here with your finger', signedAt:'Signed · ',
+    notSignedYet:'Not signed yet', clearSig:'Clear', confirmSig:'Confirm',
+    previewPDF:'Preview PDF', suspendReport:'Suspend Report', closeReportBtn:'Close Report',
+    suspended:'Report suspended — waiting for spare parts',
+    closed:'Report closed and archived successfully ✓',
+    alertIncomplete:'Report is incomplete. You may suspend it until parts are available, or close it if all tasks are done.',
+    // Technicians
+    techsTitle:'Technicians Management', techsSub:'Accounts & performance analytics',
+    addTech:'Add Technician', totalTechs:'Total Technicians', avgCompletion:'Avg Completion',
+    avgVisitHrs:'Avg Visit Hours', avgRating:'Avg Client Rating',
+    activeToday:'active today', thisMonth:'+4% this month',
+    techActive:'Active', techVacation:'On Leave', techSuspended:'Suspended',
+    techTotal:'Total', techCompleted:'Completed', techPending:'Pending',
+    completionRate:'Completion Rate', avgTime:'Avg Duration',
+    editTech:'Edit', analyticsTech:'Analytics', compareChart:'Monthly Completion Comparison',
+    visitTypeChart:'Visit Type Distribution',
+    modalAddTech:'Add New Technician', modalEditTech:'Edit Technician',
+    labelFullName:'Full Name', labelPhone:'Phone', labelEmail:'Email',
+    labelNationality:'Nationality', labelSpec:'Specialization', labelStatus:'Status',
+    labelPassword:'App Password', labelNotes2:'Notes',
+    cancel:'Cancel', save:'Save',
+    // Parts
+    partsTitle:'Spare Parts Management', partsSub:'Inventory & movement history',
+    addInventory:'Add Inventory', addNewPart:'New Part',
+    totalParts:'Total SKUs', availableParts:'Available', lowStock:'Low Stock', outOfStock:'Out of Stock',
+    tabInventory:'Current Inventory', tabHistory:'Movement History',
+    searchParts:'Search parts...', searchHistory:'Search history...',
+    colPart:'Part Name', colCategory:'Category', colQty:'Qty', colMinQty:'Min Qty', colStockStatus:'Status',
+    colMovType:'Type', colMovQty:'Quantity', colDest:'Dispatched To', colTechName:'Technician', colMovDate:'Date',
+    stockOk:'Available', stockLow:'Low', stockOut:'Out of Stock',
+    movIn:'Incoming', movOut:'Outgoing',
+    addPartTitle:'Add New Part', labelPartName:'Part Name', labelPartCat:'Category',
+    labelPartUnit:'Unit', labelPartQty:'Quantity Added', labelPartMin:'Min Alert Level',
+    labelSupplier:'Supplier',
+    // Clients
+    clientsTitle:'Clients Management', clientsSub:'Visit analytics per client',
+    addClient:'Add Client', totalClients:'Total Clients', completedVisits:'Completed Visits',
+    pendingVisitsC:'Pending Visits', warrantyClients:'Warranty Clients', activeContracts:'Active Contracts',
+    searchClients:'Search clients...',
+    contractFilter:'Contract', warrantyFilter:'Warranty', paidFilter:'Paid',
+    contractActive:'Maintenance Contract', warrantyLabel:'Under Warranty',
+    noWarranty:'No Warranty', visitsDist:'Visit Status Distribution',
+    topClients:'Top Clients by Visits', waitingParts:'Clients Waiting for Parts',
+    colVisitsTotal:'Total', colVisitsDone:'Done', colVisitsPend:'Pending', colVisitsParts:'Needs Parts',
+    reportsBtn:'Reports', historyBtn:'History', editBtn:'Edit',
+    // Reports
+    reportsTitle:'Reports & Search', reportsSub:'Search all reports and visits',
+    exportExcel:'Export Excel', printBtn:'Print',
+    filterTitle:'Search Filters', labelClientF:'Client Name', labelTechF:'Technician',
+    labelPartF:'Spare Part', labelDateRange:'Date Range',
+    labelStatusF:'Report Status', labelTypeF:'Visit Type',
+    searchBtn:'Search', clearFilters:'Clear Filters',
+    activeFilters:'Active Filters',
+    sortBy:'Sort by:', sortDateDesc:'Date (Newest)', sortDateAsc:'Date (Oldest)',
+    sortClient:'Client Name', sortTech:'Technician',
+    resultsCount:'results',
+    typeWarrantyS:'Under Warranty', typePaidS:'Paid', typeContractS:'Service Contract',
+    viewDetails:'View', printReport:'Print',
+    noResults:'No results match your search',
+    tryChange:'Try changing or clearing the filters',
+    totalResults:'Total Results',
+  },
+
+  ar: {
+    appName:'نظام إدارة الصيانة', appSub:'المطابخ المركزية وغرف التبريد',
+    secMain:'الرئيسية', secMgmt:'الإدارة', secReports:'التقارير', secAccount:'الحساب',
+    navDashboard:'لوحة التحكم', navVisits:'الزيارات', navPending:'الكشوف المعلقة',
+    navNewVisit:'زيارة جديدة', navTechs:'الفنيون', navParts:'قطع الغيار',
+    navClients:'العملاء', navReports:'التقارير', navArchive:'الأرشيف',
+    navExport:'تصدير PDF', navSettings:'الإعدادات', navMore:'المزيد',
+    userName:'محمد العتيبي', userRole:'مدير الصيانة',
+    dashSub:'نظرة عامة على عمليات اليوم',
+    statToday:'زيارة اليوم', statCompleted:'مكتملة', statPending:'معلقة', statMissingParts:'قطع ناقصة',
+    fromYest:'+3 من أمس', completion72:'72% إنجاز', needsFollowup:'تحتاج متابعة', threeReports:'3 كشوف',
+    techStatus:'حالة الفنيين', pendingVisits:'الكشوف المعلقة', recentVisits:'آخر الزيارات', weeklyProgress:'إنجاز الأسبوع',
+    viewAll:'عرض الكل', fullArchive:'الأرشيف الكامل',
+    visitsTitle:'سجل الزيارات', visitsSub:'جميع الزيارات والكشوف',
+    searchPlaceholder:'بحث بالعميل أو الفني...',
+    allFilter:'الكل', completedFilter:'مكتملة', pendingFilter:'معلقة', inProgressFilter:'قيد التنفيذ',
+    colClient:'العميل / المعدة', colTech:'الفني', colType:'النوع', colDate:'التاريخ', colStatus:'الحالة',
+    pendingMgmt:'الكشوف المعلقة', pendingSub:'تنتظر توفير قطع الغيار', pendingList:'قائمة الكشوف المعلقة',
+    newVisitTitle:'زيارة جديدة', newVisitSub:'إنشاء كشف زيارة صيانة',
+    clientData:'بيانات العميل', equipmentData:'بيانات المعدة',
+    tasksTitle:'الأعمال المنفذة', notesTitle:'ملاحظات الفني',
+    labelClient:'اسم العميل', labelLocation:'الموقع / الفرع',
+    labelVisitType:'نوع الزيارة', labelTech:'الفني المسؤول',
+    labelEquipment:'اسم المعدة / الجهاز', labelSerial:'الرقم التسلسلي',
+    labelModel:'الموديل', labelFault:'نوع العطل',
+    labelParts:'قطع الغيار المطلوبة', labelNotes:'الملاحظات',
+    typeWarranty:'زيارة تحت الضمان', typePaid:'زيارة مدفوعة', typeContract:'زيارة دورية (عقد صيانة)',
+    voiceIdle:'إملاء صوتي', voiceRec:'جاري التسجيل...',
+    translateNow:'الترجمة الفورية',
+    back:'رجوع', saveDraft:'حفظ مسودة', nextSign:'التالي: التوقيعات',
+    scanHere:'اضغط لتصوير البطاقة',
+    addWork:'إضافة عمل',
+    closeReport:'إغلاق الكشف', closeSub:'التوقيعات وإتمام الزيارة',
+    visitSummary:'ملخص الزيارة', labelDuration:'مدة الزيارة', labelTasksDone:'الأعمال المنفذة',
+    labelMissingParts:'قطع ناقصة', labelFinalStatus:'الحالة النهائية',
+    techSignature:'توقيع الفني — ', clientSignature:'ممثل العميل / المشرف',
+    signHere:'<span data-i18n="signHere">Sign here with your finger</span>', signedAt:'وقّع · ',
+    notSignedYet:'لم يوقع بعد', clearSig:'مسح', confirmSig:'تأكيد',
+    previewPDF:'معاينة PDF', suspendReport:'تعليق الكشف', closeReportBtn:'إغلاق الكشف',
+    suspended:'تم تعليق الكشف — في انتظار توفير قطع الغيار',
+    closed:'تم إغلاق الكشف بنجاح وحفظه في الأرشيف ✓',
+    alertIncomplete:'الكشف غير مكتمل. يمكنك تعليقه حتى توفير قطع الغيار، أو إغلاقه إن اكتملت جميع الأعمال.',
+    techsTitle:'إدارة الفنيين', techsSub:'حسابات الفنيين وتحليل الأداء',
+    addTech:'إضافة فني', totalTechs:'إجمالي الفنيين', avgCompletion:'متوسط الإنجاز',
+    avgVisitHrs:'متوسط ساعات الزيارة', avgRating:'متوسط تقييم العملاء',
+    activeToday:'نشطون اليوم', thisMonth:'+4% هذا الشهر',
+    techActive:'نشط', techVacation:'إجازة', techSuspended:'موقوف',
+    techTotal:'إجمالي', techCompleted:'مكتملة', techPending:'معلقة',
+    completionRate:'معدل الإنجاز', avgTime:'متوسط مدة الزيارة',
+    editTech:'تعديل', analyticsTech:'تحليل', compareChart:'مقارنة الإنجاز الشهري',
+    visitTypeChart:'توزيع أنواع الزيارات',
+    modalAddTech:'إضافة فني جديد', modalEditTech:'تعديل بيانات الفني',
+    labelFullName:'الاسم الكامل', labelPhone:'رقم الجوال', labelEmail:'البريد الإلكتروني',
+    labelNationality:'الجنسية', labelSpec:'التخصص', labelStatus:'الحالة',
+    labelPassword:'كلمة مرور التطبيق', labelNotes2:'ملاحظات',
+    cancel:'إلغاء', save:'حفظ',
+    partsTitle:'إدارة قطع الغيار', partsSub:'المخزون الحالي وسجل الحركات',
+    addInventory:'إضافة مخزون', addNewPart:'قطعة جديدة',
+    totalParts:'إجمالي أصناف القطع', availableParts:'أصناف متوفرة', lowStock:'مخزون منخفض', outOfStock:'نفد المخزون',
+    tabInventory:'المخزون الحالي', tabHistory:'سجل الحركات',
+    searchParts:'بحث عن قطعة...', searchHistory:'بحث في السجل...',
+    colPart:'اسم القطعة', colCategory:'الفئة', colQty:'الكمية', colMinQty:'الحد الأدنى', colStockStatus:'الحالة',
+    colMovType:'النوع', colMovQty:'الكمية', colDest:'صُرفت في', colTechName:'الفني', colMovDate:'التاريخ',
+    stockOk:'متوفر', stockLow:'منخفض', stockOut:'نفد',
+    movIn:'وارد', movOut:'صادر',
+    addPartTitle:'إضافة قطعة جديدة', labelPartName:'اسم القطعة', labelPartCat:'الفئة',
+    labelPartUnit:'الوحدة', labelPartQty:'الكمية المضافة', labelPartMin:'الحد الأدنى للتنبيه',
+    labelSupplier:'المورد',
+    clientsTitle:'إدارة العملاء', clientsSub:'تحليل الزيارات والأداء لكل عميل',
+    addClient:'إضافة عميل', totalClients:'إجمالي العملاء', completedVisits:'زيارات مكتملة',
+    pendingVisitsC:'زيارات معلقة', warrantyClients:'عملاء تحت الضمان', activeContracts:'عقود صيانة نشطة',
+    searchClients:'بحث عن عميل...',
+    contractFilter:'عقد صيانة', warrantyFilter:'ضمان', paidFilter:'مدفوع',
+    contractActive:'عقد صيانة', warrantyLabel:'تحت الضمان',
+    noWarranty:'بدون ضمان', visitsDist:'توزيع حالات الزيارات',
+    topClients:'أكثر العملاء زيارات', waitingParts:'عملاء ينتظرون قطع غيار',
+    colVisitsTotal:'إجمالي', colVisitsDone:'مكتملة', colVisitsPend:'معلقة', colVisitsParts:'تحتاج قطع',
+    reportsBtn:'الكشوف', historyBtn:'السجل', editBtn:'تعديل',
+    reportsTitle:'التقارير والبحث', reportsSub:'ابحث في جميع الكشوف والزيارات',
+    exportExcel:'تصدير Excel', printBtn:'طباعة',
+    filterTitle:'فلاتر البحث', labelClientF:'اسم العميل', labelTechF:'اسم الفني',
+    labelPartF:'قطعة الغيار', labelDateRange:'نطاق التاريخ',
+    labelStatusF:'حالة الكشف', labelTypeF:'نوع الزيارة',
+    searchBtn:'بحث', clearFilters:'مسح الفلاتر',
+    activeFilters:'الفلاتر النشطة',
+    sortBy:'ترتيب حسب:', sortDateDesc:'التاريخ (الأحدث)', sortDateAsc:'التاريخ (الأقدم)',
+    sortClient:'اسم العميل', sortTech:'اسم الفني',
+    resultsCount:'نتيجة',
+    typeWarrantyS:'تحت الضمان', typePaidS:'مدفوعة', typeContractS:'عقد صيانة',
+    viewDetails:'عرض', printReport:'طباعة',
+    noResults:'لا توجد نتائج تطابق بحثك',
+    tryChange:'جرّب تغيير الفلاتر أو مسحها',
+    totalResults:'الإجمالي',
+  },
+
+  ur: {
+    appName:'مینٹیننس مینجمنٹ سسٹم', appSub:'سنٹرل کچن اور کولڈ روم',
+    secMain:'مین', secMgmt:'مینجمنٹ', secReports:'رپورٹس', secAccount:'اکاؤنٹ',
+    navDashboard:'ڈیش بورڈ', navVisits:'وزٹس', navPending:'زیر التواء رپورٹس',
+    navNewVisit:'نئی وزٹ', navTechs:'ٹیکنیشنز', navParts:'اسپیئر پارٹس',
+    navClients:'کلائنٹس', navReports:'رپورٹس', navArchive:'آرکائیو',
+    navExport:'PDF ایکسپورٹ', navSettings:'سیٹنگز', navMore:'مزید',
+    userName:'محمد العتيبي', userRole:'مینٹیننس مینیجر',
+    dashSub:'آج کے آپریشنز کا جائزہ',
+    statToday:'آج کی وزٹس', statCompleted:'مکمل', statPending:'زیر التواء', statMissingParts:'غائب پارٹس',
+    fromYest:'کل سے +3', completion72:'72% مکمل', needsFollowup:'فالو اپ درکار', threeReports:'3 رپورٹس',
+    techStatus:'ٹیکنیشن اسٹیٹس', pendingVisits:'زیر التواء وزٹس', recentVisits:'حالیہ وزٹس', weeklyProgress:'ہفتہ وار پیشرفت',
+    viewAll:'سب دیکھیں', fullArchive:'مکمل آرکائیو',
+    visitsTitle:'وزٹ لاگ', visitsSub:'تمام وزٹس اور رپورٹس',
+    searchPlaceholder:'کلائنٹ یا ٹیکنیشن سے تلاش...',
+    allFilter:'سب', completedFilter:'مکمل', pendingFilter:'زیر التواء', inProgressFilter:'جاری',
+    colClient:'کلائنٹ / آلہ', colTech:'ٹیکنیشن', colType:'قسم', colDate:'تاریخ', colStatus:'اسٹیٹس',
+    pendingMgmt:'زیر التواء رپورٹس', pendingSub:'اسپیئر پارٹس کا انتظار', pendingList:'زیر التواء رپورٹس کی فہرست',
+    newVisitTitle:'نئی وزٹ', newVisitSub:'مینٹیننس وزٹ رپورٹ بنائیں',
+    clientData:'کلائنٹ کی معلومات', equipmentData:'آلے کی تفصیلات',
+    tasksTitle:'مکمل کام', notesTitle:'ٹیکنیشن نوٹس',
+    labelClient:'کلائنٹ کا نام', labelLocation:'مقام / برانچ',
+    labelVisitType:'وزٹ کی قسم', labelTech:'تفویض کردہ ٹیکنیشن',
+    labelEquipment:'آلہ / ڈیوائس', labelSerial:'سیریل نمبر',
+    labelModel:'ماڈل', labelFault:'خرابی کی قسم',
+    labelParts:'درکار اسپیئر پارٹس', labelNotes:'نوٹس',
+    typeWarranty:'وارنٹی وزٹ', typePaid:'ادائیگی وزٹ', typeContract:'متواتر وزٹ (معاہدہ)',
+    voiceIdle:'وائس انپٹ', voiceRec:'ریکارڈنگ...',
+    translateNow:'فوری ترجمہ',
+    back:'واپس', saveDraft:'ڈرافٹ محفوظ', nextSign:'اگلا: دستخط',
+    scanHere:'نیم پلیٹ کی تصویر لیں',
+    addWork:'کام شامل کریں',
+    closeReport:'رپورٹ بند کریں', closeSub:'دستخط اور وزٹ مکمل کریں',
+    visitSummary:'وزٹ خلاصہ', labelDuration:'دورانیہ', labelTasksDone:'مکمل کام',
+    labelMissingParts:'غائب پارٹس', labelFinalStatus:'حتمی اسٹیٹس',
+    techSignature:'ٹیکنیشن دستخط — ', clientSignature:'کلائنٹ نمائندہ / سپروائزر',
+    signHere:'یہاں انگلی سے دستخط کریں', signedAt:'دستخط · ',
+    notSignedYet:'ابھی دستخط نہیں', clearSig:'مٹائیں', confirmSig:'تصدیق',
+    previewPDF:'PDF پیش نظارہ', suspendReport:'رپورٹ معطل', closeReportBtn:'رپورٹ بند کریں',
+    suspended:'رپورٹ معطل — اسپیئر پارٹس کا انتظار',
+    closed:'رپورٹ کامیابی سے بند اور محفوظ ✓',
+    alertIncomplete:'رپورٹ نامکمل ہے۔ پارٹس دستیاب ہونے تک معطل کریں یا اگر سب کام مکمل ہیں تو بند کریں۔',
+    techsTitle:'ٹیکنیشنز مینجمنٹ', techsSub:'اکاؤنٹس اور کارکردگی تجزیہ',
+    addTech:'ٹیکنیشن شامل', totalTechs:'کل ٹیکنیشنز', avgCompletion:'اوسط تکمیل',
+    avgVisitHrs:'اوسط وزٹ گھنٹے', avgRating:'اوسط کلائنٹ ریٹنگ',
+    activeToday:'آج فعال', thisMonth:'اس مہینے +4%',
+    techActive:'فعال', techVacation:'چھٹی پر', techSuspended:'معطل',
+    techTotal:'کل', techCompleted:'مکمل', techPending:'زیر التواء',
+    completionRate:'تکمیل کی شرح', avgTime:'اوسط دورانیہ',
+    editTech:'ترمیم', analyticsTech:'تجزیہ', compareChart:'ماہانہ تکمیل کا موازنہ',
+    visitTypeChart:'وزٹ اقسام کی تقسیم',
+    modalAddTech:'نیا ٹیکنیشن شامل', modalEditTech:'ٹیکنیشن معلومات ترمیم',
+    labelFullName:'پورا نام', labelPhone:'فون نمبر', labelEmail:'ای میل',
+    labelNationality:'قومیت', labelSpec:'تخصص', labelStatus:'اسٹیٹس',
+    labelPassword:'ایپ پاس ورڈ', labelNotes2:'نوٹس',
+    cancel:'منسوخ', save:'محفوظ',
+    partsTitle:'اسپیئر پارٹس مینجمنٹ', partsSub:'انوینٹری اور حرکات کی تاریخ',
+    addInventory:'انوینٹری شامل', addNewPart:'نیا پارٹ',
+    totalParts:'کل SKUs', availableParts:'دستیاب', lowStock:'کم اسٹاک', outOfStock:'ختم',
+    tabInventory:'موجودہ انوینٹری', tabHistory:'حرکات کی تاریخ',
+    searchParts:'پارٹس تلاش کریں...', searchHistory:'تاریخ میں تلاش...',
+    colPart:'پارٹ کا نام', colCategory:'زمرہ', colQty:'مقدار', colMinQty:'کم از کم', colStockStatus:'اسٹیٹس',
+    colMovType:'قسم', colMovQty:'مقدار', colDest:'بھیجا گیا', colTechName:'ٹیکنیشن', colMovDate:'تاریخ',
+    stockOk:'دستیاب', stockLow:'کم', stockOut:'ختم',
+    movIn:'آنے والا', movOut:'جانے والا',
+    addPartTitle:'نیا پارٹ شامل', labelPartName:'پارٹ کا نام', labelPartCat:'زمرہ',
+    labelPartUnit:'یونٹ', labelPartQty:'شامل مقدار', labelPartMin:'کم از کم الرٹ',
+    labelSupplier:'سپلائر',
+    clientsTitle:'کلائنٹس مینجمنٹ', clientsSub:'فی کلائنٹ وزٹ تجزیہ',
+    addClient:'کلائنٹ شامل', totalClients:'کل کلائنٹس', completedVisits:'مکمل وزٹس',
+    pendingVisitsC:'زیر التواء وزٹس', warrantyClients:'وارنٹی کلائنٹس', activeContracts:'فعال معاہدے',
+    searchClients:'کلائنٹ تلاش...',
+    contractFilter:'معاہدہ', warrantyFilter:'وارنٹی', paidFilter:'ادائیگی',
+    contractActive:'مینٹیننس معاہدہ', warrantyLabel:'وارنٹی میں',
+    noWarranty:'وارنٹی نہیں', visitsDist:'وزٹ اسٹیٹس تقسیم',
+    topClients:'سب سے زیادہ وزٹ کلائنٹس', waitingParts:'پارٹس کا انتظار کرنے والے کلائنٹس',
+    colVisitsTotal:'کل', colVisitsDone:'مکمل', colVisitsPend:'زیر التواء', colVisitsParts:'پارٹس درکار',
+    reportsBtn:'رپورٹس', historyBtn:'تاریخ', editBtn:'ترمیم',
+    reportsTitle:'رپورٹس اور تلاش', reportsSub:'تمام رپورٹس اور وزٹس میں تلاش',
+    exportExcel:'Excel ایکسپورٹ', printBtn:'پرنٹ',
+    filterTitle:'تلاش فلٹرز', labelClientF:'کلائنٹ کا نام', labelTechF:'ٹیکنیشن',
+    labelPartF:'اسپیئر پارٹ', labelDateRange:'تاریخ کی حد',
+    labelStatusF:'رپورٹ اسٹیٹس', labelTypeF:'وزٹ کی قسم',
+    searchBtn:'تلاش', clearFilters:'فلٹرز صاف',
+    activeFilters:'فعال فلٹرز',
+    sortBy:'ترتیب:', sortDateDesc:'تاریخ (نیا)', sortDateAsc:'تاریخ (پرانا)',
+    sortClient:'کلائنٹ کا نام', sortTech:'ٹیکنیشن',
+    resultsCount:'نتائج',
+    typeWarrantyS:'وارنٹی', typePaidS:'ادائیگی', typeContractS:'سروس معاہدہ',
+    viewDetails:'دیکھیں', printReport:'پرنٹ',
+    noResults:'آپ کی تلاش سے کوئی نتیجہ نہیں ملا',
+    tryChange:'فلٹرز تبدیل یا صاف کرنے کی کوشش کریں',
+    totalResults:'کل نتائج',
+  }
+};
+
+var currentLang = 'en';
+
+function setLangUI(lang) {
+  currentLang = lang;
+  var dir = lang === 'ur' ? 'rtl' : lang === 'ar' ? 'rtl' : 'ltr';
+  document.documentElement.setAttribute('lang', lang === 'ar' ? 'ar' : lang === 'ur' ? 'ur' : 'en');
+  document.documentElement.setAttribute('dir', dir);
+  document.body.style.fontFamily = (lang === 'ur') ? "'Noto Nastaliq Urdu', 'Tajawal', sans-serif" : "'Tajawal', sans-serif";
+
+  // Update active lang button
+  document.querySelectorAll('.lang-btn-sw').forEach(function(btn) { btn.classList.remove('active'); });
+  var btnMap = { en: 0, ar: 1, ur: 2 };
+  var btns = document.querySelectorAll('.lang-btn-sw');
+  if (btns[btnMap[lang]]) btns[btnMap[lang]].classList.add('active');
+
+  // Apply translations
+  applyTranslations();
+
+  // Re-render dynamic content
+  if (document.getElementById('page-technicians').classList.contains('active')) renderTechCards();
+  if (document.getElementById('page-parts-store').classList.contains('active')) { renderInventory('', currentStockFilter); renderHistory('', currentHistFilter); }
+  if (document.getElementById('page-clients').classList.contains('active')) renderClientCards();
+  if (document.getElementById('page-reports').classList.contains('active')) applyReportFilters();
+}
+
+function t(key) {
+  return (i18n[currentLang] && i18n[currentLang][key]) || (i18n['en'][key]) || key;
+}
+
+function applyTranslations() {
+  document.querySelectorAll('[data-i18n]').forEach(function(el) {
+    var key = el.getAttribute('data-i18n');
+    var val = (i18n[currentLang] && i18n[currentLang][key]) || (i18n['en'] && i18n['en'][key]);
+    if (!val) return;
+    var tag = el.tagName.toLowerCase();
+    if (tag === 'input' || tag === 'textarea') {
+      el.placeholder = val;
+    } else if (tag === 'option') {
+      el.textContent = val;
+    } else {
+      el.textContent = val;
+    }
+  });
+  // Update page title in browser tab
+  document.title = t('appName');
+}
+
 
 // ===== DATE =====
 var days = ['الأحد','الاثنين','الثلاثاء','الأربعاء','الخميس','الجمعة','السبت'];
