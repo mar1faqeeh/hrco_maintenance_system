@@ -954,6 +954,9 @@ var I={
     typeWarrantyS:'تحت الضمان',typePaidS:'مدفوعة',typeContractS:'عقد صيانة',
     editTech:'تعديل',analyticsTech:'تحليل',completion:'معدل الإنجاز',avgDur:'متوسط المدة',
     labelFault:'نوع العطل',
+    roleManager:'مدير',roleTech:'فني',loginBtn:'تسجيل الدخول',
+    loginHint:'تجريبي: manager@hrco.com / hrco2026',loginError:'بيانات الدخول غير صحيحة',
+    signedAt:'وقّع · ',reportsBtn:'الكشوف',historyBtn:'السجل',
   },
   ur:{
     appName:'مینٹیننس مینجمنٹ سسٹم',appSub:'سنٹرل کچن اور کولڈ روم — HRCO',
@@ -1024,6 +1027,9 @@ var I={
     typeWarrantyS:'وارنٹی',typePaidS:'ادائیگی',typeContractS:'معاہدہ',
     editTech:'ترمیم',analyticsTech:'تجزیہ',completion:'تکمیل',avgDur:'اوسط',
     labelFault:'خرابی',
+    roleManager:'مینیجر',roleTech:'ٹیکنیشن',loginBtn:'سائن ان',
+    loginHint:'ڈیمو: manager@hrco.com / hrco2026',loginError:'غلط ای میل یا پاس ورڈ',
+    signedAt:'دستخط · ',reportsBtn:'رپورٹس',historyBtn:'تاریخ',
   }
 };
 var lang='en';
@@ -1066,12 +1072,13 @@ function go(pg){
   var el=document.getElementById('pg-'+pg);
   if(el)el.classList.add('on');
   document.querySelectorAll('.navi').forEach(function(n){n.classList.remove('on');});
-  var ni=document.querySelector('.navi[data-pg="'+pg+'"]');
+  var ni=document.querySelector(".navi[data-pg='"+pg+"']");
   if(ni)ni.classList.add('on');
   document.getElementById('mainArea').scrollTop=0;
   closeSb();
   if(pg==='signature'){setTimeout(function(){initSig('tech');initSig('client');},80);}
-  if(pg==='technicians'){renderTechGrid();renderTechCharts();}
+  if(pg==='visits'){filterVisits('');}
+  if(pg==='technicians'){renderTechGrid();setTimeout(renderTechCharts,100);}
   if(pg==='parts'){renderInvList();renderHistList();}
   if(pg==='clients'){renderClientGrid();renderDonut();renderTopClients();renderWaiting();}
   if(pg==='reports'){runReport();}
@@ -1111,7 +1118,21 @@ document.getElementById('hamBtn').addEventListener('click',function(){document.g
 // FILTER TABS HELPER
 // ═══════════════════════════════════════════
 function setFTab(group,btn){document.querySelectorAll(group).forEach(function(t){t.classList.remove('on');});btn.classList.add('on');}
-function setVFilter(f,b){setFTab('#pg-visits .ftab',b);}
+function setVFilter(f,b){
+  setFTab('#pg-visits .ftab',b);
+  var body = document.getElementById('visitsBody');
+  if(!body) return;
+  var rows = body.querySelectorAll('.trow');
+  rows.forEach(function(r){ r.style.display=''; });
+  if(f==='all') return;
+  var map = {'completed':'Completed','pending':'Pending','inprogress':'In Progress'};
+  var target = map[f];
+  if(!target) return;
+  rows.forEach(function(r){
+    var bdg = r.querySelector('.bdg');
+    if(bdg && bdg.textContent !== target) r.style.display='none';
+  });
+}
 
 // ═══════════════════════════════════════════
 // AUTOCOMPLETE
@@ -1435,7 +1456,29 @@ function clearReport(){['rf-client','rf-tech','rf-part','rf-from','rf-to'].forEa
 // ═══════════════════════════════════════════
 // VISITS TABLE
 // ═══════════════════════════════════════════
-function filterVisits(){}
+function filterVisits(q){
+  q = q || '';
+  var body = document.getElementById('visitsBody');
+  if(!body) return;
+  body.innerHTML = '';
+  var stBadge = {'Completed':'bs','Pending':'bw','In Progress':'bi'};
+  var typeLbl = {'warranty':t('typeWarrantyS'),'paid':t('typePaidS'),'contract':t('typeContractS')};
+  var fl = reportsData.filter(function(r){
+    return !q || r.client.toLowerCase().indexOf(q.toLowerCase())>=0 || r.tech.toLowerCase().indexOf(q.toLowerCase())>=0;
+  });
+  fl.forEach(function(r){
+    var row = document.createElement('div');
+    row.className = 'trow';
+    row.style.gridTemplateColumns = '2fr 1.2fr 1fr 1fr 0.8fr 70px';
+    row.innerHTML = '<div class="tc"><div style="font-weight:500">'+r.client+'</div><div class="tc2">'+r.equipment+'</div></div>'
+      + '<div class="tc">'+r.tech+'</div>'
+      + '<div class="tc"><span class="bdg '+(typeLbl[r.type]?'bi':'bg')+'">'+(typeLbl[r.type]||r.type)+'</span></div>'
+      + '<div class="tc tc2">'+r.date+'</div>'
+      + '<div class="tc"><span class="bdg '+(stBadge[r.status]||'bg')+'">'+r.status+'</span></div>'
+      + '<div><div class="rbtns"><button class="rbtn" onclick="alert(''+r.client+'')"><i class="ti ti-eye"></i></button></div></div>';
+    body.appendChild(row);
+  });
+}
 
 // ═══════════════════════════════════════════
 // SUPABASE REAL-TIME
@@ -1460,6 +1503,7 @@ async function loadReportsFromDB(){if(!DB_READY)return;var d=await dbLoad('visit
 document.addEventListener('DOMContentLoaded',async function(){
   setLang('en');
   renderTechGrid();renderTechCharts();
+  filterVisits('');
   renderInvList();renderHistList();
   renderClientGrid();renderDonut();renderTopClients();renderWaiting();
   runReport();
@@ -1469,6 +1513,144 @@ document.addEventListener('DOMContentLoaded',async function(){
     console.log('✅ HRCO System — Supabase connected');
   }
 });
+
+// ═══════════════════════════════════════════
+// LOGIN SYSTEM
+// ═══════════════════════════════════════════
+var currentRole='manager';
+var demoUsers={
+  'manager@hrco.com': {pass:'hrco2026',role:'manager',name:'Mohammed Al-Otaibi',initial:'M'},
+  'ahmed@hrco.com':   {pass:'tech1234',role:'technician',name:'Ahmed Al-Otaibi',initial:'أع'},
+  'mohamad@hrco.com': {pass:'tech1234',role:'technician',name:'Mohammed Al-Harbi',initial:'مح'},
+  'sami@hrco.com':    {pass:'tech1234',role:'technician',name:'Sami Al-Qahtani',initial:'سق'},
+  'khalid@hrco.com':  {pass:'tech1234',role:'technician',name:'Khalid Al-Rashidi',initial:'خر'}
+};
+
+function setRole(r){
+  currentRole=r;
+  var mb=document.getElementById('roleManagerBtn');
+  var tb=document.getElementById('roleTechBtn');
+  if(!mb||!tb) return;
+  if(r==='manager'){
+    mb.className='btn btnp';tb.className='btn btno';
+    document.getElementById('loginEmail').value='manager@hrco.com';
+  } else {
+    mb.className='btn btno';tb.className='btn btnp';
+    document.getElementById('loginEmail').value='ahmed@hrco.com';
+  }
+}
+
+function togglePassView(){
+  var inp=document.getElementById('loginPass');
+  var ico=document.getElementById('eyeIcon');
+  if(!inp) return;
+  if(inp.type==='password'){inp.type='text';if(ico)ico.className='ti ti-eye-off';}
+  else{inp.type='password';if(ico)ico.className='ti ti-eye';}
+}
+
+async function doLogin(){
+  var email=document.getElementById('loginEmail').value.trim().toLowerCase();
+  var pass=document.getElementById('loginPass').value;
+  var errEl=document.getElementById('loginError');
+  if(errEl) errEl.style.display='none';
+  var user=demoUsers[email];
+  if(user && user.pass===pass){ loginSuccess(user); return; }
+  if(DB_READY){
+    try{
+      var r=await _sb.auth.signInWithPassword({email:email,password:pass});
+      if(r.data&&r.data.user){ loginSuccess({role:currentRole,name:email,initial:email[0].toUpperCase()}); return; }
+    }catch(e){}
+  }
+  if(errEl){errEl.textContent=t('loginError')||'Invalid email or password';errEl.style.display='block';}
+}
+
+function loginSuccess(user){
+  var lm=document.getElementById('loginModal');
+  if(lm) lm.style.display='none';
+  var ua=document.getElementById('uAv');
+  if(ua) ua.textContent=user.initial;
+  if(user.role==='technician'){
+    ['technicians','clients','reports','archive'].forEach(function(pg){
+      var n=document.querySelector('.navi[data-pg="'+pg+'"]');
+      if(n) n.style.display='none';
+    });
+  }
+}
+
+function logout(){
+  var lm=document.getElementById('loginModal');
+  if(lm) lm.style.display='flex';
+  if(DB_READY) _sb.auth.signOut().catch(function(){});
+}
+
+// Attach logout to avatar
+document.addEventListener('DOMContentLoaded',function(){
+  var ua=document.getElementById('uAv');
+  if(ua) ua.addEventListener('click',function(){if(confirm('Sign out?'))logout();});
+
+  // Allow Enter key on login form
+  ['loginEmail','loginPass'].forEach(function(id){
+    var el=document.getElementById(id);
+    if(el) el.addEventListener('keydown',function(e){if(e.key==='Enter')doLogin();});
+  });
+});
+
+// Tech stats
+function techStats(id){
+  var tc=techsData.find(function(x){return x.id===id;});
+  if(!tc) return;
+  var pct=Math.round((tc.completed/tc.visits)*100);
+  alert(tc.name+'\nCompletion: '+pct+'%\nTotal: '+tc.visits+'\nAvg: '+tc.avgTime+'h\nRating: '+tc.rating+'/5');
+}
+
 </script>
+
+<!-- LOGIN PAGE -->
+<div class="modal on" id="loginModal" style="background:var(--navy);z-index:9999">
+  <div class="mbox" style="max-width:420px">
+    <div class="mh" style="justify-content:center;padding:20px 18px">
+      <div style="text-align:center">
+        <div style="width:52px;height:52px;background:rgba(255,255,255,.12);border-radius:var(--r);display:flex;align-items:center;justify-content:center;margin:0 auto 10px">
+          <i class="ti ti-snowflake" style="color:#7EC8E3;font-size:28px"></i>
+        </div>
+        <div class="mhtitle" style="font-size:16px" data-i18n="appName">Maintenance Management System</div>
+        <div style="color:#a0c4f1;font-size:11px;margin-top:3px" data-i18n="appSub">HRCO — Central Kitchens & Cold Rooms</div>
+      </div>
+    </div>
+    <div class="mb">
+      <!-- Role selector -->
+      <div style="display:flex;gap:8px;margin-bottom:18px">
+        <button class="btn" id="roleManagerBtn" onclick="setRole('manager')" style="flex:1;background:var(--blue);color:#fff;justify-content:center">
+          <i class="ti ti-shield-check"></i><span data-i18n="roleManager">Manager</span>
+        </button>
+        <button class="btn btno" id="roleTechBtn" onclick="setRole('technician')" style="flex:1;justify-content:center">
+          <i class="ti ti-tool"></i><span data-i18n="roleTech">Technician</span>
+        </button>
+      </div>
+      <div class="field">
+        <label data-i18n="labelEmail">Email</label>
+        <input type="text" id="loginEmail" placeholder="email@hrco.com" value="manager@hrco.com">
+      </div>
+      <div class="field">
+        <label data-i18n="labelPassword">Password</label>
+        <div style="position:relative">
+          <input type="password" id="loginPass" placeholder="••••••••" value="hrco2026" style="padding-left:12px;padding-right:36px">
+          <button onclick="togglePassView()" style="position:absolute;left:8px;top:50%;transform:translateY(-50%);background:none;border:none;color:var(--t3);cursor:pointer;font-size:15px"><i class="ti ti-eye" id="eyeIcon"></i></button>
+        </div>
+      </div>
+      <div id="loginError" style="display:none;background:var(--rpale);color:var(--red);border-radius:var(--r2);padding:8px 12px;font-size:12px;margin-bottom:12px;text-align:center"></div>
+      <button class="btn btnp" onclick="doLogin()" style="width:100%;justify-content:center;padding:11px">
+        <i class="ti ti-login"></i><span data-i18n="loginBtn">Sign In</span>
+      </button>
+      <div style="text-align:center;margin-top:12px;font-size:11px;color:var(--t3)" data-i18n="loginHint">Demo: manager@hrco.com / hrco2026</div>
+      <!-- Lang on login -->
+      <div style="display:flex;justify-content:center;margin-top:14px;gap:6px">
+        <button class="lgbtn on" onclick="setLang('en')" style="color:var(--t2);background:var(--bg);border:1px solid var(--bdr)">EN</button>
+        <button class="lgbtn" onclick="setLang('ar')" style="color:var(--t2);background:var(--bg);border:1px solid var(--bdr)">ع</button>
+        <button class="lgbtn" onclick="setLang('ur')" style="color:var(--t2);background:var(--bg);border:1px solid var(--bdr)">اردو</button>
+      </div>
+    </div>
+  </div>
+</div>
 </body>
 </html>
