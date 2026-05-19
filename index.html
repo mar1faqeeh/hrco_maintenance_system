@@ -375,7 +375,7 @@ html,body{height:100%;font-family:'Tajawal',sans-serif;background:var(--bg);colo
   .sidebar,.bnav,.topbar,.btn,.rbtn,.tabtn,.ccbtn,.sigacts,.closeab,.cambtn,.vtb,.tbox,.lpills{display:none!important}
   .main{padding:0!important;overflow:visible!important}
   .body{overflow:visible!important}.app{height:auto!important;overflow:visible!important}
-  .page{display:none!important}.page.on{display:block!important}
+  
   body{background:#fff!important}
 }
 
@@ -472,7 +472,7 @@ html,body{height:100%;font-family:'Tajawal',sans-serif;background:var(--bg);colo
   <div class="main" id="mainArea">
 
     <!-- DASHBOARD -->
-    <div class="page on" id="pg-dashboard">
+    <div class="page on" id="pg-dashboard" style="display:block">
       <div class="ph">
         <div><div class="pt" data-i18n="navDashboard">Dashboard</div><div class="ps" data-i18n="dashSub">Today's operations overview</div></div>
         <button class="btn btnp" onclick="go('newvisit')"><i class="ti ti-plus"></i><span data-i18n="navNewVisit">New Visit</span></button>
@@ -515,7 +515,7 @@ html,body{height:100%;font-family:'Tajawal',sans-serif;background:var(--bg);colo
     </div>
 
     <!-- VISITS -->
-    <div class="page" id="pg-visits">
+    <div class="page" id="pg-visits" style="display:none">
       <div class="ph"><div><div class="pt" data-i18n="navVisits">Visits</div><div class="ps" data-i18n="visitsSub">All visits and reports</div></div><button class="btn btnp" onclick="go('newvisit')"><i class="ti ti-plus"></i><span data-i18n="navNewVisit">New Visit</span></button></div>
       <div class="vtbar">
         <div class="sbox"><i class="ti ti-search"></i><input type="text" id="visitsSearch" placeholder="Search..." oninput="filterVisits(this.value)"></div>
@@ -528,7 +528,7 @@ html,body{height:100%;font-family:'Tajawal',sans-serif;background:var(--bg);colo
     </div>
 
     <!-- PENDING -->
-    <div class="page" id="pg-pending">
+    <div class="page" id="pg-pending" style="display:none">
       <div class="ph"><div><div class="pt" data-i18n="navPending">Pending Reports</div><div class="ps" data-i18n="pendingSub">Waiting for spare parts</div></div></div>
       <div class="card">
         <div class="ch"><div class="ct"><i class="ti ti-clock-pause" style="color:var(--orange)"></i><span data-i18n="pendingList">Pending Reports List</span></div></div>
@@ -540,7 +540,7 @@ html,body{height:100%;font-family:'Tajawal',sans-serif;background:var(--bg);colo
     </div>
 
     <!-- NEW VISIT -->
-    <div class="page" id="pg-newvisit">
+    <div class="page" id="pg-newvisit" style="display:none">
       <div class="ph"><div><div class="pt" data-i18n="navNewVisit">New Visit</div><div class="ps" data-i18n="newVisitSub">Create a maintenance visit report</div></div></div>
       <div class="fg">
         <div class="fcard">
@@ -619,7 +619,7 @@ html,body{height:100%;font-family:'Tajawal',sans-serif;background:var(--bg);colo
     </div>
 
     <!-- SIGNATURE -->
-    <div class="page" id="pg-signature">
+    <div class="page" id="pg-signature" style="display:none">
       <div class="ph"><div><div class="pt" data-i18n="closeReport">Close Report</div><div class="ps" data-i18n="closeSub">Signatures &amp; finalize visit</div></div></div>
       <div class="siglayout">
         <div class="card">
@@ -655,7 +655,7 @@ html,body{height:100%;font-family:'Tajawal',sans-serif;background:var(--bg);colo
     </div>
 
     <!-- TECHNICIANS -->
-    <div class="page" id="pg-technicians">
+    <div class="page" id="pg-technicians" style="display:none">
       <div class="ph"><div><div class="pt" data-i18n="navTechs">Technicians</div><div class="ps" data-i18n="techsSub">Accounts &amp; performance analytics</div></div><button class="btn btnp" onclick="openTechMod()"><i class="ti ti-user-plus"></i><span data-i18n="addTech">Add Technician</span></button></div>
       <div class="sg4">
         <div class="sc"><div class="si" style="background:var(--bpale)"><i class="ti ti-users" style="color:var(--blue)"></i></div><div class="sv">4</div><div class="sl" data-i18n="totalTechs">Total Technicians</div><div class="sch cup"><i class="ti ti-circle-check"></i><span data-i18n="activeToday">3 active today</span></div></div>
@@ -671,7 +671,7 @@ html,body{height:100%;font-family:'Tajawal',sans-serif;background:var(--bg);colo
     </div>
 
     <!-- PARTS -->
-    <div class="page" id="pg-parts">
+    <div class="page" id="pg-parts" style="display:none">
       <div class="ph"><div><div class="pt" data-i18n="navParts">Spare Parts</div><div class="ps" data-i18n="partsSub">Inventory &amp; movement history</div></div><div style="display:flex;gap:8px"><button class="btn btno" onclick="openPartMod(false)"><i class="ti ti-package-import"></i><span data-i18n="addInventory">Add Inventory</span></button><button class="btn btnp" onclick="openPartMod(true)"><i class="ti ti-plus"></i><span data-i18n="addNewPart">New Part</span></button></div></div>
       <div class="sg4"><div class="sc"><div class="si" style="background:var(--bpale)"><i class="ti ti-packages" style="color:var(--blue)"></i></div><div class="sv" id="pStatTotal">24</div><div class="sl" data-i18n="totalParts">Total SKUs</div></div><div class="sc"><div class="si" style="background:var(--gpale)"><i class="ti ti-circle-check" style="color:var(--green)"></i></div><div class="sv" id="pStatOk">18</div><div class="sl" data-i18n="availableParts">Available</div></div><div class="sc"><div class="si" style="background:var(--opale)"><i class="ti ti-alert-triangle" style="color:var(--orange)"></i></div><div class="sv" id="pStatLow">4</div><div class="sl" data-i18n="lowStock">Low Stock</div></div><div class="sc"><div class="si" style="background:var(--rpale)"><i class="ti ti-package-off" style="color:var(--red)"></i></div><div class="sv" id="pStatOut">2</div><div class="sl" data-i18n="outOfStock">Out of Stock</div></div></div>
       <div class="ptabs"><button class="ptab on" onclick="switchPT('inv',this)" data-i18n="tabInventory">Current Inventory</button><button class="ptab" onclick="switchPT('hist',this)" data-i18n="tabHistory">Movement History</button></div>
@@ -686,7 +686,7 @@ html,body{height:100%;font-family:'Tajawal',sans-serif;background:var(--bg);colo
     </div>
 
     <!-- CLIENTS -->
-    <div class="page" id="pg-clients">
+    <div class="page" id="pg-clients" style="display:none">
       <div class="ph"><div><div class="pt" data-i18n="navClients">Clients</div><div class="ps" data-i18n="clientsSub">Visit analytics per client</div></div><button class="btn btnp" onclick="openClientMod()"><i class="ti ti-building-plus"></i><span data-i18n="addClient">Add Client</span></button></div>
       <div class="sg5"><div class="sc"><div class="si" style="background:var(--bpale)"><i class="ti ti-building" style="color:var(--blue)"></i></div><div class="sv">8</div><div class="sl" data-i18n="totalClients">Total Clients</div></div><div class="sc"><div class="si" style="background:var(--gpale)"><i class="ti ti-circle-check" style="color:var(--green)"></i></div><div class="sv">54</div><div class="sl" data-i18n="completedVisits">Completed</div></div><div class="sc"><div class="si" style="background:var(--opale)"><i class="ti ti-clock-pause" style="color:var(--orange)"></i></div><div class="sv">13</div><div class="sl" data-i18n="pendingVisitsC">Pending</div></div><div class="sc"><div class="si" style="background:#DBEAFE"><i class="ti ti-shield-check" style="color:#1D4ED8"></i></div><div class="sv">5</div><div class="sl" data-i18n="warrantyClients">Warranty</div></div><div class="sc"><div class="si" style="background:var(--gpale)"><i class="ti ti-file-invoice" style="color:var(--green)"></i></div><div class="sv">6</div><div class="sl" data-i18n="activeContracts">Contracts</div></div></div>
       <div class="vtbar"><div class="sbox" style="max-width:280px"><i class="ti ti-search"></i><input type="text" placeholder="Search clients..." oninput="filterClients(this.value)"></div><div class="ftabs"><button class="ftab on" onclick="setCF('all',this)" data-i18n="allFilter">All</button><button class="ftab" onclick="setCF('contract',this)" data-i18n="contractFilter">Contract</button><button class="ftab" onclick="setCF('warranty',this)" data-i18n="warrantyFilter">Warranty</button><button class="ftab" onclick="setCF('paid',this)" data-i18n="paidFilter">Paid</button></div></div>
@@ -699,7 +699,7 @@ html,body{height:100%;font-family:'Tajawal',sans-serif;background:var(--bg);colo
     </div>
 
     <!-- REPORTS -->
-    <div class="page" id="pg-reports">
+    <div class="page" id="pg-reports" style="display:none">
       <div class="ph"><div><div class="pt" data-i18n="navReports">Reports</div><div class="ps" data-i18n="reportsSub">Search all reports and visits</div></div><div style="display:flex;gap:8px"><button class="btn btno"><i class="ti ti-file-export"></i><span data-i18n="exportExcel">Export Excel</span></button><button class="btn btnp" onclick="window.print()"><i class="ti ti-printer"></i><span data-i18n="printBtn">Print</span></button></div></div>
       <div class="rsc">
         <div class="rst"><i class="ti ti-filter" style="color:var(--blue)"></i><span data-i18n="filterTitle">Search Filters</span></div>
@@ -725,7 +725,7 @@ html,body{height:100%;font-family:'Tajawal',sans-serif;background:var(--bg);colo
     </div>
 
     <!-- ARCHIVE -->
-    <div class="page" id="pg-archive">
+    <div class="page" id="pg-archive" style="display:none">
       <div class="ph"><div><div class="pt" data-i18n="navArchive">Archive</div><div class="ps" data-i18n="archiveSub">All closed reports</div></div></div>
       <div class="card"><div style="padding:40px;text-align:center;color:var(--t4)"><i class="ti ti-history" style="font-size:48px;display:block;margin-bottom:12px"></i><div style="font-size:14px" data-i18n="archiveEmpty">Archive will appear here once reports are closed.</div></div></div>
     </div>
@@ -745,7 +745,7 @@ html,body{height:100%;font-family:'Tajawal',sans-serif;background:var(--bg);colo
 </div>
 
 <!-- TECH MODAL -->
-<div class="modal" id="techModal">
+<div class="modal" id="techModal" style="display:none">
   <div class="mbox">
     <div class="mh"><div class="mhtitle" id="techMTitle" data-i18n="modalAddTech">Add New Technician</div><button class="mclose" onclick="closeMod('techModal')"><i class="ti ti-x"></i></button></div>
     <div class="mb"><div class="mg2">
@@ -766,7 +766,7 @@ html,body{height:100%;font-family:'Tajawal',sans-serif;background:var(--bg);colo
 </div>
 
 <!-- PART MODAL -->
-<div class="modal" id="partModal">
+<div class="modal" id="partModal" style="display:none">
   <div class="mbox">
     <div class="mh"><div class="mhtitle" id="partMTitle" data-i18n="addPartTitle">Add Part</div><button class="mclose" onclick="closeMod('partModal')"><i class="ti ti-x"></i></button></div>
     <div class="mb"><div class="mg2">
@@ -785,7 +785,7 @@ html,body{height:100%;font-family:'Tajawal',sans-serif;background:var(--bg);colo
 </div>
 
 <!-- CLIENT MODAL -->
-<div class="modal" id="clientModal">
+<div class="modal" id="clientModal" style="display:none">
   <div class="mbox">
     <div class="mh"><div class="mhtitle" data-i18n="addClient">Add Client</div><button class="mclose" onclick="closeMod('clientModal')"><i class="ti ti-x"></i></button></div>
     <div class="mb"><div class="mg2">
@@ -1054,10 +1054,18 @@ function setLang(l){
   document.documentElement.lang=l;
   document.documentElement.dir=dir;
   document.body.style.fontFamily=(l==='ur')?"'Noto Nastaliq Urdu','Tajawal',sans-serif":"'Tajawal',sans-serif";
-  document.querySelectorAll('.lgbtn').forEach(function(b){b.classList.remove('on');});
+  document.querySelectorAll('.lgbtn').forEach(function(b){
+    b.classList.remove('on');
+    b.style.background='transparent';
+    b.style.color='rgba(255,255,255,0.6)';
+  });
   var idx={en:0,ar:1,ur:2}[l];
   var btns=document.querySelectorAll('.lgbtn');
-  if(btns[idx])btns[idx].classList.add('on');
+  if(btns[idx]){
+    btns[idx].classList.add('on');
+    btns[idx].style.background='#fff';
+    btns[idx].style.color='var(--navy)';
+  }
   applyI18n();
   // re-render dynamic pages
   renderTechGrid();renderInvList();renderHistList();renderClientGrid();runReport();
@@ -1080,14 +1088,31 @@ function applyI18n(){
 // NAVIGATION
 // ═══════════════════════════════════════════
 function go(pg){
-  document.querySelectorAll('.page').forEach(function(p){p.classList.remove('on');});
+  // Hide all pages using inline style (bulletproof)
+  document.querySelectorAll('.page').forEach(function(p){
+    p.style.display='none';
+    p.classList.remove('on');
+  });
+  // Show target page
   var el=document.getElementById('pg-'+pg);
-  if(el)el.classList.add('on');
+  if(el){el.style.display='block';el.classList.add('on');}
+  // Update nav
   document.querySelectorAll('.navi').forEach(function(n){n.classList.remove('on');});
+  document.querySelectorAll('.navi').forEach(function(n){
+    n.style.color=''; n.style.background=''; n.style.borderColor='';
+  });
   var ni=document.querySelector(".navi[data-pg='"+pg+"']");
-  if(ni)ni.classList.add('on');
-  document.getElementById('mainArea').scrollTop=0;
+  if(ni){
+    ni.classList.add('on');
+    ni.style.color='var(--blue)';
+    ni.style.background='var(--bpale)';
+    ni.style.fontWeight='600';
+  }
+  // Scroll top
+  var ma=document.getElementById('mainArea');
+  if(ma)ma.scrollTop=0;
   closeSb();
+  // Page-specific init
   if(pg==='signature'){setTimeout(function(){initSig('tech');initSig('client');},80);}
   if(pg==='visits'){filterVisits('');}
   if(pg==='technicians'){renderTechGrid();setTimeout(renderTechCharts,100);}
@@ -1095,10 +1120,26 @@ function go(pg){
   if(pg==='clients'){renderClientGrid();renderDonut();renderTopClients();renderWaiting();}
   if(pg==='reports'){runReport();}
 }
-function setBn(b){document.querySelectorAll('.bnitm').forEach(function(x){x.classList.remove('on');});b.classList.add('on');}
-document.querySelectorAll('.navi[data-pg]').forEach(function(n){n.addEventListener('click',function(){go(this.dataset.pg);});});
-function closeSb(){document.getElementById('sidebar').classList.remove('on');document.getElementById('ovl').classList.remove('on');}
-document.getElementById('hamBtn').addEventListener('click',function(){document.getElementById('sidebar').classList.toggle('on');document.getElementById('ovl').classList.toggle('on');});
+function setBn(b){
+  document.querySelectorAll('.bnitm').forEach(function(x){x.classList.remove('on');x.style.color='';});
+  b.classList.add('on');
+  b.style.color='var(--blue)';
+}
+document.querySelectorAll('.navi[data-pg]').forEach(function(n){
+  n.style.cursor='pointer';
+  n.addEventListener('click',function(){go(this.dataset.pg);});
+});
+function closeSb(){
+  var sb=document.getElementById('sidebar');
+  var ov=document.getElementById('ovl');
+  if(sb)sb.style.right='-240px';
+  if(ov){ov.style.display='none';ov.style.pointerEvents='none';}
+}
+document.getElementById('hamBtn').addEventListener('click',function(){var sb=document.getElementById('sidebar');
+  var ov=document.getElementById('ovl');
+  var isOpen=sb.style.right==='0px'||sb.style.left==='0px';
+  if(isOpen){sb.style.right='-240px';if(ov)ov.style.display='none';}
+  else{sb.style.right='0px';if(ov){ov.style.display='block';ov.style.pointerEvents='auto';}}});
 
 // ═══════════════════════════════════════════
 // DATE
@@ -1129,7 +1170,10 @@ document.getElementById('hamBtn').addEventListener('click',function(){document.g
 // ═══════════════════════════════════════════
 // FILTER TABS HELPER
 // ═══════════════════════════════════════════
-function setFTab(group,btn){document.querySelectorAll(group).forEach(function(t){t.classList.remove('on');});btn.classList.add('on');}
+function setFTab(group,btn){
+  document.querySelectorAll(group).forEach(function(t){t.classList.remove('on');});
+  if(btn)btn.classList.add('on');
+}
 function setVFilter(f,b){
   setFTab('#pg-visits .ftab',b);
   var body = document.getElementById('visitsBody');
@@ -1264,10 +1308,10 @@ function closeV(){var ab=document.getElementById('closeAB');if(ab)ab.innerHTML='
 // ═══════════════════════════════════════════
 // MODALS
 // ═══════════════════════════════════════════
-function openTechMod(){document.getElementById('techMTitle').textContent=t('modalAddTech');['name','phone','email','pass','notes'].forEach(function(f){var e=document.getElementById('m-'+f);if(e)e.value='';});document.getElementById('techModal').classList.add('on');}
-function openPartMod(isNew){document.getElementById('partMTitle').textContent=t(isNew?'addPartTitle':'addInventory');['name','qty','min','sup'].forEach(function(f){var e=document.getElementById('ap-'+f);if(e)e.value='';});document.getElementById('partModal').classList.add('on');}
-function openClientMod(){document.getElementById('clientModal').classList.add('on');}
-function closeMod(id){document.getElementById(id).classList.remove('on');}
+function openTechMod(){document.getElementById('techMTitle').textContent=t('modalAddTech');['name','phone','email','pass','notes'].forEach(function(f){var e=document.getElementById('m-'+f);if(e)e.value='';});document.getElementById('techModal').style.display='flex';}
+function openPartMod(isNew){document.getElementById('partMTitle').textContent=t(isNew?'addPartTitle':'addInventory');['name','qty','min','sup'].forEach(function(f){var e=document.getElementById('ap-'+f);if(e)e.value='';});document.getElementById('partModal').style.display='flex';}
+function openClientMod(){document.getElementById('clientModal').style.display='flex';}
+function closeMod(id){var el=document.getElementById(id);if(el)el.style.display='none';}
 
 // ═══════════════════════════════════════════
 // TECHNICIANS DATA & RENDER
@@ -1292,7 +1336,7 @@ function renderTechGrid(){
   });
   applyI18n();
 }
-function editTech(id){var tc=techsData.find(function(x){return x.id===id;});if(!tc)return;document.getElementById('techMTitle').textContent=t('modalEditTech');document.getElementById('m-name').value=tc.name;document.getElementById('m-phone').value=tc.phone;document.getElementById('techModal').classList.add('on');}
+function editTech(id){var tc=techsData.find(function(x){return x.id===id;});if(!tc)return;document.getElementById('techMTitle').textContent=t('modalEditTech');document.getElementById('m-name').value=tc.name;document.getElementById('m-phone').value=tc.phone;document.getElementById('techModal').style.display='flex';}
 function techStats(id){var tc=techsData.find(function(x){return x.id===id;});if(!tc)return;var pct=Math.round((tc.completed/tc.visits)*100);alert('📊 '+tc.name+'
 
 '+t('completion')+': '+pct+'%
@@ -1360,7 +1404,14 @@ function filterParts(q){renderInvList(q,stockFilter);}
 function filterHist(q){renderHistList(q,histFilter);}
 function setStockF(f,b){stockFilter=f;setFTab('#tab-inv .ftab',b);renderInvList('',f);}
 function setHistF(f,b){histFilter=f;setFTab('#tab-hist .ftab',b);renderHistList('',f);}
-function switchPT(tab,el){setFTab('.ptab',el);document.getElementById('tab-inv').style.display=tab==='inv'?'block':'none';document.getElementById('tab-hist').style.display=tab==='hist'?'block':'none';}
+function switchPT(tab,el){
+  document.querySelectorAll('.ptab').forEach(function(t){t.classList.remove('on');});
+  if(el)el.classList.add('on');
+  var inv=document.getElementById('tab-inv');
+  var hist=document.getElementById('tab-hist');
+  if(inv)inv.style.display=tab==='inv'?'block':'none';
+  if(hist)hist.style.display=tab==='hist'?'block':'none';
+}
 function quickAddStock(id){var p=partsData.find(function(x){return x.id===id;});if(!p)return;var qty=parseInt(prompt(t('quickAdd')+' — '+p.name+'
 '+t('colQty')+': '+p.qty+' '+p.unit));if(isNaN(qty)||qty<=0)return;p.qty+=qty;histData.unshift({id:Date.now(),partId:p.id,type:'in',qty:qty,dest:'—',tech:'Manager',note:'Stock added',date:new Date().toISOString().split('T')[0]});renderInvList();}
 function showPartHist(id){var p=partsData.find(function(x){return x.id===id;});if(!p)return;switchPT('hist',document.querySelectorAll('.ptab')[1]);renderHistList(p.name,'all');}
