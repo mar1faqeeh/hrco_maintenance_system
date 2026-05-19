@@ -25,8 +25,8 @@ var DB_READY=true;
   --r:12px;--r2:8px;--r3:6px;--sbw:220px;--tbh:56px;
 }
 *{box-sizing:border-box;margin:0;padding:0}
-html,body{height:100%;font-family:'Tajawal',sans-serif;background:var(--bg);color:var(--t1);font-size:14px}
-.app{display:flex;flex-direction:column;height:100vh;overflow:hidden;position:relative}
+html,body{height:100%;font-family:'Tajawal',sans-serif;background:var(--bg);color:var(--t1);font-size:14px;overflow:hidden}
+.app{display:flex;flex-direction:column;height:100vh;position:relative}
 /* TOPBAR */
 .topbar{height:var(--tbh);background:var(--navy);display:flex;align-items:center;gap:12px;padding:0 20px;flex-shrink:0;box-shadow:0 2px 8px rgba(0,0,0,.25);z-index:50}
 .tlogo{width:36px;height:36px;background:rgba(255,255,255,.12);border-radius:var(--r2);display:flex;align-items:center;justify-content:center;flex-shrink:0}
@@ -46,7 +46,7 @@ html,body{height:100%;font-family:'Tajawal',sans-serif;background:var(--bg);colo
 .uav{width:32px;height:32px;border-radius:50%;background:var(--blue2);display:flex;align-items:center;justify-content:center;color:#fff;font-size:13px;font-weight:700;cursor:pointer}
 .ham{display:none;background:none;border:none;color:#fff;font-size:22px;cursor:pointer;padding:4px}
 /* BODY */
-.body{display:flex;flex:1;overflow:hidden}
+.body{display:flex;flex:1;overflow:hidden;min-height:0}
 /* SIDEBAR */
 .sidebar{width:var(--sbw);background:var(--card);border-left:1px solid var(--bdr);display:flex;flex-direction:column;flex-shrink:0;overflow-y:auto;z-index:30}
 [dir=ltr] .sidebar{border-left:none;border-right:1px solid var(--bdr)}
@@ -63,8 +63,8 @@ html,body{height:100%;font-family:'Tajawal',sans-serif;background:var(--bg);colo
 .sbfoot{padding:12px 16px;border-top:1px solid var(--bdr)}
 .sbuser{display:flex;align-items:center;gap:10px}
 /* OVERLAY */
-.ovl{display:none;position:fixed;inset:0;background:rgba(0,0,0,.35);z-index:29}
-.ovl.on{display:block}
+.ovl{display:none;position:fixed;inset:0;background:rgba(0,0,0,.35);z-index:29;pointer-events:none}
+.ovl.on{display:block;pointer-events:auto}
 /* MAIN */
 .main{flex:1;overflow-y:auto;padding:20px;min-width:0}
 /* PAGES */
@@ -339,8 +339,8 @@ html,body{height:100%;font-family:'Tajawal',sans-serif;background:var(--bg);colo
 .nores p{font-size:13px;color:var(--t3)}
 .hl{background:#FEF9C3;border-radius:3px;padding:0 2px}
 /* MODAL */
-.modal{display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:500;align-items:center;justify-content:center;padding:16px;isolation:isolate}
-.modal.on{display:flex}
+.modal{display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:500;align-items:center;justify-content:center;padding:16px;pointer-events:none}
+.modal.on{display:flex;pointer-events:auto}
 .mbox{background:var(--card);border-radius:var(--r);width:100%;max-width:480px;max-height:90vh;overflow-y:auto;box-shadow:var(--sh2)}
 .mh{background:var(--navy);padding:13px 18px;border-radius:var(--r) var(--r) 0 0;display:flex;align-items:center;justify-content:space-between}
 .mhtitle{color:#fff;font-size:14px;font-weight:700}
@@ -360,6 +360,7 @@ html,body{height:100%;font-family:'Tajawal',sans-serif;background:var(--bg);colo
   .sidebar{position:fixed;top:var(--tbh);right:-240px;height:calc(100% - var(--tbh));width:220px;transition:right .25s;box-shadow:var(--sh2)}
   [dir=ltr] .sidebar{right:auto;left:-240px;transition:left .25s}
   .sidebar.on{right:0}[dir=ltr] .sidebar.on{left:0}
+  .sidebar:not(.on){pointer-events:none}
   .ham{display:block}.sg4{grid-template-columns:repeat(2,1fr)}.g2{grid-template-columns:1fr}
   .fg{grid-template-columns:1fr}.siglayout{grid-template-columns:1fr}
   .rfg{grid-template-columns:1fr 1fr}.bnav{display:block}
@@ -407,6 +408,17 @@ html,body{height:100%;font-family:'Tajawal',sans-serif;background:var(--bg);colo
 [dir=rtl] .sbox input { padding: 8px 36px 8px 12px; }
 [dir=ltr] .dcnt { margin-left: auto; margin-right: 0; }
 [dir=rtl] .dcnt { margin-right: auto; margin-left: 0; }
+
+
+/* ENSURE CLICK EVENTS WORK */
+.lgbtn, .nbtn, .uav, .ham { cursor:pointer; pointer-events:auto; }
+.navi { cursor:pointer; pointer-events:auto; }
+.btn, .btnp, .btno, .btnw { cursor:pointer; pointer-events:auto; }
+.bnitm { cursor:pointer; pointer-events:auto; }
+.ftab { cursor:pointer; pointer-events:auto; }
+.rbtn, .tabtn, .ccbtn, .sbtn { cursor:pointer; pointer-events:auto; }
+.ptab { cursor:pointer; pointer-events:auto; }
+.ca { cursor:pointer; pointer-events:auto; }
 
 </style>
 </head>
@@ -1514,94 +1526,7 @@ document.addEventListener('DOMContentLoaded',async function(){
   }
 });
 
-// ═══════════════════════════════════════════
-// LOGIN SYSTEM
-// ═══════════════════════════════════════════
-var currentRole='manager';
-var demoUsers={
-  'manager@hrco.com': {pass:'hrco2026',role:'manager',name:'Mohammed Al-Otaibi',initial:'M'},
-  'ahmed@hrco.com':   {pass:'tech1234',role:'technician',name:'Ahmed Al-Otaibi',initial:'أع'},
-  'mohamad@hrco.com': {pass:'tech1234',role:'technician',name:'Mohammed Al-Harbi',initial:'مح'},
-  'sami@hrco.com':    {pass:'tech1234',role:'technician',name:'Sami Al-Qahtani',initial:'سق'},
-  'khalid@hrco.com':  {pass:'tech1234',role:'technician',name:'Khalid Al-Rashidi',initial:'خر'}
-};
-
-function setRole(r){
-  currentRole=r;
-  var mb=document.getElementById('roleManagerBtn');
-  var tb=document.getElementById('roleTechBtn');
-  if(!mb||!tb) return;
-  if(r==='manager'){
-    mb.className='btn btnp';tb.className='btn btno';
-    document.getElementById('loginEmail').value='manager@hrco.com';
-  } else {
-    mb.className='btn btno';tb.className='btn btnp';
-    document.getElementById('loginEmail').value='ahmed@hrco.com';
-  }
-}
-
-function togglePassView(){
-  var inp=document.getElementById('loginPass');
-  var ico=document.getElementById('eyeIcon');
-  if(!inp) return;
-  if(inp.type==='password'){inp.type='text';if(ico)ico.className='ti ti-eye-off';}
-  else{inp.type='password';if(ico)ico.className='ti ti-eye';}
-}
-
-async function doLogin(){
-  var email=document.getElementById('loginEmail').value.trim().toLowerCase();
-  var pass=document.getElementById('loginPass').value;
-  var errEl=document.getElementById('loginError');
-  if(errEl) errEl.style.display='none';
-  var user=demoUsers[email];
-  if(user && user.pass===pass){ loginSuccess(user); return; }
-  if(DB_READY){
-    try{
-      var r=await _sb.auth.signInWithPassword({email:email,password:pass});
-      if(r.data&&r.data.user){ loginSuccess({role:currentRole,name:email,initial:email[0].toUpperCase()}); return; }
-    }catch(e){}
-  }
-  if(errEl){errEl.textContent=t('loginError')||'Invalid email or password';errEl.style.display='block';}
-}
-
-function loginSuccess(user){
-  var lm=document.getElementById('loginModal');
-  if(lm) lm.style.display='none';
-  var ua=document.getElementById('uAv');
-  if(ua) ua.textContent=user.initial;
-  if(user.role==='technician'){
-    ['technicians','clients','reports','archive'].forEach(function(pg){
-      var n=document.querySelector('.navi[data-pg="'+pg+'"]');
-      if(n) n.style.display='none';
-    });
-  }
-}
-
-function logout(){
-  var lm=document.getElementById('loginModal');
-  if(lm) lm.style.display='flex';
-  if(DB_READY) _sb.auth.signOut().catch(function(){});
-}
-
-// Attach logout to avatar
-document.addEventListener('DOMContentLoaded',function(){
-  var ua=document.getElementById('uAv');
-  if(ua) ua.addEventListener('click',function(){if(confirm('Sign out?'))logout();});
-
-  // Allow Enter key on login form
-  ['loginEmail','loginPass'].forEach(function(id){
-    var el=document.getElementById(id);
-    if(el) el.addEventListener('keydown',function(e){if(e.key==='Enter')doLogin();});
-  });
-});
-
-// Tech stats
-function techStats(id){
-  var tc=techsData.find(function(x){return x.id===id;});
-  if(!tc) return;
-  var pct=Math.round((tc.completed/tc.visits)*100);
-  alert(tc.name+'\nCompletion: '+pct+'%\nTotal: '+tc.visits+'\nAvg: '+tc.avgTime+'h\nRating: '+tc.rating+'/5');
-}
+// Tech stats handled by login script
 
 </script>
 
