@@ -26,7 +26,7 @@ var DB_READY=true;
 }
 *{box-sizing:border-box;margin:0;padding:0}
 html,body{height:100%;font-family:'Tajawal',sans-serif;background:var(--bg);color:var(--t1);font-size:14px}
-.app{display:flex;flex-direction:column;height:100vh;overflow:hidden}
+.app{display:flex;flex-direction:column;height:100vh;overflow:hidden;position:relative}
 /* TOPBAR */
 .topbar{height:var(--tbh);background:var(--navy);display:flex;align-items:center;gap:12px;padding:0 20px;flex-shrink:0;box-shadow:0 2px 8px rgba(0,0,0,.25);z-index:50}
 .tlogo{width:36px;height:36px;background:rgba(255,255,255,.12);border-radius:var(--r2);display:flex;align-items:center;justify-content:center;flex-shrink:0}
@@ -339,7 +339,7 @@ html,body{height:100%;font-family:'Tajawal',sans-serif;background:var(--bg);colo
 .nores p{font-size:13px;color:var(--t3)}
 .hl{background:#FEF9C3;border-radius:3px;padding:0 2px}
 /* MODAL */
-.modal{display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:500;align-items:center;justify-content:center;padding:16px}
+.modal{display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:500;align-items:center;justify-content:center;padding:16px;isolation:isolate}
 .modal.on{display:flex}
 .mbox{background:var(--card);border-radius:var(--r);width:100%;max-width:480px;max-height:90vh;overflow-y:auto;box-shadow:var(--sh2)}
 .mh{background:var(--navy);padding:13px 18px;border-radius:var(--r) var(--r) 0 0;display:flex;align-items:center;justify-content:space-between}
@@ -1605,52 +1605,217 @@ function techStats(id){
 
 </script>
 
-<!-- LOGIN PAGE -->
-<div class="modal on" id="loginModal" style="background:var(--navy);z-index:9999">
-  <div class="mbox" style="max-width:420px">
-    <div class="mh" style="justify-content:center;padding:20px 18px">
-      <div style="text-align:center">
-        <div style="width:52px;height:52px;background:rgba(255,255,255,.12);border-radius:var(--r);display:flex;align-items:center;justify-content:center;margin:0 auto 10px">
-          <i class="ti ti-snowflake" style="color:#7EC8E3;font-size:28px"></i>
-        </div>
-        <div class="mhtitle" style="font-size:16px" data-i18n="appName">Maintenance Management System</div>
-        <div style="color:#a0c4f1;font-size:11px;margin-top:3px" data-i18n="appSub">HRCO — Central Kitchens & Cold Rooms</div>
+
+<!-- LOGIN SCREEN -->
+<div id="loginModal" style="position:fixed;inset:0;background:#0F2D52;z-index:9999;display:flex;align-items:center;justify-content:center;padding:16px;font-family:'Tajawal',sans-serif">
+  <div style="background:#fff;border-radius:16px;width:100%;max-width:400px;overflow:hidden;box-shadow:0 20px 60px rgba(0,0,0,.3)">
+    
+    <!-- Header -->
+    <div style="background:#0F2D52;padding:24px 20px;text-align:center">
+      <div style="width:56px;height:56px;background:rgba(255,255,255,.12);border-radius:12px;display:flex;align-items:center;justify-content:center;margin:0 auto 12px">
+        <i class="ti ti-snowflake" style="color:#7EC8E3;font-size:30px"></i>
+      </div>
+      <div style="color:#fff;font-size:17px;font-weight:700" id="lgAppName">Maintenance Management System</div>
+      <div style="color:#7EC8E3;font-size:12px;margin-top:4px">HRCO — Central Kitchens &amp; Cold Rooms</div>
+      <!-- Language switcher inside login -->
+      <div style="display:flex;justify-content:center;gap:6px;margin-top:14px">
+        <button id="lg-en" onclick="setLangLogin('en')" style="padding:4px 12px;border-radius:99px;font-size:11px;font-weight:700;cursor:pointer;border:1px solid rgba(255,255,255,.3);background:#fff;color:#0F2D52;font-family:inherit">EN</button>
+        <button id="lg-ar" onclick="setLangLogin('ar')" style="padding:4px 12px;border-radius:99px;font-size:11px;font-weight:700;cursor:pointer;border:1px solid rgba(255,255,255,.3);background:transparent;color:#fff;font-family:inherit">ع</button>
+        <button id="lg-ur" onclick="setLangLogin('ur')" style="padding:4px 12px;border-radius:99px;font-size:11px;font-weight:700;cursor:pointer;border:1px solid rgba(255,255,255,.3);background:transparent;color:#fff;font-family:inherit">اردو</button>
       </div>
     </div>
-    <div class="mb">
-      <!-- Role selector -->
-      <div style="display:flex;gap:8px;margin-bottom:18px">
-        <button class="btn" id="roleManagerBtn" onclick="setRole('manager')" style="flex:1;background:var(--blue);color:#fff;justify-content:center">
-          <i class="ti ti-shield-check"></i><span data-i18n="roleManager">Manager</span>
+
+    <!-- Body -->
+    <div style="padding:24px 20px">
+      <!-- Role Selector -->
+      <div style="display:flex;gap:8px;margin-bottom:20px">
+        <button id="btnRoleManager" onclick="setLoginRole('manager')" style="flex:1;padding:10px;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;border:none;background:#1D4E89;color:#fff;font-family:inherit;display:flex;align-items:center;justify-content:center;gap:6px">
+          <i class="ti ti-shield-check"></i><span id="lgRoleManager">Manager</span>
         </button>
-        <button class="btn btno" id="roleTechBtn" onclick="setRole('technician')" style="flex:1;justify-content:center">
-          <i class="ti ti-tool"></i><span data-i18n="roleTech">Technician</span>
+        <button id="btnRoleTech" onclick="setLoginRole('technician')" style="flex:1;padding:10px;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;border:1px solid #D9E2EC;background:#fff;color:#4A5568;font-family:inherit;display:flex;align-items:center;justify-content:center;gap:6px">
+          <i class="ti ti-tool"></i><span id="lgRoleTech">Technician</span>
         </button>
       </div>
-      <div class="field">
-        <label data-i18n="labelEmail">Email</label>
-        <input type="text" id="loginEmail" placeholder="email@hrco.com" value="manager@hrco.com">
+
+      <!-- Email -->
+      <div style="margin-bottom:12px">
+        <label id="lgLblEmail" style="display:block;font-size:12px;font-weight:600;color:#4A5568;margin-bottom:5px">Email</label>
+        <input type="email" id="loginEmail" value="manager@hrco.com"
+          style="width:100%;padding:10px 12px;border:1px solid #D9E2EC;border-radius:8px;font-size:14px;font-family:inherit;outline:none;color:#1A202C;box-sizing:border-box"
+          onfocus="this.style.borderColor='#2E7BC4'" onblur="this.style.borderColor='#D9E2EC'">
       </div>
-      <div class="field">
-        <label data-i18n="labelPassword">Password</label>
+
+      <!-- Password -->
+      <div style="margin-bottom:16px">
+        <label id="lgLblPass" style="display:block;font-size:12px;font-weight:600;color:#4A5568;margin-bottom:5px">Password</label>
         <div style="position:relative">
-          <input type="password" id="loginPass" placeholder="••••••••" value="hrco2026" style="padding-left:12px;padding-right:36px">
-          <button onclick="togglePassView()" style="position:absolute;left:8px;top:50%;transform:translateY(-50%);background:none;border:none;color:var(--t3);cursor:pointer;font-size:15px"><i class="ti ti-eye" id="eyeIcon"></i></button>
+          <input type="password" id="loginPass" value="hrco2026"
+            style="width:100%;padding:10px 40px 10px 12px;border:1px solid #D9E2EC;border-radius:8px;font-size:14px;font-family:inherit;outline:none;color:#1A202C;box-sizing:border-box"
+            onfocus="this.style.borderColor='#2E7BC4'" onblur="this.style.borderColor='#D9E2EC'"
+            onkeydown="if(event.key==='Enter')doLogin()">
+          <button onclick="togglePassView()" style="position:absolute;right:10px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;color:#718096;font-size:16px;padding:0">
+            <i class="ti ti-eye" id="eyeIcon"></i>
+          </button>
         </div>
       </div>
-      <div id="loginError" style="display:none;background:var(--rpale);color:var(--red);border-radius:var(--r2);padding:8px 12px;font-size:12px;margin-bottom:12px;text-align:center"></div>
-      <button class="btn btnp" onclick="doLogin()" style="width:100%;justify-content:center;padding:11px">
-        <i class="ti ti-login"></i><span data-i18n="loginBtn">Sign In</span>
+
+      <!-- Error -->
+      <div id="loginError" style="display:none;background:#FCEBEB;color:#C0392B;border-radius:8px;padding:8px 12px;font-size:12px;margin-bottom:12px;text-align:center"></div>
+
+      <!-- Login Button -->
+      <button onclick="doLogin()" id="loginSubmitBtn"
+        style="width:100%;padding:12px;background:#1D4E89;color:#fff;border:none;border-radius:8px;font-size:15px;font-weight:700;cursor:pointer;font-family:inherit;display:flex;align-items:center;justify-content:center;gap:8px;box-sizing:border-box"
+        onmouseover="this.style.background='#0F2D52'" onmouseout="this.style.background='#1D4E89'">
+        <i class="ti ti-login"></i><span id="lgBtnLogin">Sign In</span>
       </button>
-      <div style="text-align:center;margin-top:12px;font-size:11px;color:var(--t3)" data-i18n="loginHint">Demo: manager@hrco.com / hrco2026</div>
-      <!-- Lang on login -->
-      <div style="display:flex;justify-content:center;margin-top:14px;gap:6px">
-        <button class="lgbtn on" onclick="setLang('en')" style="color:var(--t2);background:var(--bg);border:1px solid var(--bdr)">EN</button>
-        <button class="lgbtn" onclick="setLang('ar')" style="color:var(--t2);background:var(--bg);border:1px solid var(--bdr)">ع</button>
-        <button class="lgbtn" onclick="setLang('ur')" style="color:var(--t2);background:var(--bg);border:1px solid var(--bdr)">اردو</button>
+
+      <!-- Demo hint -->
+      <div id="lgHint" style="text-align:center;margin-top:12px;font-size:11px;color:#718096">
+        Demo: manager@hrco.com / hrco2026
       </div>
     </div>
   </div>
 </div>
+
+<script>
+// ── LOGIN HELPERS (inline, no dependency on main JS) ──
+var _loginRole = 'manager';
+var _demoUsers = {
+  'manager@hrco.com': {pass:'hrco2026', role:'manager',     name:'Mohammed Al-Otaibi', initial:'M'},
+  'ahmed@hrco.com':   {pass:'tech1234', role:'technician',  name:'Ahmed Al-Otaibi',    initial:'أع'},
+  'mohamad@hrco.com': {pass:'tech1234', role:'technician',  name:'Mohammed Al-Harbi',  initial:'مح'},
+  'sami@hrco.com':    {pass:'tech1234', role:'technician',  name:'Sami Al-Qahtani',    initial:'سق'},
+  'khalid@hrco.com':  {pass:'tech1234', role:'technician',  name:'Khalid Al-Rashidi',  initial:'خر'}
+};
+
+var _lgTexts = {
+  en: { appName:'Maintenance Management System', roleManager:'Manager', roleTech:'Technician',
+        email:'Email', password:'Password', signIn:'Sign In', hint:'Demo: manager@hrco.com / hrco2026',
+        error:'Invalid email or password', dir:'ltr' },
+  ar: { appName:'نظام إدارة الصيانة', roleManager:'مدير', roleTech:'فني',
+        email:'البريد الإلكتروني', password:'كلمة المرور', signIn:'تسجيل الدخول',
+        hint:'تجريبي: manager@hrco.com / hrco2026', error:'بيانات الدخول غير صحيحة', dir:'rtl' },
+  ur: { appName:'مینٹیننس مینجمنٹ سسٹم', roleManager:'مینیجر', roleTech:'ٹیکنیشن',
+        email:'ای میل', password:'پاس ورڈ', signIn:'سائن ان',
+        hint:'ڈیمو: manager@hrco.com / hrco2026', error:'غلط ای میل یا پاس ورڈ', dir:'rtl' }
+};
+
+function setLangLogin(l) {
+  // Update login UI language
+  var tx = _lgTexts[l] || _lgTexts.en;
+  document.getElementById('lgAppName').textContent   = tx.appName;
+  document.getElementById('lgRoleManager').textContent = tx.roleManager;
+  document.getElementById('lgRoleTech').textContent  = tx.roleTech;
+  document.getElementById('lgLblEmail').textContent  = tx.email;
+  document.getElementById('lgLblPass').textContent   = tx.password;
+  document.getElementById('lgBtnLogin').textContent  = tx.signIn;
+  document.getElementById('lgHint').textContent      = tx.hint;
+  // Update lang buttons
+  ['en','ar','ur'].forEach(function(x) {
+    var b = document.getElementById('lg-'+x);
+    if (b) {
+      b.style.background = (x===l) ? '#fff' : 'transparent';
+      b.style.color      = (x===l) ? '#0F2D52' : '#fff';
+    }
+  });
+  // Also set main app language
+  if (typeof setLang === 'function') setLang(l);
+}
+
+function setLoginRole(r) {
+  _loginRole = r;
+  var mb = document.getElementById('btnRoleManager');
+  var tb = document.getElementById('btnRoleTech');
+  var em = document.getElementById('loginEmail');
+  if (r === 'manager') {
+    mb.style.background = '#1D4E89'; mb.style.color = '#fff'; mb.style.border = 'none';
+    tb.style.background = '#fff';    tb.style.color = '#4A5568'; tb.style.border = '1px solid #D9E2EC';
+    if (em) em.value = 'manager@hrco.com';
+  } else {
+    tb.style.background = '#1D4E89'; tb.style.color = '#fff'; tb.style.border = 'none';
+    mb.style.background = '#fff';    mb.style.color = '#4A5568'; mb.style.border = '1px solid #D9E2EC';
+    if (em) em.value = 'ahmed@hrco.com';
+  }
+  var pe = document.getElementById('loginPass');
+  if (pe) pe.value = (r === 'manager') ? 'hrco2026' : 'tech1234';
+}
+
+function togglePassView() {
+  var inp = document.getElementById('loginPass');
+  var ico = document.getElementById('eyeIcon');
+  if (!inp) return;
+  inp.type = inp.type === 'password' ? 'text' : 'password';
+  if (ico) ico.className = inp.type === 'password' ? 'ti ti-eye' : 'ti ti-eye-off';
+}
+
+async function doLogin() {
+  var email  = (document.getElementById('loginEmail').value || '').trim().toLowerCase();
+  var pass   = (document.getElementById('loginPass').value  || '');
+  var errEl  = document.getElementById('loginError');
+  var curLang = (typeof lang !== 'undefined') ? lang : 'en';
+  var tx      = _lgTexts[curLang] || _lgTexts.en;
+
+  if (errEl) errEl.style.display = 'none';
+
+  // Check demo users
+  var user = _demoUsers[email];
+  if (user && user.pass === pass) {
+    _doLoginSuccess(user);
+    return;
+  }
+
+  // Try Supabase auth
+  if (typeof _sb !== 'undefined') {
+    try {
+      var r = await _sb.auth.signInWithPassword({ email: email, password: pass });
+      if (r.data && r.data.user) {
+        _doLoginSuccess({ role: _loginRole, name: email, initial: email[0].toUpperCase() });
+        return;
+      }
+    } catch(e) { console.log('Supabase auth:', e); }
+  }
+
+  // Show error
+  if (errEl) {
+    errEl.textContent   = tx.error;
+    errEl.style.display = 'block';
+  }
+}
+
+function _doLoginSuccess(user) {
+  // Hide login screen
+  var lm = document.getElementById('loginModal');
+  if (lm) lm.style.display = 'none';
+
+  // Update avatar
+  var ua = document.getElementById('uAv');
+  if (ua) ua.textContent = user.initial || 'M';
+
+  // Hide pages not available for technicians
+  if (user.role === 'technician') {
+    ['technicians','clients','reports','archive'].forEach(function(pg) {
+      var n = document.querySelector('.navi[data-pg="' + pg + '"]');
+      if (n) n.style.display = 'none';
+    });
+  }
+
+  console.log('✅ Logged in:', user.name, '| Role:', user.role);
+}
+
+function logout() {
+  var lm = document.getElementById('loginModal');
+  if (lm) lm.style.display = 'flex';
+  if (typeof _sb !== 'undefined') _sb.auth.signOut().catch(function(){});
+}
+
+// Logout on avatar click
+document.addEventListener('DOMContentLoaded', function() {
+  var ua = document.getElementById('uAv');
+  if (ua) ua.addEventListener('click', function() {
+    if (confirm('Sign out?')) logout();
+  });
+});
+</script>
+
 </body>
 </html>
