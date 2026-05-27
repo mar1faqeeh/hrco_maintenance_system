@@ -6,7 +6,6 @@
 <title>HRCO Maintenance System</title>
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@2.44.0/tabler-icons.min.css">
 <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700&display=swap" rel="stylesheet">
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
 html,body{height:100%;font-family:Tajawal,sans-serif;font-size:14px;background:#F0F4F8;color:#1a202c}
@@ -739,53 +738,19 @@ html,body{height:100%;font-family:Tajawal,sans-serif;font-size:14px;background:#
   </div>
 </div>
 
-<!-- LOGIN SCREEN - completely separate from #app -->
-<div id="loginScreen" style="position:fixed;inset:0;background:#0F2D52;z-index:9999;display:flex;align-items:center;justify-content:center;padding:16px;font-family:Tajawal,sans-serif">
-  <div style="background:#fff;border-radius:16px;width:100%;max-width:400px;overflow:hidden;box-shadow:0 20px 60px rgba(0,0,0,.3)">
-    <div style="background:#0F2D52;padding:24px 20px;text-align:center">
-      <div style="width:52px;height:52px;background:rgba(255,255,255,.12);border-radius:12px;display:flex;align-items:center;justify-content:center;margin:0 auto 12px"><i class="ti ti-snowflake" style="color:#7EC8E3;font-size:28px"></i></div>
-      <div style="color:#fff;font-size:16px;font-weight:700" id="lg-appname">Maintenance Management System</div>
-      <div style="color:#7EC8E3;font-size:12px;margin-top:4px">HRCO — Central Kitchens & Cold Rooms</div>
-      <div style="display:flex;justify-content:center;gap:6px;margin-top:14px">
-        <button id="lg-en" onclick="lgLang('en')" style="padding:4px 12px;border-radius:99px;font-size:11px;font-weight:700;cursor:pointer;border:1px solid rgba(255,255,255,.3);background:#fff;color:#0F2D52;font-family:Tajawal,sans-serif">EN</button>
-        <button id="lg-ar" onclick="lgLang('ar')" style="padding:4px 12px;border-radius:99px;font-size:11px;font-weight:700;cursor:pointer;border:1px solid rgba(255,255,255,.3);background:transparent;color:#fff;font-family:Tajawal,sans-serif">ع</button>
-        <button id="lg-ur" onclick="lgLang('ur')" style="padding:4px 12px;border-radius:99px;font-size:11px;font-weight:700;cursor:pointer;border:1px solid rgba(255,255,255,.3);background:transparent;color:#fff;font-family:Tajawal,sans-serif">اردو</button>
-      </div>
-    </div>
-    <div style="padding:24px 20px">
-      <div style="display:flex;gap:8px;margin-bottom:20px">
-        <button id="lg-role-mgr" onclick="lgRole('manager')" style="flex:1;padding:10px;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;border:none;background:#1D4E89;color:#fff;font-family:Tajawal,sans-serif;display:flex;align-items:center;justify-content:center;gap:6px"><i class="ti ti-shield-check"></i><span id="lg-mgr-lbl">Manager</span></button>
-        <button id="lg-role-tech" onclick="lgRole('technician')" style="flex:1;padding:10px;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;border:1px solid #D9E2EC;background:#fff;color:#4A5568;font-family:Tajawal,sans-serif;display:flex;align-items:center;justify-content:center;gap:6px"><i class="ti ti-tool"></i><span id="lg-tech-lbl">Technician</span></button>
-      </div>
-      <div style="margin-bottom:12px">
-        <label id="lg-email-lbl" style="display:block;font-size:12px;font-weight:700;color:#4A5568;margin-bottom:5px">Username</label>
-        <input type="text" id="lg-email" value="manager" onkeydown="if(event.key==='Enter')lgLogin()" style="width:100%;padding:10px 12px;border:1px solid #D9E2EC;border-radius:8px;font-size:14px;font-family:Tajawal,sans-serif;outline:none;color:#1a202c;box-sizing:border-box">
-      </div>
-      <div style="margin-bottom:16px">
-        <label id="lg-pass-lbl" style="display:block;font-size:12px;font-weight:700;color:#4A5568;margin-bottom:5px">Password</label>
-        <div style="position:relative">
-          <input type="password" id="lg-pass" value="hrco2026" onkeydown="if(event.key==='Enter')lgLogin()" style="width:100%;padding:10px 40px 10px 12px;border:1px solid #D9E2EC;border-radius:8px;font-size:14px;font-family:Tajawal,sans-serif;outline:none;color:#1a202c;box-sizing:border-box">
-          <button onclick="var i=document.getElementById('lg-pass');i.type=i.type==='password'?'text':'password'" style="position:absolute;right:10px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;color:#718096;font-size:16px;padding:0"><i class="ti ti-eye"></i></button>
-        </div>
-      </div>
-      <div id="lg-err" style="display:none;background:#FCEBEB;color:#C0392B;border-radius:8px;padding:8px 12px;font-size:12px;margin-bottom:12px;text-align:center"></div>
-      <button onclick="lgLogin()" style="width:100%;padding:12px;background:#1D4E89;color:#fff;border:none;border-radius:8px;font-size:15px;font-weight:700;cursor:pointer;font-family:Tajawal,sans-serif;display:flex;align-items:center;justify-content:center;gap:8px;box-sizing:border-box">
-        <i class="ti ti-login"></i><span id="lg-btn-lbl">Sign In</span>
-      </button>
-      <div id="lg-hint" style="text-align:center;margin-top:12px;font-size:11px;color:#718096">Demo: manager / hrco2026</div>
-    </div>
-  </div>
 </div>
 
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script>
 // ══════════════════════════════════════
 // SUPABASE
 // ══════════════════════════════════════
 var SURL = 'https://luuvvbevhdtpzywlrtux.supabase.co';
 var SKEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imx1dXZ2YmV2aGR0cHp5d2xydHV4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzg2NjQyMjUsImV4cCI6MjA5NDI0MDIyNX0.AuIn2FChEWEeAeKG_SLJf8H_AptwXBibNWKoQFgNb18';
-var _sb = window.supabase ? window.supabase.createClient(SURL, SKEY) : null;
-async function dbGet(t){try{var r=await _sb.from(t).select('*');return r.data||[];}catch(e){return[];}}
-async function dbSave(t,o){try{if(o.id){return(await _sb.from(t).update(o).eq('id',o.id)).data;}else{return(await _sb.from(t).insert(o).select()).data;}}catch(e){return null;}}
+var _sb = null;
+try { if (window.supabase) _sb = window.supabase.createClient(SURL, SKEY); } catch(e) { console.log('Supabase init failed:', e); }
+async function dbGet(t){if(!_sb)return[];try{var r=await _sb.from(t).select('*');return r.data||[];}catch(e){return[];}}
+async function dbSave(t,o){if(!_sb)return null;try{if(o.id){return(await _sb.from(t).update(o).eq('id',o.id)).data;}else{return(await _sb.from(t).insert(o).select()).data;}}catch(e){return null;}}
 
 // ══════════════════════════════════════
 // i18n
@@ -888,7 +853,8 @@ async function lgLogin(){
   err.textContent=t('err');err.style.display='block';
 }
 function lgSuccess(u){
-  document.getElementById('loginScreen').style.display='none';
+  var ls=document.getElementById('loginScreen');
+  if(ls){ls.style.display='none';ls.style.visibility='hidden';ls.style.pointerEvents='none';}
   document.getElementById('uAv').textContent=u.init||'M';
   if(u.role==='technician'){['nav-technicians','nav-clients','nav-reports','nav-archive'].forEach(function(id){var el=document.getElementById(id);if(el)el.style.display='none';});}
   setLang(LNG);
@@ -902,13 +868,15 @@ function logout(){if(confirm('Sign out?')){document.getElementById('loginScreen'
 // ══════════════════════════════════════
 var PAGES=['dashboard','visits','pending','newvisit','signature','technicians','parts','clients','reports','archive','settings'];
 function go(pg){
-  PAGES.forEach(function(p){var el=document.getElementById('pg-'+p);if(el)el.style.display='none';});
-  var el=document.getElementById('pg-'+pg);if(el)el.style.display='block';
+  try{
+  PAGES.forEach(function(p){var el=document.getElementById('pg-'+p);if(el){el.style.display='none';el.style.visibility='visible';}});
+  var el=document.getElementById('pg-'+pg);if(el){el.style.display='block';el.style.visibility='visible';}
   document.querySelectorAll('.nav-item').forEach(function(n){n.style.background='';n.style.color='#4A5568';n.style.borderRightColor='transparent';n.style.borderLeftColor='transparent';n.style.fontWeight='';});
   var ni=document.getElementById('nav-'+pg);
   if(ni){ni.style.background='#E6F1FB';ni.style.color='#1D4E89';ni.style.fontWeight='600';if(document.documentElement.dir==='ltr')ni.style.borderLeftColor='#1D4E89';else ni.style.borderRightColor='#1D4E89';}
   var ma=document.getElementById('main');if(ma)ma.scrollTop=0;
   if(window.innerWidth<960){document.getElementById('sidebar').style.right='-240px';document.getElementById('ovl').style.display='none';}
+  }catch(e){console.log('go() error:',e);}
   if(pg==='signature')setTimeout(function(){initSig('tech');initSig('client');},80);
   if(pg==='technicians'){renderTechGrid();renderTechCharts();}
   if(pg==='parts'){renderInvList();renderHistList();}
@@ -1165,25 +1133,42 @@ function clearReport(){['rf-client','rf-tech','rf-part','rf-from','rf-to'].forEa
 // INIT
 // ══════════════════════════════════════
 document.addEventListener('DOMContentLoaded', function() {
-  // Responsive sidebar
-  if (window.innerWidth >= 960) {
-    document.getElementById('sidebar').style.right = 'auto';
-    document.getElementById('sidebar').style.position = 'relative';
-    document.getElementById('sidebar').style.top = 'auto';
-    document.getElementById('sidebar').style.height = 'auto';
+  try {
+    // Ensure all pages hidden except dashboard
+    var PAGES_INIT=['visits','pending','newvisit','signature','technicians','parts','clients','reports','archive','settings'];
+    PAGES_INIT.forEach(function(p){
+      var el=document.getElementById('pg-'+p);
+      if(el){el.style.display='none';el.style.visibility='visible';}
+    });
+    var dash=document.getElementById('pg-dashboard');
+    if(dash){dash.style.display='block';}
+
+    // Sidebar setup
+    if (window.innerWidth >= 960) {
+      var sb=document.getElementById('sidebar');
+      if(sb){sb.style.right='auto';sb.style.position='relative';sb.style.top='auto';sb.style.height='auto';}
+    }
+    // Active nav
+    var nd=document.getElementById('nav-dashboard');
+    if(nd){nd.style.background='#E6F1FB';nd.style.color='#1D4E89';nd.style.fontWeight='600';}
+    var bd=document.getElementById('bn-dashboard');
+    if(bd)bd.style.color='#1D4E89';
+
+    // Resize handler
+    window.addEventListener('resize',function(){
+      var sb=document.getElementById('sidebar');
+      if(!sb)return;
+      if(window.innerWidth>=960){sb.style.position='relative';sb.style.right='auto';sb.style.top='auto';}
+      else{sb.style.position='fixed';if(sb.style.right!=='0px')sb.style.right='-240px';}
+    });
+
+    // Init chart on dashboard
+    initChart();
+
+    console.log('HRCO System loaded successfully');
+  } catch(e) {
+    console.error('DOMContentLoaded error:', e);
   }
-  // Dashboard is default active nav
-  var nd = document.getElementById('nav-dashboard');
-  if (nd) { nd.style.background='#E6F1FB'; nd.style.color='#1D4E89'; nd.style.fontWeight='600'; }
-  // Init bottom nav active
-  var bd = document.getElementById('bn-dashboard');
-  if (bd) bd.style.color = '#1D4E89';
-  // Responsive sidebar position
-  window.addEventListener('resize', function() {
-    var sb = document.getElementById('sidebar');
-    if (window.innerWidth >= 960) { sb.style.position='relative'; sb.style.right='auto'; sb.style.top='auto'; }
-    else { sb.style.position='fixed'; if (sb.style.right !== '0px') sb.style.right='-240px'; }
-  });
 });
 
 // ══════════════════════════════════════
@@ -1473,5 +1458,42 @@ window.addEventListener('load', async function() {
 });
 
 </script>
+<!-- LOGIN SCREEN - completely separate from #app -->
+<div id="loginScreen" style="position:fixed;inset:0;background:#0F2D52;z-index:9999;display:flex;align-items:center;justify-content:center;padding:16px;font-family:Tajawal,sans-serif">
+  <div style="background:#fff;border-radius:16px;width:100%;max-width:400px;overflow:hidden;box-shadow:0 20px 60px rgba(0,0,0,.3)">
+    <div style="background:#0F2D52;padding:24px 20px;text-align:center">
+      <div style="width:52px;height:52px;background:rgba(255,255,255,.12);border-radius:12px;display:flex;align-items:center;justify-content:center;margin:0 auto 12px"><i class="ti ti-snowflake" style="color:#7EC8E3;font-size:28px"></i></div>
+      <div style="color:#fff;font-size:16px;font-weight:700" id="lg-appname">Maintenance Management System</div>
+      <div style="color:#7EC8E3;font-size:12px;margin-top:4px">HRCO — Central Kitchens & Cold Rooms</div>
+      <div style="display:flex;justify-content:center;gap:6px;margin-top:14px">
+        <button id="lg-en" onclick="lgLang('en')" style="padding:4px 12px;border-radius:99px;font-size:11px;font-weight:700;cursor:pointer;border:1px solid rgba(255,255,255,.3);background:#fff;color:#0F2D52;font-family:Tajawal,sans-serif">EN</button>
+        <button id="lg-ar" onclick="lgLang('ar')" style="padding:4px 12px;border-radius:99px;font-size:11px;font-weight:700;cursor:pointer;border:1px solid rgba(255,255,255,.3);background:transparent;color:#fff;font-family:Tajawal,sans-serif">ع</button>
+        <button id="lg-ur" onclick="lgLang('ur')" style="padding:4px 12px;border-radius:99px;font-size:11px;font-weight:700;cursor:pointer;border:1px solid rgba(255,255,255,.3);background:transparent;color:#fff;font-family:Tajawal,sans-serif">اردو</button>
+      </div>
+    </div>
+    <div style="padding:24px 20px">
+      <div style="display:flex;gap:8px;margin-bottom:20px">
+        <button id="lg-role-mgr" onclick="lgRole('manager')" style="flex:1;padding:10px;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;border:none;background:#1D4E89;color:#fff;font-family:Tajawal,sans-serif;display:flex;align-items:center;justify-content:center;gap:6px"><i class="ti ti-shield-check"></i><span id="lg-mgr-lbl">Manager</span></button>
+        <button id="lg-role-tech" onclick="lgRole('technician')" style="flex:1;padding:10px;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;border:1px solid #D9E2EC;background:#fff;color:#4A5568;font-family:Tajawal,sans-serif;display:flex;align-items:center;justify-content:center;gap:6px"><i class="ti ti-tool"></i><span id="lg-tech-lbl">Technician</span></button>
+      </div>
+      <div style="margin-bottom:12px">
+        <label id="lg-email-lbl" style="display:block;font-size:12px;font-weight:700;color:#4A5568;margin-bottom:5px">Username</label>
+        <input type="text" id="lg-email" value="manager" onkeydown="if(event.key==='Enter')lgLogin()" style="width:100%;padding:10px 12px;border:1px solid #D9E2EC;border-radius:8px;font-size:14px;font-family:Tajawal,sans-serif;outline:none;color:#1a202c;box-sizing:border-box">
+      </div>
+      <div style="margin-bottom:16px">
+        <label id="lg-pass-lbl" style="display:block;font-size:12px;font-weight:700;color:#4A5568;margin-bottom:5px">Password</label>
+        <div style="position:relative">
+          <input type="password" id="lg-pass" value="hrco2026" onkeydown="if(event.key==='Enter')lgLogin()" style="width:100%;padding:10px 40px 10px 12px;border:1px solid #D9E2EC;border-radius:8px;font-size:14px;font-family:Tajawal,sans-serif;outline:none;color:#1a202c;box-sizing:border-box">
+          <button onclick="var i=document.getElementById('lg-pass');i.type=i.type==='password'?'text':'password'" style="position:absolute;right:10px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;color:#718096;font-size:16px;padding:0"><i class="ti ti-eye"></i></button>
+        </div>
+      </div>
+      <div id="lg-err" style="display:none;background:#FCEBEB;color:#C0392B;border-radius:8px;padding:8px 12px;font-size:12px;margin-bottom:12px;text-align:center"></div>
+      <button onclick="lgLogin()" style="width:100%;padding:12px;background:#1D4E89;color:#fff;border:none;border-radius:8px;font-size:15px;font-weight:700;cursor:pointer;font-family:Tajawal,sans-serif;display:flex;align-items:center;justify-content:center;gap:8px;box-sizing:border-box">
+        <i class="ti ti-login"></i><span id="lg-btn-lbl">Sign In</span>
+      </button>
+      <div id="lg-hint" style="text-align:center;margin-top:12px;font-size:11px;color:#718096">Demo: manager / hrco2026</div>
+    </div>
+  </div>
+
 </body>
 </html>
