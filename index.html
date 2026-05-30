@@ -151,6 +151,10 @@ html,body{height:100%;font-family:Tajawal,sans-serif;font-size:14px;background:#
 /* Parts */
 .ptabs{display:flex;border-bottom:1px solid #D9E2EC;margin-bottom:16px}
 .ptab{padding:10px 20px;font-size:13px;font-weight:500;cursor:pointer;color:#718096;border-bottom:2px solid transparent;background:none;border-top:none;border-left:none;border-right:none;font-family:inherit}
+/* HIDE ALL PAGES - JS will show the active one */
+#main > div[id^="pg-"] { display: none !important; }
+#pg-dashboard { display: block !important; }
+
 /* Donut */
 .donutw{display:flex;align-items:center;gap:16px;padding:14px}
 .dleg{flex:1}
@@ -869,8 +873,8 @@ function logout(){if(confirm('Sign out?')){document.getElementById('loginScreen'
 var PAGES=['dashboard','visits','pending','newvisit','signature','technicians','parts','clients','reports','archive','settings'];
 function go(pg){
   try{
-  PAGES.forEach(function(p){var el=document.getElementById('pg-'+p);if(el){el.style.display='none';el.style.visibility='visible';}});
-  var el=document.getElementById('pg-'+pg);if(el){el.style.display='block';el.style.visibility='visible';}
+  PAGES.forEach(function(p){var el=document.getElementById('pg-'+p);if(el){el.style.cssText='display:none';}});
+  var el=document.getElementById('pg-'+pg);if(el){el.style.cssText='display:block';}
   document.querySelectorAll('.nav-item').forEach(function(n){n.style.background='';n.style.color='#4A5568';n.style.borderRightColor='transparent';n.style.borderLeftColor='transparent';n.style.fontWeight='';});
   var ni=document.getElementById('nav-'+pg);
   if(ni){ni.style.background='#E6F1FB';ni.style.color='#1D4E89';ni.style.fontWeight='600';if(document.documentElement.dir==='ltr')ni.style.borderLeftColor='#1D4E89';else ni.style.borderRightColor='#1D4E89';}
@@ -1134,14 +1138,9 @@ function clearReport(){['rf-client','rf-tech','rf-part','rf-from','rf-to'].forEa
 // ══════════════════════════════════════
 document.addEventListener('DOMContentLoaded', function() {
   try {
-    // Ensure all pages hidden except dashboard
-    var PAGES_INIT=['visits','pending','newvisit','signature','technicians','parts','clients','reports','archive','settings'];
-    PAGES_INIT.forEach(function(p){
-      var el=document.getElementById('pg-'+p);
-      if(el){el.style.display='none';el.style.visibility='visible';}
-    });
+    // CSS handles hiding, just ensure dashboard is visible
     var dash=document.getElementById('pg-dashboard');
-    if(dash){dash.style.display='block';}
+    if(dash){dash.style.cssText='display:block !important';}
 
     // Sidebar setup
     if (window.innerWidth >= 960) {
