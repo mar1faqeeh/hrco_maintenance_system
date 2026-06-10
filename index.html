@@ -13,7 +13,7 @@ html,body{height:100%;font-family:Tajawal,sans-serif;font-size:14px;background:#
 #app{display:flex;flex-direction:column;height:100vh}
 #topbar{height:56px;background:#0F2D52;display:flex;align-items:center;gap:12px;padding:0 20px;flex-shrink:0;z-index:10;box-shadow:0 2px 8px rgba(0,0,0,.25)}
 #body{display:flex;flex:1;min-height:0}
-#sidebar{width:220px;background:#fff;border-left:1px solid #D9E2EC;display:flex;flex-direction:column;overflow-y:auto;flex-shrink:0;z-index:5}
+#sidebar{width:220px;background:#fff;border-left:1px solid #D9E2EC;display:flex;flex-direction:column;overflow-y:auto;flex-shrink:0;z-index:5;pointer-events:auto}
 [dir=ltr] #sidebar{border-left:none;border-right:1px solid #D9E2EC}
 #main{flex:1;overflow-y:auto;padding:20px;min-width:0}
 /* Topbar */
@@ -36,6 +36,7 @@ html,body{height:100%;font-family:Tajawal,sans-serif;font-size:14px;background:#
 .nav-item{display:flex;align-items:center;gap:10px;padding:9px 16px;font-size:13px;color:#4A5568;cursor:pointer;border-right:3px solid transparent;transition:background .15s}
 [dir=ltr] .nav-item{border-right:none;border-left:3px solid transparent}
 .nav-item:hover{background:#F0F4F8;color:#1a202c}
+.nav-item{cursor:pointer;user-select:none;pointer-events:auto;}
 .nav-item i{font-size:17px;flex-shrink:0}
 .nbadge{font-size:10px;padding:1px 6px;border-radius:99px;background:#FDF0E0;color:#C4680A;font-weight:700;margin-right:auto}
 [dir=ltr] .nbadge{margin-right:0;margin-left:auto}
@@ -857,13 +858,45 @@ async function lgLogin(){
   err.textContent=t('err');err.style.display='block';
 }
 function lgSuccess(u){
+  // Hide login screen
   var ls=document.getElementById('loginScreen');
-  if(ls){ls.style.display='none';ls.style.visibility='hidden';ls.style.pointerEvents='none';}
-  document.getElementById('uAv').textContent=u.init||'M';
-  if(u.role==='technician'){['nav-technicians','nav-clients','nav-reports','nav-archive'].forEach(function(id){var el=document.getElementById(id);if(el)el.style.display='none';});}
-  setLang(LNG);
+  if(ls){
+    ls.style.display='none';
+    ls.style.visibility='hidden';
+    ls.style.pointerEvents='none';
+    ls.style.zIndex='-1';
+    ls.setAttribute('hidden','true');
+  }
+  
+  // Update avatar
+  var ua=document.getElementById('uAv');
+  if(ua) ua.textContent=u.init||'M';
+  
+  // Hide nav items for technician role
+  if(u.role==='technician'){
+    ['nav-technicians','nav-clients','nav-reports','nav-archive'].forEach(function(id){
+      var el=document.getElementById(id);
+      if(el) el.style.display='none';
+    });
+  }
+  
+  // Ensure sidebar is visible on desktop
+  var sb=document.getElementById('sidebar');
+  if(sb && window.innerWidth>=960){
+    sb.style.position='relative';
+    sb.style.right='auto';
+    sb.style.left='auto';
+    sb.style.display='flex';
+  }
+  
+  // Apply language
+  try { setLang(LNG); } catch(e) { console.log('setLang error:', e); }
+  
+  // Show dashboard
   go('dashboard');
-  initChart();
+  
+  // Init chart
+  try { initChart(); } catch(e) {}
 }
 function logout(){if(confirm('Sign out?')){document.getElementById('loginScreen').style.display='flex';if(_sb)_sb.auth.signOut().catch(function(){});}}
 
@@ -887,6 +920,8 @@ function go(pg){
   if(pg==='clients'){renderClientGrid();renderDonut();renderTopClients();}
   if(pg==='reports')runReport();
   if(pg==='visits')renderVisits('all','');
+  if(pg==='archive')loadArchive();
+  if(pg==='settings'){renderUsersList();checkDBStatus();}
 }
 function setBn(b){document.querySelectorAll('.bn').forEach(function(x){x.style.color='#A0AEC0';});b.style.color='#1D4E89';}
 function toggleSb(){
@@ -1164,6 +1199,12 @@ document.addEventListener('DOMContentLoaded', function() {
     // Init chart on dashboard
     initChart();
 
+    // Add click listeners to nav items as backup
+    document.querySelectorAll('.nav-item[id^="nav-"]').forEach(function(n) {
+      n.style.cursor = 'pointer';
+      n.style.pointerEvents = 'auto';
+    });
+
     console.log('HRCO System loaded successfully');
   } catch(e) {
     console.error('DOMContentLoaded error:', e);
@@ -1434,13 +1475,7 @@ function acShow(field, val) {
 // ══════════════════════════════════════
 // OVERRIDE go() to load data on navigate
 // ══════════════════════════════════════
-var _origGo = go;
-go = function(pg) {
-  _origGo(pg);
-  if (pg === 'archive') loadArchive();
-  if (pg === 'settings') { renderUsersList(); checkDBStatus(); }
-  if (pg === 'visits') renderVisits('all', '');
-};
+// go() handles all navigation (merged below)
 
 // ══════════════════════════════════════
 // SUPABASE REALTIME
