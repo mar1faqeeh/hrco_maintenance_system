@@ -329,12 +329,7 @@ html,body{height:100%;font-family:Tajawal,sans-serif;font-size:14px;background:#
         </select>
       </div>
       <div class="field"><label id="t-lbl-tech">Assigned Technician</label>
-        <select id="sel-tech">
-          <option>أحمد العتيبي</option>
-          <option>محمد الحربي</option>
-          <option>سامي القحطاني</option>
-          <option>خالد الرشيدي</option>
-        </select>
+        <select id="sel-tech"></select>
       </div>
     </div>
     <div class="fcard">
@@ -897,6 +892,7 @@ function lgSuccess(u){
   // Load ALL data from Supabase first, then show dashboard
   loadAllFromDB().then(function(){
     try { setLang(LNG); } catch(e) { console.log('setLang error:', e); }
+    populateTechSelect();
     go('dashboard');
     try { initChart(); } catch(e) {}
   });
@@ -1366,6 +1362,25 @@ function showTechStats(id) {
   if (!tc) return;
   var pct = Math.round((tc.completed/tc.visits)*100);
   alert(tc.name + '\nCompletion: ' + pct + '%\nTotal: ' + tc.visits + '\nRating: ' + tc.rating + '/5');
+}
+
+// ══════════════════════════════════════
+// POPULATE TECH SELECT IN NEW VISIT FORM
+// ══════════════════════════════════════
+function populateTechSelect(){
+  var sel = document.getElementById('sel-tech');
+  if(!sel) return;
+  var current = sel.value;
+  sel.innerHTML = '';
+  var active = techsData.filter(function(t){ return t.status === 'active'; });
+  if(!active.length) active = techsData; // fallback: show all
+  active.forEach(function(t){
+    var opt = document.createElement('option');
+    opt.value = t.name;
+    opt.textContent = t.name;
+    if(t.name === current) opt.selected = true;
+    sel.appendChild(opt);
+  });
 }
 
 // ══════════════════════════════════════
