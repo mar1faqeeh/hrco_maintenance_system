@@ -1094,8 +1094,27 @@ function initSig(id){
 function clrSig(w){var c=document.getElementById(w+'C');if(c)c.getContext('2d').clearRect(0,0,c.width,c.height);sigDr[w]=false;sigSt[w]=false;var h=document.getElementById(w+'Hint');if(h)h.style.display='flex';var ts=document.getElementById('sig'+w.charAt(0).toUpperCase()+w.slice(1)+'TS');if(ts){ts.textContent=t('notSigned');ts.style.color='';}updSig();}
 function cfmSig(w){if(!sigDr[w])return;sigSt[w]=true;var n=new Date(),h=n.getHours(),m=n.getMinutes(),ap=h>=12?'PM':'AM';h=h%12||12;var ts=document.getElementById('sig'+w.charAt(0).toUpperCase()+w.slice(1)+'TS');if(ts){ts.textContent='Signed · '+h+':'+(m<10?'0':'')+m+' '+ap;ts.style.color='#2D7D3A';}updSig();}
 function updSig(){var both=sigSt.tech&&sigSt.client;var sb=document.getElementById('suspBtn'),cb=document.getElementById('closeBtn'),pf=document.getElementById('pFill');if(sb)sb.disabled=!both;if(cb)cb.disabled=!both;if(pf){pf.style.width=both?'100%':(sigSt.tech||sigSt.client?'75%':'50%');pf.style.background=both?'#C4680A':'#1D4E89';}}
-function suspendV(){var ab=document.getElementById('closeAB');if(ab)ab.innerHTML='<div style="padding:10px;color:#C4680A;font-size:13px;font-weight:700;display:flex;align-items:center;gap:8px"><i class="ti ti-clock-pause" style="font-size:18px"></i>'+t('suspended')+'</div>';}
-function closeV(){var ab=document.getElementById('closeAB');if(ab)ab.innerHTML='<div style="padding:10px;color:#2D7D3A;font-size:13px;font-weight:700;display:flex;align-items:center;gap:8px"><i class="ti ti-circle-check" style="font-size:18px"></i>'+t('closed')+'</div>';}
+function suspendV(){
+  var ab=document.getElementById('closeAB');
+  if(ab)ab.innerHTML='<div style="padding:10px;color:#C4680A;font-size:13px;font-weight:700;display:flex;align-items:center;gap:8px"><i class="ti ti-clock-pause" style="font-size:18px"></i>'+t('suspended')+'</div>';
+  // Update status in Supabase
+  if(currentVisitId && _sb){
+    _sb.from('visits').update({status:'معلقة'}).eq('id',currentVisitId).then(function(r){
+      if(r.error) console.log('suspendV error:', r.error);
+    });
+  }
+}
+function closeV(){
+  var ab=document.getElementById('closeAB');
+  if(ab)ab.innerHTML='<div style="padding:10px;color:#2D7D3A;font-size:13px;font-weight:700;display:flex;align-items:center;gap:8px"><i class="ti ti-circle-check" style="font-size:18px"></i>'+t('closed')+'</div>';
+  // Update status in Supabase
+  if(currentVisitId && _sb){
+    _sb.from('visits').update({status:'مكتملة'}).eq('id',currentVisitId).then(function(r){
+      if(r.error) console.log('closeV error:', r.error);
+      else console.log('Visit closed in DB');
+    });
+  }
+}
 
 // ══════════════════════════════════════
 // MODALS
@@ -1390,43 +1409,48 @@ var currentVisitId = null;
 
 async function saveVisitDraft() {
   var visit = collectVisitData();
-  visit.status = 'draft';
+  visit.status = 'معلقة';
   var result = await dbSave('visits', visit);
-  if (result && result[0]) {
+  if(result && result[0]){
     currentVisitId = result[0].id;
-    alert('✅ Draft saved!');
+    var localVisit = Object.assign({}, visit, {id:result[0].id, equip:visit.equipment, type:visit.visit_type});
+    visData.unshift(localVisit);
+    alert('✅ Draft saved successfully!');
   }
 }
 
 async function saveAndSign() {
   var visit = collectVisitData();
-  visit.status = 'قيد التنفيذ';
   var result = await dbSave('visits', visit);
-  if (result && result[0]) currentVisitId = result[0].id;
-  // Update visits list
-  var existing = visData.findIndex(function(v){ return v.id === currentVisitId; });
-  if (existing >= 0) visData[existing] = Object.assign(visData[existing], visit);
-  else { visit.id = currentVisitId || Date.now(); visData.unshift(visit); }
-  rData = visData.map(function(v,i){ return Object.assign({id:i+1,parts:v.status==='Pending'?['Danfoss T2']:[]},v); });
+  if(result && result[0]){
+    currentVisitId = result[0].id;
+    // Add to local visData for immediate display
+    var localVisit = Object.assign({}, visit, {
+      id: result[0].id,
+      equip: visit.equipment,
+      type: visit.visit_type,
+      status: 'Pending'
+    });
+    visData.unshift(localVisit);
+    rData = visData.map(function(v,i){ return Object.assign({id:i+1}, v, {parts:v.parts||[]}); });
+  }
   go('signature');
 }
 
 function collectVisitData() {
+  // Only include columns that exist in the visits table
   return {
     client:        document.getElementById('inp-client').value || 'Unknown',
-    location:      document.getElementById('inp-location').value,
-    visit_type:    document.getElementById('sel-vtype').value,
-    tech:          document.getElementById('sel-tech').value,
     equipment:     document.getElementById('inp-equipment').value,
     serial_number: document.getElementById('inp-serial').value,
     model:         document.getElementById('inp-model').value,
-    fault:         document.getElementById('inp-fault').value,
-    parts:         selParts,
-    notes:         document.getElementById('notesArea').value,
-    date:          new Date().toISOString().split('T')[0],
+    tech:          document.getElementById('sel-tech').value,
+    visit_type:    document.getElementById('sel-vtype').value,
     status:        'قيد التنفيذ',
-    equip:         document.getElementById('inp-equipment').value,
-    type:          document.getElementById('sel-vtype').value
+    fault:         document.getElementById('inp-fault').value,
+    notes:         document.getElementById('notesArea').value,
+    parts:         selParts,
+    date:          new Date().toISOString().split('T')[0]
   };
 }
 
