@@ -751,7 +751,16 @@ var SKEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI
 var _sb = null;
 try { if (window.supabase) _sb = window.supabase.createClient(SURL, SKEY); } catch(e) { console.log('Supabase init failed:', e); }
 async function dbGet(t){if(!_sb)return[];try{var r=await _sb.from(t).select('*');return r.data||[];}catch(e){return[];}}
-async function dbSave(t,o){if(!_sb)return null;try{if(o.id){return(await _sb.from(t).update(o).eq('id',o.id)).data;}else{return(await _sb.from(t).insert(o).select()).data;}}catch(e){return null;}}
+async function dbSave(t,o){
+  if(!_sb){alert('Database not connected');return null;}
+  try{
+    var r;
+    if(o.id){ r=await _sb.from(t).update(o).eq('id',o.id); }
+    else{ r=await _sb.from(t).insert(o).select(); }
+    if(r.error){ console.error('DB Error:',r.error); alert('Save error: '+r.error.message); return null; }
+    return r.data;
+  }catch(e){ console.error('dbSave exception:',e); alert('Save error: '+e.message); return null; }
+}
 
 // ══════════════════════════════════════
 // i18n
@@ -1038,7 +1047,32 @@ function editTech(id){var tc=techsData.find(function(x){return x.id===id;});if(!
 function renderTechCharts(){
   var el=document.getElementById('techCompare');if(el){el.innerHTML='';var cols=['#1D4E89','#2D7D3A','#C4680A','#64748B'];techsData.forEach(function(tc,i){var pct=Math.round((tc.completed/tc.visits)*100);el.innerHTML+='<div style="display:flex;align-items:center;gap:10px;margin-bottom:10px"><div style="font-size:12px;min-width:80px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+tc.name.split(' ')[0]+'</div><div style="flex:1;height:20px;background:#F0F4F8;border-radius:4px;overflow:hidden"><div style="height:100%;width:'+pct+'%;background:'+cols[i]+';border-radius:4px;display:flex;align-items:center;padding-left:6px;font-size:10px;color:#fff;font-weight:700">'+pct+'%</div></div><div style="font-size:11px;color:#718096;min-width:40px">'+tc.visits+'</div></div>';});}
   var vt=document.getElementById('vtypeChart');if(vt){vt.innerHTML='';var types=[{l:'Warranty',c:87,col:'#1D4E89'},{l:'Paid',c:134,col:'#2D7D3A'},{l:'Contract',c:212,col:'#C4680A'}];var tot=433;types.forEach(function(tp){var pct=Math.round(tp.c/tot*100);vt.innerHTML+='<div style="display:flex;align-items:center;gap:10px;margin-bottom:10px"><div style="width:12px;height:12px;border-radius:3px;background:'+tp.col+';flex-shrink:0"></div><div style="font-size:12px;flex:1">'+tp.l+'</div><div style="flex:1.5;height:8px;background:#F0F4F8;border-radius:99px;overflow:hidden"><div style="height:100%;width:'+pct+'%;background:'+tp.col+';border-radius:99px"></div></div><div style="font-size:11px;color:#718096;min-width:30px">'+tp.c+'</div><div style="font-size:10px;color:#A0AEC0;min-width:28px">'+pct+'%</div></div>';});}}
-async function saveTech(){var name=document.getElementById('m-name').value.trim();if(!name){alert('Please enter name');return;}var tc={name:name,phone:document.getElementById('m-phone').value,email:document.getElementById('m-email').value,spec:document.getElementById('m-spec').value,status:document.getElementById('m-status').value,visits:0,completed:0,pending:0,rating:0,avgTime:0,init:name.split(' ').map(function(w){return w[0];}).join('').slice(0,2),color:'#1D4E89',bg:'#E6F1FB'};if(_sb)await dbSave('technicians',tc);techsData.push(Object.assign({id:Date.now()},tc));closeMod('techModal');renderTechGrid();}
+async function saveTech(){
+  var name=document.getElementById('m-name').value.trim();
+  if(!name){alert('Please enter name');return;}
+  var tc={
+    name: name,
+    phone: document.getElementById('m-phone').value,
+    email: document.getElementById('m-email').value || name.toLowerCase().replace(' ','.')+'@hrco.com',
+    nationality: document.getElementById('m-nat').value,
+    spec: document.getElementById('m-spec').value,
+    status: document.getElementById('m-status').value,
+    visits: 0, completed: 0, pending: 0,
+    rating: 0.0, avg_time: 0.0,
+    initials: name.split(' ').map(function(w){return w[0]||'';}).join('').slice(0,2),
+    color: '#1D4E89', bg: '#E6F1FB',
+    monthly: [0,0,0,0,0,0,0]
+  };
+  var saved = await dbSave('technicians', tc);
+  if(saved && saved[0]) tc.id = saved[0].id;
+  else tc.id = Date.now();
+  tc.init = tc.initials;
+  tc.avgTime = 0;
+  techsData.push(tc);
+  closeMod('techModal');
+  renderTechGrid();
+  if(saved) alert('✅ Technician saved successfully!');
+}
 
 // ══════════════════════════════════════
 // PARTS
@@ -1074,23 +1108,37 @@ function setStockF(f,b){stF=f;document.querySelectorAll('#tab-inv .ftab').forEac
 function switchPTab(tab,el){document.querySelectorAll('.ptab').forEach(function(t){t.style.color='#718096';t.style.borderBottomColor='transparent';t.style.fontWeight='';});el.style.color='#1D4E89';el.style.borderBottomColor='#1D4E89';el.style.fontWeight='600';document.getElementById('tab-inv').style.display=tab==='inv'?'block':'none';document.getElementById('tab-hist').style.display=tab==='hist'?'block':'none';}
 function quickAdd(id){var p=partsData.find(function(x){return x.id===id;});if(!p)return;var qty=parseInt(prompt('Add stock for: '+p.name+'\nCurrent: '+p.qty+' '+p.unit));if(isNaN(qty)||qty<=0)return;p.qty+=qty;histData.unshift({id:Date.now(),partId:p.id,type:'in',qty:qty,dest:'—',tech:'Manager',note:'Stock added',date:new Date().toISOString().split('T')[0]});renderInvList();}
 function showPH(id){switchPTab('hist',document.getElementById('ptab-hist'));renderHistList(partsData.find(function(x){return x.id===id;})||{name:''}.name,'all');}
-async function savePart(){var name=document.getElementById('ap-name').value.trim();if(!name){alert('Enter part name');return;}var np={name:name,cat:document.getElementById('ap-cat').value,unit:document.getElementById('ap-unit').value,qty:parseInt(document.getElementById('ap-qty').value)||0,min:parseInt(document.getElementById('ap-min').value)||2,supplier:document.getElementById('ap-sup').value||'—'};if(_sb)await dbSave('parts',np);np.id=Date.now();partsData.push(np);closeMod('partModal');renderInvList();}
-
-// ══════════════════════════════════════
-// CLIENTS
-// ══════════════════════════════════════
-var clientsData=[{id:1,name:'Ritz Carlton',type:'Hotel',loc:'Riyadh',color:'#1D4E89',bg:'#E6F1FB',init:'RC',contract:'contract',warranty:true,total:32,completed:28,pending:3,parts:1,wv:8},{id:2,name:'Al-Aseel Restaurant',type:'Restaurant',loc:'Riyadh',color:'#2D7D3A',bg:'#EAF3DE',init:'AA',contract:'contract',warranty:false,total:18,completed:17,pending:1,parts:0,wv:0},{id:3,name:"McDonald's",type:'Chain',loc:'Riyadh',color:'#C4680A',bg:'#FDF0E0',init:'MC',contract:'contract',warranty:true,total:45,completed:40,pending:4,parts:2,wv:12},{id:4,name:'Hilton Hotel',type:'Hotel',loc:'Riyadh',color:'#7C3AED',bg:'#EDE9FE',init:'HH',contract:'warranty',warranty:true,total:22,completed:18,pending:4,parts:2,wv:15},{id:5,name:'Burger King',type:'Chain',loc:'Riyadh',color:'#BE185D',bg:'#FCE7F3',init:'BK',contract:'paid',warranty:false,total:14,completed:11,pending:3,parts:1,wv:0},{id:6,name:'King Faisal Hospital',type:'Hospital',loc:'Riyadh',color:'#0891B2',bg:'#CFFAFE',init:'KF',contract:'contract',warranty:true,total:28,completed:26,pending:2,parts:1,wv:10},{id:7,name:'KFC Saudi Arabia',type:'Chain',loc:'Riyadh',color:'#C0392B',bg:'#FCEBEB',init:'KC',contract:'contract',warranty:false,total:19,completed:17,pending:2,parts:0,wv:0},{id:8,name:'King Khalid Airport',type:'Airport',loc:'Riyadh',color:'#047857',bg:'#D1FAE5',init:'KA',contract:'contract',warranty:true,total:11,completed:10,pending:1,parts:0,wv:4}];
-var cSrch='',cFil='all';
-function renderClientGrid(){
-  var g=document.getElementById('clientGrid');if(!g)return;g.innerHTML='';
-  var fl=clientsData.filter(function(c){return(!cSrch||c.name.toLowerCase().includes(cSrch.toLowerCase()))&&(cFil==='all'||(cFil==='contract'&&c.contract==='contract')||(cFil==='warranty'&&c.warranty)||(cFil==='paid'&&c.contract==='paid'));});
-  fl.forEach(function(c){
-    var cp=Math.round(c.completed/c.total*100),pp=Math.round(c.pending/c.total*100),wp=Math.round(c.wv/c.total*100);
-    var ctag={'contract':'background:#EAF3DE;color:#2D7D3A','warranty':'background:#DBEAFE;color:#1D4ED8','paid':'background:#F1F5F9;color:#64748B'}[c.contract]||'background:#F1F5F9;color:#64748B';
-    var card=document.createElement('div');card.style.cssText='background:#fff;border:1px solid #D9E2EC;border-radius:12px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,.06)';
-    card.innerHTML='<div style="padding:14px 16px 10px;border-bottom:1px solid #D9E2EC;display:flex;align-items:flex-start;gap:12px"><div style="width:44px;height:44px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:16px;font-weight:700;flex-shrink:0;background:'+c.bg+';color:'+c.color+'">'+c.init+'</div><div style="flex:1;min-width:0"><div style="font-size:14px;font-weight:700">'+c.name+'</div><div style="font-size:11px;color:#718096;margin-top:2px">'+c.type+' · '+c.loc+'</div><div style="display:flex;gap:5px;margin-top:5px;flex-wrap:wrap"><span style="font-size:10px;padding:2px 7px;border-radius:99px;font-weight:700;display:inline-flex;align-items:center;gap:3px;'+ctag+'"><i class="ti ti-file-invoice" style="font-size:10px"></i>'+c.contract+'</span>'+(c.warranty?'<span style="font-size:10px;padding:2px 7px;border-radius:99px;font-weight:700;background:#DBEAFE;color:#1D4ED8">Warranty</span>':'')+'</div></div></div><div style="display:grid;grid-template-columns:repeat(4,1fr);border-bottom:1px solid #D9E2EC"><div style="padding:10px 8px;text-align:center;border-left:1px solid #D9E2EC"><div style="font-size:15px;font-weight:700">'+c.total+'</div><div style="font-size:10px;color:#718096">Total</div></div><div style="padding:10px 8px;text-align:center;border-left:1px solid #D9E2EC"><div style="font-size:15px;font-weight:700;color:#2D7D3A">'+c.completed+'</div><div style="font-size:10px;color:#718096">Done</div></div><div style="padding:10px 8px;text-align:center;border-left:1px solid #D9E2EC"><div style="font-size:15px;font-weight:700;color:#C4680A">'+c.pending+'</div><div style="font-size:10px;color:#718096">Pending</div></div><div style="padding:10px 8px;text-align:center;border-left:1px solid #D9E2EC"><div style="font-size:15px;font-weight:700;color:#C0392B">'+c.parts+'</div><div style="font-size:10px;color:#718096">Parts</div></div></div><div style="padding:12px 14px"><div style="display:flex;align-items:center;gap:8px;margin-bottom:6px"><div style="font-size:11px;color:#718096;min-width:65px">Completed</div><div style="flex:1;height:8px;background:#F0F4F8;border-radius:99px;overflow:hidden"><div style="height:100%;width:'+cp+'%;background:#2D7D3A;border-radius:99px"></div></div><div style="font-size:11px;font-weight:700;min-width:28px">'+cp+'%</div></div><div style="display:flex;align-items:center;gap:8px;margin-bottom:6px"><div style="font-size:11px;color:#718096;min-width:65px">Pending</div><div style="flex:1;height:8px;background:#F0F4F8;border-radius:99px;overflow:hidden"><div style="height:100%;width:'+pp+'%;background:#C4680A;border-radius:99px"></div></div><div style="font-size:11px;font-weight:700;min-width:28px">'+pp+'%</div></div><div style="display:flex;align-items:center;gap:8px"><div style="font-size:11px;color:#718096;min-width:65px">Warranty</div><div style="flex:1;height:8px;background:#F0F4F8;border-radius:99px;overflow:hidden"><div style="height:100%;width:'+wp+'%;background:#1D4ED8;border-radius:99px"></div></div><div style="font-size:11px;font-weight:700;min-width:28px">'+c.wv+'</div></div></div><div style="display:flex;gap:6px;padding:10px 14px;border-top:1px solid #D9E2EC"><button style="flex:1;padding:6px;border-radius:6px;font-size:11px;font-weight:600;cursor:pointer;border:1px solid #D9E2EC;background:#F8FAFC;color:#718096;font-family:Tajawal,sans-serif">Reports</button><button style="flex:1;padding:6px;border-radius:6px;font-size:11px;font-weight:600;cursor:pointer;border:1px solid #D9E2EC;background:#F8FAFC;color:#718096;font-family:Tajawal,sans-serif">History</button><button style="flex:1;padding:6px;border-radius:6px;font-size:11px;font-weight:600;cursor:pointer;border:1px solid #D9E2EC;background:#F8FAFC;color:#718096;font-family:Tajawal,sans-serif">Edit</button></div>';
-    g.appendChild(card);
-  });
+async function savePart(){
+  var name=document.getElementById('ap-name').value.trim();
+  if(!name){alert('Enter part name');return;}
+  var qty=parseInt(document.getElementById('ap-qty').value)||0;
+  var min2=parseInt(document.getElementById('ap-min').value)||2;
+  var np={
+    name: name,
+    cat: document.getElementById('ap-cat').value,
+    unit: document.getElementById('ap-unit').value,
+    qty: qty,
+    min: min2,
+    supplier: document.getElementById('ap-sup').value||'—'
+  };
+  var ex=partsData.find(function(p){return p.name.toLowerCase()===name.toLowerCase();});
+  if(ex){
+    ex.qty+=qty;
+    await dbSave('parts',{id:ex.id,qty:ex.qty});
+  } else {
+    var saved=await dbSave('parts',np);
+    if(saved&&saved[0]) np.id=saved[0].id;
+    else np.id=Date.now();
+    partsData.push(np);
+  }
+  if(qty>0){
+    var nh={part_id:(ex?ex.id:np.id),type:'in',qty:qty,dest:'—',tech:'Manager',note:'Stock added',date:new Date().toISOString().split('T')[0]};
+    await dbSave('parts_history',nh);
+    histData.unshift(Object.assign({id:Date.now(),partId:(ex?ex.id:np.id)},nh));
+  }
+  closeMod('partModal');
+  renderInvList();
+  alert('✅ Part saved!');
 }
 function filterClients(q){cSrch=q;renderClientGrid();}
 function setCF(f,b){cFil=f;document.querySelectorAll('#pg-clients .vtbar .ftab').forEach(function(x){x.style.background='';x.style.color='#718096';});b.style.background='#1D4E89';b.style.color='#fff';renderClientGrid();}
@@ -1119,7 +1167,33 @@ function renderTopClients(){
     el.appendChild(r);
   });
 }
-async function saveClient(){var name=document.getElementById('cl-name').value.trim();if(!name){alert('Enter client name');return;}var nc={name:name,type:document.getElementById('cl-type').value,loc:document.getElementById('cl-loc').value,phone:document.getElementById('cl-phone').value,contract:document.getElementById('cl-contract').value,warranty:document.getElementById('cl-contract').value==='warranty',total:0,completed:0,pending:0,parts:0,wv:0,init:name.slice(0,2).toUpperCase(),color:'#1D4E89',bg:'#E6F1FB'};if(_sb)await dbSave('clients',nc);nc.id=Date.now();clientsData.push(nc);closeMod('clientModal');renderClientGrid();}
+async function saveClient(){
+  var name=document.getElementById('cl-name').value.trim();
+  if(!name){alert('Enter client name');return;}
+  var contract=document.getElementById('cl-contract').value;
+  var nc={
+    name: name,
+    type: document.getElementById('cl-type').value,
+    location: document.getElementById('cl-loc').value,
+    phone: document.getElementById('cl-phone').value,
+    contract: contract,
+    expiry: document.getElementById('cl-expiry').value || null,
+    warranty: contract==='warranty',
+    total_visits: 0, completed: 0, pending: 0, needs_parts: 0,
+    warranty_visits: 0, paid_visits: 0, contract_visits: 0,
+    initials: name.slice(0,2).toUpperCase(),
+    color: '#1D4E89', bg: '#E6F1FB'
+  };
+  var saved = await dbSave('clients', nc);
+  if(saved && saved[0]) nc.id = saved[0].id;
+  else nc.id = Date.now();
+  // Add to local data
+  nc.total = 0; nc.parts = 0; nc.wv = 0; nc.init = nc.initials; nc.loc = nc.location;
+  clientsData.push(nc);
+  closeMod('clientModal');
+  renderClientGrid();
+  if(saved) alert('✅ Client saved successfully!');
+}
 
 // ══════════════════════════════════════
 // REPORTS
@@ -1244,20 +1318,20 @@ async function saveAndSign() {
 
 function collectVisitData() {
   return {
-    client:    document.getElementById('inp-client').value,
-    location:  document.getElementById('inp-location').value,
-    visit_type: document.getElementById('sel-vtype').value,
-    tech:      document.getElementById('sel-tech').value,
-    equipment: document.getElementById('inp-equipment').value,
+    client:        document.getElementById('inp-client').value || 'Unknown',
+    location:      document.getElementById('inp-location').value,
+    visit_type:    document.getElementById('sel-vtype').value,
+    tech:          document.getElementById('sel-tech').value,
+    equipment:     document.getElementById('inp-equipment').value,
     serial_number: document.getElementById('inp-serial').value,
-    model:     document.getElementById('inp-model').value,
-    fault:     document.getElementById('inp-fault').value,
-    parts:     selParts,
-    notes:     document.getElementById('notesArea').value,
-    date:      new Date().toISOString().split('T')[0],
-    equip:     document.getElementById('inp-equipment').value,
-    status:    'قيد التنفيذ',
-    type:      document.getElementById('sel-vtype').value
+    model:         document.getElementById('inp-model').value,
+    fault:         document.getElementById('inp-fault').value,
+    parts:         selParts,
+    notes:         document.getElementById('notesArea').value,
+    date:          new Date().toISOString().split('T')[0],
+    status:        'قيد التنفيذ',
+    equip:         document.getElementById('inp-equipment').value,
+    type:          document.getElementById('sel-vtype').value
   };
 }
 
