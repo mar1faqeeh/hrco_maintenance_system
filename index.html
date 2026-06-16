@@ -893,15 +893,95 @@ function lgSuccess(u){
     sb.style.left='auto';
     sb.style.display='flex';
   }
-  
-  // Apply language
-  try { setLang(LNG); } catch(e) { console.log('setLang error:', e); }
-  
-  // Show dashboard
-  go('dashboard');
-  
-  // Init chart
-  try { initChart(); } catch(e) {}
+
+  // Load ALL data from Supabase first, then show dashboard
+  loadAllFromDB().then(function(){
+    try { setLang(LNG); } catch(e) { console.log('setLang error:', e); }
+    go('dashboard');
+    try { initChart(); } catch(e) {}
+  });
+}
+
+async function loadAllFromDB(){
+  if(!_sb) return;
+  try {
+    // Load technicians
+    var r1 = await _sb.from('technicians').select('*').order('name');
+    if(r1.data && r1.data.length){
+      techsData = r1.data.map(function(t){
+        return {
+          id: t.id, name: t.name, init: t.initials||t.name.slice(0,2),
+          color: t.color||'#1D4E89', bg: t.bg||'#E6F1FB',
+          phone: t.phone||'', spec: t.spec||'', status: t.status||'active',
+          visits: t.visits||0, completed: t.completed||0, pending: t.pending||0,
+          rating: t.rating||0, avgTime: t.avg_time||0
+        };
+      });
+      console.log('Loaded', techsData.length, 'technicians from DB');
+    }
+  } catch(e){ console.log('loadTechs error:', e); }
+
+  try {
+    // Load clients
+    var r2 = await _sb.from('clients').select('*').order('name');
+    if(r2.data && r2.data.length){
+      clientsData = r2.data.map(function(cl){
+        return {
+          id: cl.id, name: cl.name, type: cl.type||'',
+          loc: cl.location||cl.loc||'', color: cl.color||'#1D4E89',
+          bg: cl.bg||'#E6F1FB', init: cl.initials||cl.name.slice(0,2),
+          contract: cl.contract||'paid', warranty: cl.warranty||false,
+          total: cl.total_visits||0, completed: cl.completed||0,
+          pending: cl.pending||0, parts: cl.needs_parts||0,
+          wv: cl.warranty_visits||0
+        };
+      });
+      console.log('Loaded', clientsData.length, 'clients from DB');
+    }
+  } catch(e){ console.log('loadClients error:', e); }
+
+  try {
+    // Load parts
+    var r3 = await _sb.from('parts').select('*').order('name');
+    if(r3.data && r3.data.length){
+      partsData = r3.data;
+      console.log('Loaded', partsData.length, 'parts from DB');
+    }
+  } catch(e){ console.log('loadParts error:', e); }
+
+  try {
+    // Load visits
+    var r4 = await _sb.from('visits').select('*').order('date', {ascending:false}).limit(100);
+    if(r4.data && r4.data.length){
+      visData = r4.data.map(function(v){
+        return {
+          id: v.id, client: v.client, tech: v.tech,
+          equip: v.equipment||v.equip||'—', equipment: v.equipment||'',
+          type: v.visit_type||v.type||'paid',
+          status: v.status==='مكتملة'?'Completed':v.status==='معلقة'?'Pending':v.status||'Pending',
+          date: v.date||'', parts: v.parts||[], notes: v.notes||'',
+          location: v.location||''
+        };
+      });
+      rData = visData.map(function(v,i){ return Object.assign({id:i+1},v); });
+      console.log('Loaded', visData.length, 'visits from DB');
+    }
+  } catch(e){ console.log('loadVisits error:', e); }
+
+  try {
+    // Load parts history
+    var r5 = await _sb.from('parts_history').select('*').order('date', {ascending:false}).limit(50);
+    if(r5.data && r5.data.length){
+      histData = r5.data.map(function(h){
+        return {
+          id: h.id, partId: h.part_id, type: h.type,
+          qty: h.qty, dest: h.dest||'—', tech: h.tech||'—',
+          note: h.note||'', date: h.date||''
+        };
+      });
+      console.log('Loaded', histData.length, 'history records from DB');
+    }
+  } catch(e){ console.log('loadHistory error:', e); }
 }
 function logout(){if(confirm('Sign out?')){document.getElementById('loginScreen').style.display='flex';if(_sb)_sb.auth.signOut().catch(function(){});}}
 
