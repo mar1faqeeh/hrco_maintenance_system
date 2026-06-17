@@ -391,7 +391,7 @@ html,body{height:100%;font-family:Tajawal,sans-serif;font-size:14px;background:#
           <button onclick="setNLang('ur',this)" style="padding:4px 10px;border-radius:99px;border:1px solid #D9E2EC;background:#fff;color:#718096;cursor:pointer;font-size:11px;font-weight:700;font-family:inherit">اردو</button>
         </div>
       </div>
-      <textarea id="notesArea" style="width:100%;padding:8px 12px;border:1px solid #D9E2EC;border-radius:8px;font-size:13px;font-family:inherit;resize:vertical;min-height:80px;outline:none">Unit inspected — gas pressure was low, recharged with 500g R410A.</textarea>
+      <textarea id="notesArea" style="width:100%;padding:8px 12px;border:1px solid #D9E2EC;border-radius:8px;font-size:13px;font-family:inherit;resize:vertical;min-height:80px;outline:none"></textarea>
       <div style="border:1px solid #D9E2EC;border-radius:8px;overflow:hidden;margin-top:8px">
         <div style="display:flex;align-items:center;gap:8px;padding:7px 12px;background:#F8FAFC;border-bottom:1px solid #D9E2EC">
           <i class="ti ti-language" style="color:#718096;font-size:14px"></i>
@@ -402,9 +402,9 @@ html,body{height:100%;font-family:Tajawal,sans-serif;font-size:14px;background:#
             <button onclick="showTr('ur',this)" style="font-size:11px;padding:3px 9px;background:#fff;color:#718096;cursor:pointer;border:none;font-family:inherit">اردو</button>
           </div>
         </div>
-        <div id="tr-en" style="padding:10px 12px;font-size:13px;line-height:1.6">Unit inspected — gas pressure was low, recharged with 500g R410A. Operating normally.</div>
-        <div id="tr-ar" style="display:none;padding:10px 12px;font-size:13px;line-height:1.6;direction:rtl">تم فحص الوحدة ووجدنا انخفاض في ضغط الغاز، تم الشحن بـ 500 جرام R410A. الوحدة تعمل بشكل طبيعي.</div>
-        <div id="tr-ur" style="display:none;padding:10px 12px;font-size:13px;line-height:1.6;direction:rtl">یونٹ کا معائنہ کیا گیا، گیس کے دباؤ میں کمی پائی گئی۔ 500 گرام R410A سے ری چارج کیا گیا۔</div>
+        <div id="tr-en" style="padding:10px 12px;font-size:13px;line-height:1.6"></div>
+        <div id="tr-ar" style="display:none;padding:10px 12px;font-size:13px;line-height:1.6;direction:rtl"></div>
+        <div id="tr-ur" style="display:none;padding:10px 12px;font-size:13px;line-height:1.6;direction:rtl"></div>
       </div>
     </div>
   </div>
@@ -1492,6 +1492,27 @@ function showTechStats(id) {
 // ══════════════════════════════════════
 // POPULATE TECH SELECT IN NEW VISIT FORM
 // ══════════════════════════════════════
+function resetNewVisitForm(){
+  // Clear all inputs
+  ['inp-client','inp-location','inp-serial','inp-model','inp-fault','inp-part'].forEach(function(id){
+    var el=document.getElementById(id);if(el)el.value='';
+  });
+  var eq=document.getElementById('inp-equipment');if(eq)eq.value='';
+  var notes=document.getElementById('notesArea');if(notes)notes.value='';
+  // Clear translation boxes
+  ['tr-en','tr-ar','tr-ur'].forEach(function(id){
+    var el=document.getElementById(id);if(el)el.textContent='';
+  });
+  // Clear parts tags
+  selParts=[];renderTags();
+  // Reset checkboxes
+  document.querySelectorAll('#tasklist input[type=checkbox]').forEach(function(cb){cb.checked=false;});
+  // Stop mic if running
+  if(micOn&&_recog){try{_recog.stop();}catch(e){}}
+  micOn=false;_updateMicUI(false);
+  currentVisitId=null;
+}
+
 function populateTechSelect(){
   var sel = document.getElementById('sel-tech');
   if(!sel) return;
