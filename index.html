@@ -819,7 +819,14 @@ function setLang(l){
     't-new-visit-btn':'newvisit'
   };
   Object.keys(map).forEach(function(id){var el=document.getElementById(id);if(el)el.textContent=t(map[id]);});
-  renderTechGrid(); renderInvList(); renderHistList(); renderClientGrid(); renderDonut(); renderTopClients(); runReport();
+  // Safely call render functions (may not be defined yet on first load)
+  try{ if(typeof renderTechGrid==='function') renderTechGrid(); }catch(e){}
+  try{ if(typeof renderInvList==='function') renderInvList(); }catch(e){}
+  try{ if(typeof renderHistList==='function') renderHistList(); }catch(e){}
+  try{ if(typeof renderClientGrid==='function') renderClientGrid(); }catch(e){}
+  try{ if(typeof renderDonut==='function') renderDonut(); }catch(e){}
+  try{ if(typeof renderTopClients==='function') renderTopClients(); }catch(e){}
+  try{ if(typeof runReport==='function') runReport(); }catch(e){}
 }
 
 // ══════════════════════════════════════
@@ -1438,14 +1445,16 @@ async function saveAndSign() {
 }
 
 function collectVisitData() {
-  // Only include columns that exist in the visits table
+  // Map visit_type to match DB check constraint: 'ضمان','مدفوعة','عقد'
+  var vtMap = {'warranty':'ضمان','paid':'مدفوعة','contract':'عقد'};
+  var vt = document.getElementById('sel-vtype').value;
   return {
     client:        document.getElementById('inp-client').value || 'Unknown',
     equipment:     document.getElementById('inp-equipment').value,
     serial_number: document.getElementById('inp-serial').value,
     model:         document.getElementById('inp-model').value,
     tech:          document.getElementById('sel-tech').value,
-    visit_type:    document.getElementById('sel-vtype').value,
+    visit_type:    vtMap[vt] || vt,
     status:        'قيد التنفيذ',
     fault:         document.getElementById('inp-fault').value,
     notes:         document.getElementById('notesArea').value,
