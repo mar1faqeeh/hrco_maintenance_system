@@ -183,6 +183,7 @@ html,body{height:100%;font-family:Tajawal,sans-serif;font-size:14px;background:#
   #body{overflow:visible!important}
   #app{height:auto!important}
 }
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.3}}
 </style>
 </head>
 <body>
@@ -385,7 +386,7 @@ html,body{height:100%;font-family:Tajawal,sans-serif;font-size:14px;background:#
           <span id="t-mic">Voice Input</span>
         </button>
         <div style="display:flex;gap:4px">
-          <button onclick="setNLang('ar',this)" style="padding:4px 10px;border-radius:99px;border:1px solid #D9E2EC;background:#E6F1FB;color:#1D4E89;cursor:pointer;font-size:11px;font-weight:700;font-family:inherit">ع</button>
+          <button onclick="setNLang('ar',this)" data-lang="ar" class="lpill-active" style="padding:4px 10px;border-radius:99px;border:1px solid #D9E2EC;background:#E6F1FB;color:#1D4E89;cursor:pointer;font-size:11px;font-weight:700;font-family:inherit">ع</button>
           <button onclick="setNLang('en',this)" style="padding:4px 10px;border-radius:99px;border:1px solid #D9E2EC;background:#fff;color:#718096;cursor:pointer;font-size:11px;font-weight:700;font-family:inherit">EN</button>
           <button onclick="setNLang('ur',this)" style="padding:4px 10px;border-radius:99px;border:1px solid #D9E2EC;background:#fff;color:#718096;cursor:pointer;font-size:11px;font-weight:700;font-family:inherit">اردو</button>
         </div>
@@ -1065,14 +1066,112 @@ function setVF(f,b){visFil=f;document.querySelectorAll('#pg-visits .ftab').forEa
 // VOICE / TRANSLATE
 // ══════════════════════════════════════
 var micOn=false;
+var _recog=null;
+
 function toggleMic(){
-  micOn=!micOn;
-  var btn=document.getElementById('micBtn'),lbl=document.getElementById('t-mic'),pulse=document.getElementById('mpulse');
-  btn.style.background=micOn?'#FCEBEB':'#E6F1FB';btn.style.color=micOn?'#C0392B':'#1D4E89';
-  if(lbl)lbl.textContent=t(micOn?'recording':'voiceInput');
-  if(pulse){pulse.style.background=micOn?'#C0392B':'#1D4E89';pulse.style.animation=micOn?'pulse 1s infinite':'';}
+  // Check browser support
+  var SpeechRec = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if(!SpeechRec){
+    alert('Voice input is not supported in this browser. Please use Chrome or Edge.');
+    return;
+  }
+
+  if(micOn){
+    // Stop recording
+    if(_recog){ try{ _recog.stop(); }catch(e){} }
+    micOn=false;
+    _updateMicUI(false);
+    return;
+  }
+
+  // Start recording
+  micOn=true;
+  _updateMicUI(true);
+
+  _recog = new SpeechRec();
+  _recog.lang = _getMicLang();
+  _recog.continuous = true;
+  _recog.interimResults = true;
+
+  var finalText = document.getElementById('notesArea').value;
+
+  _recog.onresult = function(e){
+    var interim='', final='';
+    for(var i=e.resultIndex;i<e.results.length;i++){
+      if(e.results[i].isFinal) final += e.results[i][0].transcript;
+      else interim += e.results[i][0].transcript;
+    }
+    if(final) finalText += (finalText?' ':'') + final;
+    document.getElementById('notesArea').value = finalText + (interim?' ['+interim+']':'');
+  };
+
+  _recog.onerror = function(e){
+    console.log('Speech error:', e.error);
+    if(e.error==='not-allowed'){
+      alert('Microphone access denied. Please allow microphone in browser settings.');
+    } else if(e.error==='no-speech'){
+      // Just continue listening
+    } else {
+      alert('Voice error: ' + e.error);
+    }
+    micOn=false;
+    _updateMicUI(false);
+  };
+
+  _recog.onend = function(){
+    // Clean up interim brackets
+    var ta = document.getElementById('notesArea');
+    if(ta) ta.value = ta.value.replace(/\s*\[[^\]]*\]/g,'');
+    if(micOn){
+      // Restart if still supposed to be recording
+      try{ _recog.start(); }catch(e){ micOn=false; _updateMicUI(false); }
+    }
+  };
+
+  try{
+    _recog.start();
+  }catch(e){
+    alert('Could not start microphone: ' + e.message);
+    micOn=false;
+    _updateMicUI(false);
+  }
 }
-function setNLang(l,el){document.querySelectorAll('#pg-newvisit button[onclick^="setNLang"]').forEach(function(b){b.style.background='#fff';b.style.color='#718096';});el.style.background='#E6F1FB';el.style.color='#1D4E89';var na=document.getElementById('notesArea');if(na)na.style.direction=(l==='en'||l==='tl')?'ltr':'rtl';}
+
+function _getMicLang(){
+  // Get language based on selected note language pill
+  var active = document.querySelector('#pg-newvisit button.lpill-active');
+  var lang = active ? active.getAttribute('data-lang') : 'ar';
+  var langMap = {'ar':'ar-SA','en':'en-US','ur':'ur-PK','tl':'tl-PH'};
+  return langMap[lang] || 'ar-SA';
+}
+
+function _updateMicUI(on){
+  var btn=document.getElementById('micBtn');
+  var lbl=document.getElementById('t-mic');
+  var pulse=document.getElementById('mpulse');
+  if(btn){ btn.style.background=on?'#FCEBEB':'#E6F1FB'; btn.style.color=on?'#C0392B':'#1D4E89'; }
+  if(lbl) lbl.textContent=on?'Recording... (tap to stop)':'Voice Input';
+  if(pulse){ pulse.style.background=on?'#C0392B':'#1D4E89'; pulse.style.animation=on?'pulse 1s infinite':'none'; }
+}
+function setNLang(l,el){
+  document.querySelectorAll('#pg-newvisit button[onclick^="setNLang"]').forEach(function(b){
+    b.style.background='#fff';
+    b.style.color='#718096';
+    b.classList.remove('lpill-active');
+    b.removeAttribute('data-lang');
+  });
+  el.style.background='#E6F1FB';
+  el.style.color='#1D4E89';
+  el.classList.add('lpill-active');
+  el.setAttribute('data-lang', l);
+  var na=document.getElementById('notesArea');
+  if(na) na.style.direction=(l==='en'||l==='tl')?'ltr':'rtl';
+  // Update mic language if recording
+  if(micOn && _recog){
+    var langMap={'ar':'ar-SA','en':'en-US','ur':'ur-PK','tl':'tl-PH'};
+    _recog.lang = langMap[l] || 'ar-SA';
+  }
+}
 function showTr(l,el){document.querySelectorAll('#pg-newvisit .tbox button').forEach(function(b){b.style.background='#fff';b.style.color='#718096';});el.style.background='#1D4E89';el.style.color='#fff';['en','ar','ur'].forEach(function(x){var e=document.getElementById('tr-'+x);if(e)e.style.display='none';});var td=document.getElementById('tr-'+l);if(td)td.style.display='block';}
 function addTask(){var txt=prompt(t('addTask')+':');if(txt){var d=document.createElement('div');d.style.cssText='display:flex;align-items:center;gap:10px;padding:8px 12px;background:#F8FAFC;border:1px solid #D9E2EC;border-radius:8px';d.innerHTML='<input type="checkbox"><span>'+txt+'</span>';document.getElementById('tasklist').appendChild(d);}}
 var selParts=[];
