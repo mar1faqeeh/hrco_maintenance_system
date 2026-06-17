@@ -1055,11 +1055,97 @@ function renderVisits(f,q){
   var stBadge={'Completed':'b-s','Pending':'b-w'};
   fl.forEach(function(r){
     var row=document.createElement('div');row.className='trow';row.style.gridTemplateColumns='2fr 1.2fr 1fr 1fr 0.8fr 70px';
-    row.innerHTML='<div class="tc"><div style="font-weight:500">'+r.client+'</div><div class="tc2">'+r.equip+'</div></div><div class="tc">'+r.tech+'</div><div class="tc"><span class="bdg b-i" style="font-size:10px">'+(typeLabel[r.type]||r.type)+'</span></div><div class="tc tc2">'+r.date+'</div><div class="tc"><span class="bdg '+stBadge[r.status]+'">'+r.status+'</span></div><div style="display:flex;gap:4px"><button class="rbtn"><i class="ti ti-eye"></i></button><button class="rbtn"><i class="ti ti-edit"></i></button></div>';
+    var rid = r.id||'';
+    var stb = stBadge[r.status]||'b-g';
+    var tlbl = typeLabel[r.visit_type]||typeLabel[r.type]||r.visit_type||r.type||'—';
+    row.innerHTML='<div class="tc"><div style="font-weight:500">'+(r.client||'—')+'</div><div class="tc2">'+(r.equipment||r.equip||'—')+'</div></div>'
+      +'<div class="tc">'+(r.tech||'—')+'</div>'
+      +'<div class="tc"><span class="bdg b-i" style="font-size:10px">'+tlbl+'</span></div>'
+      +'<div class="tc tc2">'+(r.date||'—')+'</div>'
+      +'<div class="tc"><span class="bdg '+stb+'">'+(r.status||'—')+'</span></div>'
+      +'<div style="display:flex;gap:4px">'
+      +'<button class="rbtn" onclick="viewVisit('+rid+')" title="View"><i class="ti ti-eye"></i></button>'
+      +'<button class="rbtn" onclick="printVisit('+rid+')" title="Print"><i class="ti ti-printer"></i></button>'
+      +'</div>';
     body.appendChild(row);
   });
 }
 function filterVis(q){renderVisits(visFil,q);}
+
+var currentViewId = null;
+
+function viewVisit(id){
+  // Find visit in local data
+  var v = visData.find(function(x){ return x.id==id; });
+  if(!v){
+    // Try loading from DB
+    if(_sb){
+      _sb.from('visits').select('*').eq('id',id).single().then(function(r){
+        if(r.data) _showVisitModal(r.data);
+        else alert('Visit not found');
+      });
+    }
+    return;
+  }
+  _showVisitModal(v);
+}
+
+function _showVisitModal(v){
+  currentViewId = v.id;
+  document.getElementById('vm-title').textContent = 'Visit #' + v.id + ' — ' + (v.client||'');
+  document.getElementById('vm-client').textContent = v.client || '—';
+  document.getElementById('vm-tech').textContent = v.tech || '—';
+  document.getElementById('vm-equip').textContent = v.equipment || v.equip || '—';
+  document.getElementById('vm-serial').textContent = v.serial_number || '—';
+  document.getElementById('vm-date').textContent = v.date || '—';
+  document.getElementById('vm-fault').textContent = v.fault || '—';
+  document.getElementById('vm-notes').textContent = v.notes || '—';
+  
+  // Status badge
+  var stBadge = {'مكتملة':'b-s','Completed':'b-s','معلقة':'b-w','Pending':'b-w','قيد التنفيذ':'b-i'};
+  var stEl = document.getElementById('vm-status');
+  var stCls = stBadge[v.status] || 'b-g';
+  stEl.innerHTML = '<span class="bdg '+stCls+'">'+(v.status||'—')+'</span>';
+  
+  // Visit type
+  var typeMap = {'ضمان':'Warranty','مدفوعة':'Paid','عقد':'Contract','warranty':'Warranty','paid':'Paid','contract':'Contract'};
+  document.getElementById('vm-type').textContent = typeMap[v.visit_type||v.type] || v.visit_type || v.type || '—';
+  
+  // Parts
+  var partsWrap = document.getElementById('vm-parts-wrap');
+  var partsEl = document.getElementById('vm-parts');
+  var parts = v.parts || [];
+  if(parts.length > 0){
+    partsWrap.style.display = 'block';
+    partsEl.innerHTML = parts.map(function(p){
+      return '<span style="background:#E6F1FB;color:#1D4E89;border-radius:99px;padding:3px 10px;font-size:12px">'+p+'</span>';
+    }).join('');
+  } else {
+    partsWrap.style.display = 'none';
+  }
+  
+  openMod('visitModal');
+}
+
+function editVisit(id){
+  closeMod('visitModal');
+  // Load visit data into new visit form
+  var v = visData.find(function(x){ return x.id==id; });
+  if(!v) return;
+  go('newvisit');
+  setTimeout(function(){
+    var cl=document.getElementById('inp-client'); if(cl) cl.value=v.client||'';
+    var eq=document.getElementById('inp-equipment'); if(eq) eq.value=v.equipment||v.equip||'';
+    var sr=document.getElementById('inp-serial'); if(sr) sr.value=v.serial_number||'';
+    var md=document.getElementById('inp-model'); if(md) md.value=v.model||'';
+    var ft=document.getElementById('inp-fault'); if(ft) ft.value=v.fault||'';
+    var nt=document.getElementById('notesArea'); if(nt) nt.value=v.notes||'';
+    var tc=document.getElementById('sel-tech'); if(tc) tc.value=v.tech||'';
+    currentVisitId = v.id;
+    selParts = v.parts||[];
+    renderTags();
+  }, 100);
+}
 function setVF(f,b){visFil=f;document.querySelectorAll('#pg-visits .ftab').forEach(function(x){x.style.background='';x.style.color='#718096';});b.style.background='#1D4E89';b.style.color='#fff';renderVisits(f,'');}
 
 // ══════════════════════════════════════
@@ -1821,6 +1907,71 @@ window.addEventListener('load', async function() {
 });
 
 </script>
+<!-- VISIT DETAIL MODAL -->
+<div id="visitModal" style="display:none" class="modal">
+  <div class="mbox" style="max-width:600px">
+    <div class="mh">
+      <div class="mhtitle" id="vm-title">Visit Details</div>
+      <button class="mclose" onclick="closeMod('visitModal')"><i class="ti ti-x"></i></button>
+    </div>
+    <div class="mb">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px">
+        <div style="background:#F8FAFC;border:1px solid #D9E2EC;border-radius:8px;padding:10px">
+          <div style="font-size:11px;color:#718096;margin-bottom:3px">Client</div>
+          <div style="font-size:14px;font-weight:600" id="vm-client">—</div>
+        </div>
+        <div style="background:#F8FAFC;border:1px solid #D9E2EC;border-radius:8px;padding:10px">
+          <div style="font-size:11px;color:#718096;margin-bottom:3px">Technician</div>
+          <div style="font-size:14px;font-weight:600" id="vm-tech">—</div>
+        </div>
+        <div style="background:#F8FAFC;border:1px solid #D9E2EC;border-radius:8px;padding:10px">
+          <div style="font-size:11px;color:#718096;margin-bottom:3px">Equipment</div>
+          <div style="font-size:13px;font-weight:500" id="vm-equip">—</div>
+        </div>
+        <div style="background:#F8FAFC;border:1px solid #D9E2EC;border-radius:8px;padding:10px">
+          <div style="font-size:11px;color:#718096;margin-bottom:3px">Serial Number</div>
+          <div style="font-size:13px;font-weight:500" id="vm-serial">—</div>
+        </div>
+        <div style="background:#F8FAFC;border:1px solid #D9E2EC;border-radius:8px;padding:10px">
+          <div style="font-size:11px;color:#718096;margin-bottom:3px">Visit Type</div>
+          <div style="font-size:13px;font-weight:500" id="vm-type">—</div>
+        </div>
+        <div style="background:#F8FAFC;border:1px solid #D9E2EC;border-radius:8px;padding:10px">
+          <div style="font-size:11px;color:#718096;margin-bottom:3px">Date</div>
+          <div style="font-size:13px;font-weight:500" id="vm-date">—</div>
+        </div>
+        <div style="background:#F8FAFC;border:1px solid #D9E2EC;border-radius:8px;padding:10px">
+          <div style="font-size:11px;color:#718096;margin-bottom:3px">Status</div>
+          <div id="vm-status">—</div>
+        </div>
+        <div style="background:#F8FAFC;border:1px solid #D9E2EC;border-radius:8px;padding:10px">
+          <div style="font-size:11px;color:#718096;margin-bottom:3px">Fault</div>
+          <div style="font-size:13px" id="vm-fault">—</div>
+        </div>
+      </div>
+      <div style="background:#F8FAFC;border:1px solid #D9E2EC;border-radius:8px;padding:10px;margin-bottom:10px">
+        <div style="font-size:11px;color:#718096;margin-bottom:5px">Technician Notes</div>
+        <div style="font-size:13px;line-height:1.6;white-space:pre-wrap" id="vm-notes">—</div>
+      </div>
+      <div id="vm-parts-wrap" style="background:#F8FAFC;border:1px solid #D9E2EC;border-radius:8px;padding:10px;margin-bottom:14px;display:none">
+        <div style="font-size:11px;color:#718096;margin-bottom:5px">Spare Parts Used</div>
+        <div id="vm-parts" style="display:flex;flex-wrap:wrap;gap:5px"></div>
+      </div>
+      <div style="display:flex;gap:8px">
+        <button class="btn btn-o" onclick="printVisit(currentViewId)" style="flex:1">
+          <i class="ti ti-printer"></i> Print Report
+        </button>
+        <button class="btn btn-p" onclick="editVisit(currentViewId)" style="flex:1">
+          <i class="ti ti-edit"></i> Edit Visit
+        </button>
+        <button class="btn btn-o" onclick="closeMod('visitModal')" style="flex:1">
+          <i class="ti ti-x"></i> Close
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
 <!-- LOGIN SCREEN - completely separate from #app -->
 <div id="loginScreen" style="position:fixed;inset:0;background:#0F2D52;z-index:9999;display:flex;align-items:center;justify-content:center;padding:16px;font-family:Tajawal,sans-serif">
   <div style="background:#fff;border-radius:16px;width:100%;max-width:400px;overflow:hidden;box-shadow:0 20px 60px rgba(0,0,0,.3)">
