@@ -71,7 +71,8 @@ html,body{height:100%;font-family:Tajawal,sans-serif;font-size:14px;background:#
 .sg{display:grid;gap:12px;margin-bottom:18px}
 .sg-4{grid-template-columns:repeat(4,1fr)}
 .sg-5{grid-template-columns:repeat(5,1fr)}
-.sc{background:#fff;border:1px solid #D9E2EC;border-radius:12px;padding:14px 16px;box-shadow:0 1px 3px rgba(0,0,0,.06)}
+.sc{background:#fff;border:1px solid #D9E2EC;border-radius:12px;padding:14px 16px;box-shadow:0 1px 3px rgba(0,0,0,.06);transition:transform .15s,box-shadow .15s}
+.sc[onclick]:hover{transform:translateY(-2px);box-shadow:0 4px 16px rgba(0,0,0,.12);border-color:#B5D4F4;}
 .si{width:36px;height:36px;border-radius:8px;display:flex;align-items:center;justify-content:center;margin-bottom:8px}
 .sv{font-size:24px;font-weight:700;line-height:1}
 .sl{font-size:11px;color:#718096;margin-top:3px}
@@ -184,6 +185,7 @@ html,body{height:100%;font-family:Tajawal,sans-serif;font-size:14px;background:#
   #app{height:auto!important}
 }
 @keyframes pulse{0%,100%{opacity:1}50%{opacity:.3}}
+@keyframes spin{to{transform:rotate(360deg)}}
 </style>
 </head>
 <body>
@@ -207,7 +209,7 @@ html,body{height:100%;font-family:Tajawal,sans-serif;font-size:14px;background:#
   </div>
 
   <div id="body">
-    <div id="ovl" onclick="toggleSb()"></div>
+    <div id="ovl" onclick="if(document.documentElement.dir==='ltr'){document.getElementById('sidebar').style.left='-240px';}else{document.getElementById('sidebar').style.right='-240px';}this.style.display='none';this.style.pointerEvents='none';"></div>
 
     <div id="sidebar">
       <div style="padding:10px 0;flex:1">
@@ -306,11 +308,16 @@ html,body{height:100%;font-family:Tajawal,sans-serif;font-size:14px;background:#
 <div id="pg-pending" style="display:none">
   <div class="ph"><div><div class="pt" id="t-pend-pg">Pending Reports</div><div class="ps" id="t-pend-sub">Waiting for spare parts</div></div></div>
   <div class="card">
-    <div class="ch"><div class="ct"><i class="ti ti-clock-pause" style="color:#C4680A"></i><span id="t-pend-list">Pending Reports List</span></div></div>
-    <div class="lr"><div class="av" style="background:#FDF0E0;border-radius:8px"><i class="ti ti-clock-pause" style="color:#C4680A;font-size:16px"></i></div><div class="ri"><div class="rn">Ritz Carlton — Room B3</div><div class="rs">Danfoss T2 · أحمد العتيبي</div></div><span class="bdg b-w">Day 1</span></div>
-    <div class="lr"><div class="av" style="background:#FDF0E0;border-radius:8px"><i class="ti ti-clock-pause" style="color:#C4680A;font-size:16px"></i></div><div class="ri"><div class="rn">Burger King — Central Kitchen</div><div class="rs">Fridge Motor · سامي القحطاني</div></div><span class="bdg b-w">Day 3</span></div>
-    <div class="lr"><div class="av" style="background:#FCEBEB;border-radius:8px"><i class="ti ti-alert-triangle" style="color:#C0392B;font-size:16px"></i></div><div class="ri"><div class="rn">Hilton Hotel — Cold Storage</div><div class="rs">Carel pCO5 · خالد الرشيدي</div></div><span class="bdg b-d">Day 7</span></div>
-    <div class="lr"><div class="av" style="background:#FCEBEB;border-radius:8px"><i class="ti ti-alert-triangle" style="color:#C0392B;font-size:16px"></i></div><div class="ri"><div class="rn">Al-Kabeer Hotel</div><div class="rs">Embraco · محمد الحربي</div></div><span class="bdg b-d">Day 5</span></div>
+    <div class="ch">
+      <div class="ct"><i class="ti ti-clock-pause" style="color:#C4680A"></i><span id="t-pend-list">Pending Reports List</span></div>
+      <span id="pend-count" class="bdg b-w">0</span>
+    </div>
+    <div id="pendingBody">
+      <div style="padding:30px;text-align:center;color:#A0AEC0">
+        <i class="ti ti-clock-pause" style="font-size:36px;display:block;margin-bottom:8px"></i>
+        <div>No pending reports</div>
+      </div>
+    </div>
   </div>
 </div>
 
@@ -391,7 +398,7 @@ html,body{height:100%;font-family:Tajawal,sans-serif;font-size:14px;background:#
           <button onclick="setNLang('ur',this)" style="padding:4px 10px;border-radius:99px;border:1px solid #D9E2EC;background:#fff;color:#718096;cursor:pointer;font-size:11px;font-weight:700;font-family:inherit">اردو</button>
         </div>
       </div>
-      <textarea id="notesArea" style="width:100%;padding:8px 12px;border:1px solid #D9E2EC;border-radius:8px;font-size:13px;font-family:inherit;resize:vertical;min-height:80px;outline:none"></textarea>
+      <textarea id="notesArea" style="width:100%;padding:8px 12px;border:1px solid #D9E2EC;border-radius:8px;font-size:13px;font-family:inherit;resize:vertical;min-height:80px;outline:none" oninput="triggerAutoTranslate()" placeholder="Write or speak notes here..."></textarea>
       <div style="border:1px solid #D9E2EC;border-radius:8px;overflow:hidden;margin-top:8px">
         <div style="display:flex;align-items:center;gap:8px;padding:7px 12px;background:#F8FAFC;border-bottom:1px solid #D9E2EC">
           <i class="ti ti-language" style="color:#718096;font-size:14px"></i>
@@ -901,6 +908,8 @@ function lgSuccess(u){
   loadAllFromDB().then(function(){
     try { setLang(LNG); } catch(e) { console.log('setLang error:', e); }
     populateTechSelect();
+    updateDashStats();
+    renderPending();
     go('dashboard');
     try { initChart(); } catch(e) {}
   });
@@ -1014,12 +1023,22 @@ function go(pg){
 }
 function setBn(b){document.querySelectorAll('.bn').forEach(function(x){x.style.color='#A0AEC0';});b.style.color='#1D4E89';}
 function toggleSb(){
-  var sb=document.getElementById('sidebar'),ov=document.getElementById('ovl');
-  var open=sb.style.right==='0px';
-  sb.style.right=open?'-240px':'0px';
-  sb.style.left='auto';
-  if(document.documentElement.dir==='ltr'){sb.style.left=open?'-240px':'0px';sb.style.right='auto';}
-  ov.style.display=open?'none':'block';
+  var sb=document.getElementById('sidebar');
+  var ov=document.getElementById('ovl');
+  if(!sb) return;
+  var isLTR = document.documentElement.dir==='ltr';
+  var isOpen = isLTR ? (sb.style.left==='0px') : (sb.style.right==='0px');
+  if(isOpen){
+    // Close
+    if(isLTR){ sb.style.left='-240px'; sb.style.right='auto'; }
+    else { sb.style.right='-240px'; sb.style.left='auto'; }
+    if(ov){ ov.style.display='none'; ov.style.pointerEvents='none'; }
+  } else {
+    // Open
+    if(isLTR){ sb.style.left='0px'; sb.style.right='auto'; }
+    else { sb.style.right='0px'; sb.style.left='auto'; }
+    if(ov){ ov.style.display='block'; ov.style.pointerEvents='auto'; }
+  }
 }
 
 // ══════════════════════════════════════
@@ -1071,6 +1090,53 @@ function renderVisits(f,q){
   });
 }
 function filterVis(q){renderVisits(visFil,q);}
+
+function renderPending(){
+  var body = document.getElementById('pendingBody');
+  var countEl = document.getElementById('pend-count');
+  if(!body) return;
+
+  // Get pending visits from visData
+  var pending = visData.filter(function(v){
+    return v.status==='معلقة' || v.status==='Pending' || v.status==='قيد التنفيذ';
+  });
+
+  if(countEl) countEl.textContent = pending.length;
+
+  if(!pending.length){
+    body.innerHTML = '<div style="padding:30px;text-align:center;color:#A0AEC0"><i class="ti ti-circle-check" style="font-size:36px;display:block;margin-bottom:8px;color:#2D7D3A"></i><div>No pending reports — all caught up! ✅</div></div>';
+    return;
+  }
+
+  body.innerHTML = '';
+  pending.forEach(function(v){
+    // Calculate days pending
+    var days = 0;
+    if(v.date){
+      var diff = new Date() - new Date(v.date);
+      days = Math.floor(diff / (1000*60*60*24));
+    }
+    var dayColor = days >= 5 ? '#C0392B' : days >= 3 ? '#C4680A' : '#2D7D3A';
+    var icon = days >= 3 ? 'ti-alert-triangle' : 'ti-clock-pause';
+    var iconBg = days >= 3 ? '#FCEBEB' : '#FDF0E0';
+    var iconColor = days >= 3 ? '#C0392B' : '#C4680A';
+    var dayLabel = days === 0 ? 'Today' : days === 1 ? 'Day 1' : 'Day ' + days;
+
+    var parts = Array.isArray(v.parts) ? v.parts.join(', ') : '—';
+    var row = document.createElement('div');
+    row.className = 'lr';
+    row.style.cursor = 'pointer';
+    row.onclick = function(){ viewVisit(v.id); };
+    row.innerHTML = 
+      '<div class="av" style="background:'+iconBg+';border-radius:8px"><i class="ti '+icon+'" style="color:'+iconColor+';font-size:16px"></i></div>'
+      + '<div class="ri">'
+      +   '<div class="rn">'+(v.client||'—')+' — '+(v.equipment||v.equip||'—')+'</div>'
+      +   '<div class="rs">'+(parts!=='—'?parts+' · ':'')+(v.tech||'—')+'</div>'
+      + '</div>'
+      + '<span style="font-size:11px;color:'+dayColor+';font-weight:700;flex-shrink:0">'+dayLabel+'</span>';
+    body.appendChild(row);
+  });
+}
 
 var currentViewId = null;
 
@@ -1258,7 +1324,87 @@ function setNLang(l,el){
     _recog.lang = langMap[l] || 'ar-SA';
   }
 }
-function showTr(l,el){document.querySelectorAll('#pg-newvisit .tbox button').forEach(function(b){b.style.background='#fff';b.style.color='#718096';});el.style.background='#1D4E89';el.style.color='#fff';['en','ar','ur'].forEach(function(x){var e=document.getElementById('tr-'+x);if(e)e.style.display='none';});var td=document.getElementById('tr-'+l);if(td)td.style.display='block';}
+var _trCache = {};
+
+async function translateText(text, targetLang) {
+  if(!text || !text.trim()) return '';
+  var cacheKey = targetLang + ':' + text.slice(0,50);
+  if(_trCache[cacheKey]) return _trCache[cacheKey];
+
+  // Detect source lang - if text has Arabic chars, source is ar, else en
+  var hasArabic = /[؀-ۿ]/.test(text);
+  var sourceLang = hasArabic ? 'ar' : 'en';
+  if(sourceLang === targetLang) return text;
+
+  var langMap = {'en':'en-US','ar':'ar-SA','ur':'ur-PK'};
+  var src = langMap[sourceLang] || sourceLang;
+  var tgt = langMap[targetLang] || targetLang;
+
+  try {
+    var url = 'https://api.mymemory.translated.net/get?q=' + encodeURIComponent(text.slice(0,500)) + '&langpair=' + src + '|' + tgt;
+    var resp = await fetch(url);
+    var data = await resp.json();
+    if(data.responseStatus === 200 && data.responseData){
+      var result = data.responseData.translatedText;
+      _trCache[cacheKey] = result;
+      return result;
+    }
+  } catch(e) {
+    console.log('Translation error:', e);
+  }
+  return text; // fallback: return original
+}
+
+function showTr(l, el) {
+  // Update tab buttons
+  document.querySelectorAll('#pg-newvisit .tbox button').forEach(function(b){
+    b.style.background='#fff'; b.style.color='#718096';
+  });
+  el.style.background='#1D4E89'; el.style.color='#fff';
+
+  // Show selected lang box, hide others
+  ['en','ar','ur'].forEach(function(x){
+    var e=document.getElementById('tr-'+x);
+    if(e) e.style.display='none';
+  });
+  var td=document.getElementById('tr-'+l);
+  if(td) td.style.display='block';
+
+  // Get source text from notesArea
+  var notes = document.getElementById('notesArea');
+  var srcText = notes ? notes.value.trim() : '';
+  if(!srcText){
+    if(td) td.textContent = '';
+    return;
+  }
+
+  // Show loading
+  if(td) td.innerHTML = '<span style="color:#A0AEC0;font-size:12px"><i class="ti ti-loader" style="animation:spin 1s linear infinite;display:inline-block"></i> Translating...</span>';
+
+  // Translate
+  translateText(srcText, l).then(function(result){
+    if(td){
+      td.textContent = result;
+      td.style.direction = (l==='ar'||l==='ur') ? 'rtl' : 'ltr';
+    }
+  });
+}
+
+// Auto-translate when notes change (debounced)
+var _trTimer = null;
+function triggerAutoTranslate(){
+  clearTimeout(_trTimer);
+  _trTimer = setTimeout(function(){
+    // Find active translation tab
+    var activeTabs = document.querySelectorAll('#pg-newvisit .tbox button');
+    var activeBtn = null;
+    activeTabs.forEach(function(b){ if(b.style.background.includes('1D4E89')||b.style.background.includes('rgb(29, 78, 137)') ) activeBtn=b; });
+    if(activeBtn){
+      var activeLang = activeBtn.textContent.trim()==='EN'?'en':activeBtn.textContent.trim()==='ع'?'ar':'ur';
+      showTr(activeLang, activeBtn);
+    }
+  }, 1200);
+}
 function addTask(){var txt=prompt(t('addTask')+':');if(txt){var d=document.createElement('div');d.style.cssText='display:flex;align-items:center;gap:10px;padding:8px 12px;background:#F8FAFC;border:1px solid #D9E2EC;border-radius:8px';d.innerHTML='<input type="checkbox"><span>'+txt+'</span>';document.getElementById('tasklist').appendChild(d);}}
 var selParts=[];
 function addPart(){var v=document.getElementById('inp-part').value.trim();if(!v)return;if(!selParts.includes(v))selParts.push(v);document.getElementById('inp-part').value='';renderTags();}
@@ -1458,7 +1604,8 @@ async function saveClient(){
   var name=document.getElementById('cl-name').value.trim();
   if(!name){alert('Enter client name');return;}
   var contract=document.getElementById('cl-contract').value;
-  var nc={
+  // Data for Supabase (DB columns)
+  var dbData={
     name: name,
     type: document.getElementById('cl-type').value,
     location: document.getElementById('cl-loc').value,
@@ -1471,15 +1618,32 @@ async function saveClient(){
     initials: name.slice(0,2).toUpperCase(),
     color: '#1D4E89', bg: '#E6F1FB'
   };
-  var saved = await dbSave('clients', nc);
-  if(saved && saved[0]) nc.id = saved[0].id;
-  else nc.id = Date.now();
-  // Add to local data
-  nc.total = 0; nc.parts = 0; nc.wv = 0; nc.init = nc.initials; nc.loc = nc.location;
-  clientsData.push(nc);
+  var saved = await dbSave('clients', dbData);
+  // Local data structure for renderClientGrid
+  var localClient = {
+    id: (saved && saved[0]) ? saved[0].id : Date.now(),
+    name: name,
+    type: dbData.type,
+    loc: dbData.location,
+    phone: dbData.phone,
+    contract: contract,
+    warranty: dbData.warranty,
+    color: '#1D4E89',
+    bg: '#E6F1FB',
+    init: name.slice(0,2).toUpperCase(),
+    total: 0, completed: 0, pending: 0, parts: 0, wv: 0
+  };
+  clientsData.push(localClient);
   closeMod('clientModal');
+  // Clear modal fields
+  ['cl-name','cl-loc','cl-phone'].forEach(function(id){
+    var el=document.getElementById(id); if(el) el.value='';
+  });
   renderClientGrid();
-  if(saved) alert('✅ Client saved successfully!');
+  // Update client count on dashboard
+  var cc=document.getElementById('set-client-count'); if(cc) cc.textContent=clientsData.length;
+  refreshAC();
+  if(saved) alert('✅ Client "'+name+'" saved successfully!');
 }
 
 // ══════════════════════════════════════
@@ -1548,9 +1712,23 @@ document.addEventListener('DOMContentLoaded', function() {
     // Resize handler
     window.addEventListener('resize',function(){
       var sb=document.getElementById('sidebar');
-      if(!sb)return;
-      if(window.innerWidth>=960){sb.style.position='relative';sb.style.right='auto';sb.style.top='auto';}
-      else{sb.style.position='fixed';if(sb.style.right!=='0px')sb.style.right='-240px';}
+      if(!sb) return;
+      if(window.innerWidth>=960){
+        // Desktop: always show sidebar
+        sb.style.position='relative';
+        sb.style.right='auto';
+        sb.style.left='auto';
+        sb.style.top='auto';
+        sb.style.display='flex';
+      } else {
+        // Mobile: hide sidebar
+        sb.style.position='fixed';
+        if(document.documentElement.dir==='ltr'){
+          if(sb.style.left!=='0px') sb.style.left='-240px';
+        } else {
+          if(sb.style.right!=='0px') sb.style.right='-240px';
+        }
+      }
     });
 
     // Init chart on dashboard
@@ -1578,6 +1756,20 @@ function showTechStats(id) {
 // ══════════════════════════════════════
 // POPULATE TECH SELECT IN NEW VISIT FORM
 // ══════════════════════════════════════
+function updateDashStats(){
+  var total = visData.length;
+  var completed = visData.filter(function(v){ return v.status==='مكتملة'||v.status==='Completed'; }).length;
+  var pending = visData.filter(function(v){ return v.status==='معلقة'||v.status==='Pending'; }).length;
+  var missingParts = visData.filter(function(v){ return v.parts && v.parts.length>0 && (v.status==='معلقة'||v.status==='Pending'); }).length;
+  var pct = total>0 ? Math.round(completed/total*100) : 0;
+
+  var e1=document.getElementById('dash-total-visits'); if(e1) e1.textContent=total;
+  var e2=document.getElementById('dash-completed'); if(e2) e2.textContent=completed;
+  var e3=document.getElementById('dash-pending'); if(e3) e3.textContent=pending;
+  var e4=document.getElementById('dash-missing-parts'); if(e4) e4.textContent=missingParts;
+  var e5=document.getElementById('dash-comp-pct'); if(e5) e5.textContent=pct+'%';
+}
+
 function resetNewVisitForm(){
   // Clear all inputs
   ['inp-client','inp-location','inp-serial','inp-model','inp-fault','inp-part'].forEach(function(id){
@@ -1840,16 +2032,26 @@ async function loadVisitsFromDB() {
 var acData = { client: [], location: [], fault: [] };
 
 async function loadAC() {
+  // Load client names from clientsData (already loaded)
+  clientsData.forEach(function(cl){
+    if(!acData.client.includes(cl.name)) acData.client.push(cl.name);
+  });
   if (!_sb) return;
   try {
     var r = await _sb.from('autocomplete').select('*');
     if (r.data) r.data.forEach(function(row) {
-      if (acData[row.field_key]) acData[row.field_key].push(row.field_value);
+      if (acData[row.field_key] && !acData[row.field_key].includes(row.field_value))
+        acData[row.field_key].push(row.field_value);
     });
-    // Also load clients
-    var cl = await _sb.from('clients').select('name');
-    if (cl.data) cl.data.forEach(function(c){ if(!acData.client.includes(c.name)) acData.client.push(c.name); });
   } catch(e) {}
+}
+
+// Refresh autocomplete when new client added
+function refreshAC(){
+  acData.client = [];
+  clientsData.forEach(function(cl){
+    if(!acData.client.includes(cl.name)) acData.client.push(cl.name);
+  });
 }
 
 function acShow(field, val) {
