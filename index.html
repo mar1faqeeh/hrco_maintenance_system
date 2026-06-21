@@ -245,10 +245,10 @@ html,body{height:100%;font-family:Tajawal,sans-serif;font-size:14px;background:#
     <button class="btn btn-p" onclick="go('newvisit')"><i class="ti ti-plus"></i><span id="t-new-visit-btn">New Visit</span></button>
   </div>
   <div class="sg sg-4">
-    <div class="sc"><div class="si" style="background:#E6F1FB"><i class="ti ti-calendar-check" style="color:#1D4E89"></i></div><div class="sv">18</div><div class="sl" id="t-stat-today">Today's Visits</div><div class="sch cup"><i class="ti ti-trending-up"></i><span id="t-from-yest">+3 from yesterday</span></div></div>
-    <div class="sc"><div class="si" style="background:#EAF3DE"><i class="ti ti-circle-check" style="color:#2D7D3A"></i></div><div class="sv">13</div><div class="sl" id="t-stat-done">Completed</div><div class="sch cup"><i class="ti ti-trending-up"></i> 72%</div></div>
-    <div class="sc"><div class="si" style="background:#FDF0E0"><i class="ti ti-clock-pause" style="color:#C4680A"></i></div><div class="sv">4</div><div class="sl" id="t-stat-pend">Pending</div><div class="sch cwn"><i class="ti ti-alert-triangle"></i><span id="t-needs-fu">Needs follow-up</span></div></div>
-    <div class="sc"><div class="si" style="background:#FCEBEB"><i class="ti ti-tool" style="color:#C0392B"></i></div><div class="sv">7</div><div class="sl" id="t-stat-parts">Missing Parts</div><div class="sch cdn"><i class="ti ti-trending-down"></i> 3</div></div>
+    <div class="sc" onclick="go('visits')" style="cursor:pointer"><div class="si" style="background:#E6F1FB"><i class="ti ti-calendar-check" style="color:#1D4E89"></i></div><div class="sv" id="dash-total-visits">18</div><div class="sl" id="t-stat-today">Today's Visits</div><div class="sch cup"><i class="ti ti-trending-up"></i><span id="t-from-yest">+3 from yesterday</span></div></div>
+    <div class="sc" onclick="go('visits')" style="cursor:pointer"><div class="si" style="background:#EAF3DE"><i class="ti ti-circle-check" style="color:#2D7D3A"></i></div><div class="sv" id="dash-completed">13</div><div class="sl" id="t-stat-done">Completed</div><div class="sch cup"><i class="ti ti-trending-up"></i> <span id="dash-comp-pct">72%</span></div></div>
+    <div class="sc" onclick="go('pending')" style="cursor:pointer"><div class="si" style="background:#FDF0E0"><i class="ti ti-clock-pause" style="color:#C4680A"></i></div><div class="sv" id="dash-pending">4</div><div class="sl" id="t-stat-pend">Pending</div><div class="sch cwn"><i class="ti ti-alert-triangle"></i><span id="t-needs-fu">Needs follow-up</span></div></div>
+    <div class="sc" onclick="go('parts')" style="cursor:pointer"><div class="si" style="background:#FCEBEB"><i class="ti ti-tool" style="color:#C0392B"></i></div><div class="sv" id="dash-missing-parts">7</div><div class="sl" id="t-stat-parts">Missing Parts</div><div class="sch cdn"><i class="ti ti-trending-down"></i> 3</div></div>
   </div>
   <div class="g2">
     <div class="card">
@@ -1220,6 +1220,8 @@ function setVF(f,b){visFil=f;document.querySelectorAll('#pg-visits .ftab').forEa
 var micOn=false;
 var _recog=null;
 
+var _micBaseText = ''; // text that existed BEFORE this recording session started
+
 function toggleMic(){
   // Check browser support
   var SpeechRec = window.SpeechRecognition || window.webkitSpeechRecognition;
@@ -1230,14 +1232,17 @@ function toggleMic(){
 
   if(micOn){
     // Stop recording
+    micOn = false; // set BEFORE stop() so onend won't auto-restart
     if(_recog){ try{ _recog.stop(); }catch(e){} }
-    micOn=false;
     _updateMicUI(false);
     return;
   }
 
-  // Start recording
-  micOn=true;
+  // Start recording - remember what was already in the box
+  var ta = document.getElementById('notesArea');
+  _micBaseText = ta ? ta.value.trim() : '';
+
+  micOn = true;
   _updateMicUI(true);
 
   _recog = new SpeechRec();
@@ -1245,38 +1250,37 @@ function toggleMic(){
   _recog.continuous = true;
   _recog.interimResults = true;
 
-  var finalText = document.getElementById('notesArea').value;
-
   _recog.onresult = function(e){
-    var interim='', final='';
-    for(var i=e.resultIndex;i<e.results.length;i++){
-      if(e.results[i].isFinal) final += e.results[i][0].transcript;
-      else interim += e.results[i][0].transcript;
+    // Rebuild the FULL transcript from ALL results each time (no manual accumulation)
+    var finalChunk = '', interimChunk = '';
+    for(var i=0; i<e.results.length; i++){
+      if(e.results[i].isFinal) finalChunk += e.results[i][0].transcript + ' ';
+      else interimChunk += e.results[i][0].transcript;
     }
-    if(final) finalText += (finalText?' ':'') + final;
-    document.getElementById('notesArea').value = finalText + (interim?' ['+interim+']':'');
+    var combined = (_micBaseText ? _micBaseText + ' ' : '') + finalChunk.trim();
+    var ta = document.getElementById('notesArea');
+    if(ta) ta.value = combined + (interimChunk ? (combined?' ':'') + interimChunk : '');
   };
 
   _recog.onerror = function(e){
     console.log('Speech error:', e.error);
     if(e.error==='not-allowed'){
       alert('Microphone access denied. Please allow microphone in browser settings.');
-    } else if(e.error==='no-speech'){
-      // Just continue listening
+      micOn=false; _updateMicUI(false);
+    } else if(e.error==='no-speech' || e.error==='aborted'){
+      // Ignore - these are normal pauses
     } else {
-      alert('Voice error: ' + e.error);
+      micOn=false; _updateMicUI(false);
     }
-    micOn=false;
-    _updateMicUI(false);
   };
 
   _recog.onend = function(){
-    // Clean up interim brackets
-    var ta = document.getElementById('notesArea');
-    if(ta) ta.value = ta.value.replace(/\s*\[[^\]]*\]/g,'');
     if(micOn){
-      // Restart if still supposed to be recording
-      try{ _recog.start(); }catch(e){ micOn=false; _updateMicUI(false); }
+      // Lock in what we have so far as the new base, then restart cleanly
+      var ta = document.getElementById('notesArea');
+      _micBaseText = ta ? ta.value.trim() : _micBaseText;
+      try{ _recog.start(); }
+      catch(e){ micOn=false; _updateMicUI(false); }
     }
   };
 
