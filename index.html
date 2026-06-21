@@ -1220,7 +1220,8 @@ function setVF(f,b){visFil=f;document.querySelectorAll('#pg-visits .ftab').forEa
 var micOn=false;
 var _recog=null;
 
-var _micBaseText = ''; // text that existed BEFORE this recording session started
+var _micFinalText = ''; // accumulated final text for THIS recording session
+var _micLastResultCount = 0;
 
 function toggleMic(){
   // Check browser support
@@ -1231,68 +1232,80 @@ function toggleMic(){
   }
 
   if(micOn){
-    // Stop recording
-    micOn = false; // set BEFORE stop() so onend won't auto-restart
+    micOn = false;
     if(_recog){ try{ _recog.stop(); }catch(e){} }
     _updateMicUI(false);
     return;
   }
 
-  // Start recording - remember what was already in the box
+  // Starting fresh: capture what's already typed as a fixed prefix
   var ta = document.getElementById('notesArea');
-  _micBaseText = ta ? ta.value.trim() : '';
+  var prefix = ta ? ta.value.trim() : '';
 
   micOn = true;
   _updateMicUI(true);
+  _micFinalText = '';     // only the NEW speech goes here
+  _micLastResultCount = 0; // how many results[] entries we've already committed
 
-  _recog = new SpeechRec();
-  _recog.lang = _getMicLang();
-  _recog.continuous = true;
-  _recog.interimResults = true;
+  function startEngine(){
+    _recog = new SpeechRec();
+    _recog.lang = _getMicLang();
+    _recog.continuous = true;
+    _recog.interimResults = true;
+    _micLastResultCount = 0; // reset per engine instance - results[] restarts at 0 each time
 
-  _recog.onresult = function(e){
-    // Rebuild the FULL transcript from ALL results each time (no manual accumulation)
-    var finalChunk = '', interimChunk = '';
-    for(var i=0; i<e.results.length; i++){
-      if(e.results[i].isFinal) finalChunk += e.results[i][0].transcript + ' ';
-      else interimChunk += e.results[i][0].transcript;
-    }
-    var combined = (_micBaseText ? _micBaseText + ' ' : '') + finalChunk.trim();
-    var ta = document.getElementById('notesArea');
-    if(ta) ta.value = combined + (interimChunk ? (combined?' ':'') + interimChunk : '');
-  };
-
-  _recog.onerror = function(e){
-    console.log('Speech error:', e.error);
-    if(e.error==='not-allowed'){
-      alert('Microphone access denied. Please allow microphone in browser settings.');
-      micOn=false; _updateMicUI(false);
-    } else if(e.error==='no-speech' || e.error==='aborted'){
-      // Ignore - these are normal pauses
-    } else {
-      micOn=false; _updateMicUI(false);
-    }
-  };
-
-  _recog.onend = function(){
-    if(micOn){
-      // Lock in what we have so far as the new base, then restart cleanly
+    _recog.onresult = function(e){
+      var interim = '';
+      for(var i=0; i<e.results.length; i++){
+        if(e.results[i].isFinal){
+          // Only commit results we haven't already added
+          if(i >= _micLastResultCount){
+            _micFinalText += (_micFinalText ? ' ' : '') + e.results[i][0].transcript.trim();
+            _micLastResultCount = i + 1;
+          }
+        } else {
+          interim += e.results[i][0].transcript;
+        }
+      }
+      var full = (prefix ? prefix + ' ' : '') + _micFinalText;
       var ta = document.getElementById('notesArea');
-      _micBaseText = ta ? ta.value.trim() : _micBaseText;
-      try{ _recog.start(); }
-      catch(e){ micOn=false; _updateMicUI(false); }
+      if(ta) ta.value = full + (interim ? (full?' ':'') + interim : '');
+    };
+
+    _recog.onerror = function(e){
+      console.log('Speech error:', e.error);
+      if(e.error==='not-allowed'){
+        alert('Microphone access denied. Please allow microphone in browser settings.');
+        micOn=false; _updateMicUI(false);
+      } else if(e.error==='no-speech' || e.error==='aborted'){
+        // normal pause - let onend handle restart
+      } else {
+        micOn=false; _updateMicUI(false);
+      }
+    };
+
+    _recog.onend = function(){
+      if(micOn){
+        // Lock in current final text as the new prefix, reset counters, restart clean
+        prefix = (prefix ? prefix + ' ' : '') + _micFinalText;
+        _micFinalText = '';
+        _micLastResultCount = 0;
+        try{ startEngine(); _recog.start(); }
+        catch(e){ micOn=false; _updateMicUI(false); }
+      }
+    };
+
+    try{
+      _recog.start();
+    }catch(e){
+      alert('Could not start microphone: ' + e.message);
+      micOn=false;
+      _updateMicUI(false);
     }
-  };
-
-  try{
-    _recog.start();
-  }catch(e){
-    alert('Could not start microphone: ' + e.message);
-    micOn=false;
-    _updateMicUI(false);
   }
-}
 
+  startEngine();
+}
 function _getMicLang(){
   // Get language based on selected note language pill
   var active = document.querySelector('#pg-newvisit button.lpill-active');
