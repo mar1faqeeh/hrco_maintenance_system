@@ -1220,8 +1220,8 @@ function setVF(f,b){visFil=f;document.querySelectorAll('#pg-visits .ftab').forEa
 var micOn=false;
 var _recog=null;
 
-var _micFinalText = ''; // accumulated final text for THIS recording session
-var _micPrefix = '';    // text that existed before recording started
+var _micPrefix = '';      // text that existed before recording started
+var _micLastFinal = '';   // last final transcript string we've already added (dedup guard)
 
 function toggleMic(){
   var SpeechRec = window.SpeechRecognition || window.webkitSpeechRecognition;
@@ -1231,20 +1231,18 @@ function toggleMic(){
   }
 
   if(micOn){
-    // Manual stop only - no auto-restart logic will fire
     micOn = false;
     if(_recog){
-      _recog.onend = null; // disable any restart behavior
+      _recog.onend = null;
       try{ _recog.stop(); }catch(e){}
     }
     _updateMicUI(false);
     return;
   }
 
-  // Starting fresh
   var ta = document.getElementById('notesArea');
   _micPrefix = ta ? ta.value.trim() : '';
-  _micFinalText = '';
+  _micLastFinal = '';
   micOn = true;
   _updateMicUI(true);
 
@@ -1254,15 +1252,30 @@ function toggleMic(){
   _recog.interimResults = true;
 
   _recog.onresult = function(e){
-    var interim = '', final = '';
-    for(var i=e.resultIndex; i<e.results.length; i++){
-      if(e.results[i].isFinal) final += e.results[i][0].transcript + ' ';
+    // Android engines often resend the FULL accumulated transcript as "final"
+    // instead of just the new chunk. So we take the LAST final result only,
+    // and only append the part of it we haven't already shown.
+    var interim = '', lastFinal = '';
+    for(var i=0; i<e.results.length; i++){
+      if(e.results[i].isFinal) lastFinal = e.results[i][0].transcript.trim();
       else interim += e.results[i][0].transcript;
     }
-    if(final) _micFinalText += final;
-    var full = (_micPrefix ? _micPrefix + ' ' : '') + _micFinalText.trim();
+
+    if(lastFinal && lastFinal !== _micLastFinal){
+      // Figure out the truly NEW portion: if lastFinal starts with what we
+      // already had, only take the new tail; otherwise treat as wholly new.
+      var newPart = lastFinal;
+      if(_micLastFinal && lastFinal.indexOf(_micLastFinal) === 0){
+        newPart = lastFinal.slice(_micLastFinal.length).trim();
+      }
+      if(newPart){
+        _micPrefix = (_micPrefix ? _micPrefix + ' ' : '') + newPart;
+      }
+      _micLastFinal = lastFinal;
+    }
+
     var ta2 = document.getElementById('notesArea');
-    if(ta2) ta2.value = full + (interim ? (full?' ':'') + interim : '');
+    if(ta2) ta2.value = _micPrefix + (interim ? (_micPrefix?' ':'') + interim : '');
   };
 
   _recog.onerror = function(e){
@@ -1270,14 +1283,11 @@ function toggleMic(){
     if(e.error==='not-allowed'){
       alert('Microphone access denied. Please allow microphone in browser settings.');
     }
-    // Do NOT auto-restart on any error - user controls start/stop manually
     micOn = false;
     _updateMicUI(false);
   };
 
   _recog.onend = function(){
-    // No auto-restart - recording only stops when user taps the button
-    // (engine may end itself after a pause; we simply reflect "off" state)
     micOn = false;
     _updateMicUI(false);
   };
