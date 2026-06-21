@@ -396,6 +396,7 @@ html,body{height:100%;font-family:Tajawal,sans-serif;font-size:14px;background:#
           <button onclick="setNLang('ar',this)" data-lang="ar" class="lpill-active" style="padding:4px 10px;border-radius:99px;border:1px solid #D9E2EC;background:#E6F1FB;color:#1D4E89;cursor:pointer;font-size:11px;font-weight:700;font-family:inherit">ع</button>
           <button onclick="setNLang('en',this)" style="padding:4px 10px;border-radius:99px;border:1px solid #D9E2EC;background:#fff;color:#718096;cursor:pointer;font-size:11px;font-weight:700;font-family:inherit">EN</button>
           <button onclick="setNLang('ur',this)" style="padding:4px 10px;border-radius:99px;border:1px solid #D9E2EC;background:#fff;color:#718096;cursor:pointer;font-size:11px;font-weight:700;font-family:inherit">اردو</button>
+          <button onclick="setNLang('tl',this)" style="padding:4px 10px;border-radius:99px;border:1px solid #D9E2EC;background:#fff;color:#718096;cursor:pointer;font-size:11px;font-weight:700;font-family:inherit">FIL</button>
         </div>
       </div>
       <textarea id="notesArea" style="width:100%;padding:8px 12px;border:1px solid #D9E2EC;border-radius:8px;font-size:13px;font-family:inherit;resize:vertical;min-height:80px;outline:none" oninput="triggerAutoTranslate()" placeholder="Write or speak notes here..."></textarea>
@@ -407,11 +408,13 @@ html,body{height:100%;font-family:Tajawal,sans-serif;font-size:14px;background:#
             <button onclick="showTr('en',this)" style="font-size:11px;padding:3px 9px;background:#1D4E89;color:#fff;cursor:pointer;border:none;font-family:inherit">EN</button>
             <button onclick="showTr('ar',this)" style="font-size:11px;padding:3px 9px;background:#fff;color:#718096;cursor:pointer;border:none;font-family:inherit">ع</button>
             <button onclick="showTr('ur',this)" style="font-size:11px;padding:3px 9px;background:#fff;color:#718096;cursor:pointer;border:none;font-family:inherit">اردو</button>
+            <button onclick="showTr('tl',this)" style="font-size:11px;padding:3px 9px;background:#fff;color:#718096;cursor:pointer;border:none;font-family:inherit">FIL</button>
           </div>
         </div>
         <div id="tr-en" style="padding:10px 12px;font-size:13px;line-height:1.6"></div>
         <div id="tr-ar" style="display:none;padding:10px 12px;font-size:13px;line-height:1.6;direction:rtl"></div>
         <div id="tr-ur" style="display:none;padding:10px 12px;font-size:13px;line-height:1.6;direction:rtl"></div>
+        <div id="tr-tl" style="display:none;padding:10px 12px;font-size:13px;line-height:1.6;direction:ltr"></div>
       </div>
     </div>
   </div>
@@ -1347,7 +1350,7 @@ async function translateText(text, targetLang) {
   var sourceLang = hasArabic ? 'ar' : 'en';
   if(sourceLang === targetLang) return text;
 
-  var langMap = {'en':'en-US','ar':'ar-SA','ur':'ur-PK'};
+  var langMap = {'en':'en-US','ar':'ar-SA','ur':'ur-PK','tl':'tl-PH'};
   var src = langMap[sourceLang] || sourceLang;
   var tgt = langMap[targetLang] || targetLang;
 
@@ -1374,7 +1377,7 @@ function showTr(l, el) {
   el.style.background='#1D4E89'; el.style.color='#fff';
 
   // Show selected lang box, hide others
-  ['en','ar','ur'].forEach(function(x){
+  ['en','ar','ur','tl'].forEach(function(x){
     var e=document.getElementById('tr-'+x);
     if(e) e.style.display='none';
   });
@@ -1411,7 +1414,8 @@ function triggerAutoTranslate(){
     var activeBtn = null;
     activeTabs.forEach(function(b){ if(b.style.background.includes('1D4E89')||b.style.background.includes('rgb(29, 78, 137)') ) activeBtn=b; });
     if(activeBtn){
-      var activeLang = activeBtn.textContent.trim()==='EN'?'en':activeBtn.textContent.trim()==='ع'?'ar':'ur';
+      var txt = activeBtn.textContent.trim();
+      var activeLang = txt==='EN'?'en':txt==='ع'?'ar':txt==='FIL'?'tl':'ur';
       showTr(activeLang, activeBtn);
     }
   }, 1200);
