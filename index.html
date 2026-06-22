@@ -947,7 +947,8 @@ async function loadAllFromDB(){
           id: cl.id, name: cl.name, type: cl.type||'',
           loc: cl.location||cl.loc||'', color: cl.color||'#1D4E89',
           bg: cl.bg||'#E6F1FB', init: cl.initials||cl.name.slice(0,2),
-          contract: cl.contract||'paid', warranty: cl.warranty||false,
+          contract: cl.contract==='عقد صيانة'?'contract':cl.contract==='ضمان'?'warranty':cl.contract==='مدفوع'?'paid':'paid',
+          warranty: cl.warranty||false,
           total: cl.total_visits||0, completed: cl.completed||0,
           pending: cl.pending||0, parts: cl.needs_parts||0,
           wv: cl.warranty_visits||0
@@ -1686,16 +1687,19 @@ function renderTopClients(){
 async function saveClient(){
   var name=document.getElementById('cl-name').value.trim();
   if(!name){alert('Enter client name');return;}
-  var contract=document.getElementById('cl-contract').value;
+  var contractRaw=document.getElementById('cl-contract').value;
+  // Map contract to match DB CHECK constraint: 'عقد صيانة','ضمان','مدفوع','بدون عقد'
+  var contractMap={'contract':'عقد صيانة','warranty':'ضمان','paid':'مدفوع'};
+  var contractDB = contractMap[contractRaw] || 'بدون عقد';
   // Data for Supabase (DB columns)
   var dbData={
     name: name,
     type: document.getElementById('cl-type').value,
     location: document.getElementById('cl-loc').value,
     phone: document.getElementById('cl-phone').value,
-    contract: contract,
+    contract: contractDB,
     expiry: document.getElementById('cl-expiry').value || null,
-    warranty: contract==='warranty',
+    warranty: contractRaw==='warranty',
     total_visits: 0, completed: 0, pending: 0, needs_parts: 0,
     warranty_visits: 0, paid_visits: 0, contract_visits: 0,
     initials: name.slice(0,2).toUpperCase(),
@@ -1709,7 +1713,7 @@ async function saveClient(){
     type: dbData.type,
     loc: dbData.location,
     phone: dbData.phone,
-    contract: contract,
+    contract: contractRaw,
     warranty: dbData.warranty,
     color: '#1D4E89',
     bg: '#E6F1FB',
@@ -1919,7 +1923,7 @@ async function saveAndSign() {
         name: clientName,
         type: 'Unknown',
         location: document.getElementById('inp-location').value || '',
-        contract: visit.visit_type==='ضمان'?'warranty':visit.visit_type==='عقد'?'contract':'paid',
+        contract: visit.visit_type==='ضمان'?'ضمان':visit.visit_type==='عقد'?'عقد صيانة':'مدفوع',
         warranty: visit.visit_type==='ضمان',
         total_visits: 1, completed: 0, pending: 1,
         needs_parts: 0, warranty_visits: visit.visit_type==='ضمان'?1:0,
