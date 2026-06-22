@@ -1649,15 +1649,53 @@ function renderClientGrid(){
       +'<div style="display:flex;align-items:center;gap:8px;margin-bottom:6px"><div style="font-size:11px;color:#718096;min-width:65px">Pending</div><div style="flex:1;height:8px;background:#F0F4F8;border-radius:99px;overflow:hidden"><div style="height:100%;width:'+pp+'%;background:#C4680A;border-radius:99px"></div></div><div style="font-size:11px;font-weight:700;min-width:28px">'+pp+'%</div></div>'
       +'<div style="display:flex;align-items:center;gap:8px"><div style="font-size:11px;color:#718096;min-width:65px">Warranty</div><div style="flex:1;height:8px;background:#F0F4F8;border-radius:99px;overflow:hidden"><div style="height:100%;width:'+wp+'%;background:#1D4ED8;border-radius:99px"></div></div><div style="font-size:11px;font-weight:700;min-width:28px">'+c.wv+'</div></div></div>'
       +'<div style="display:flex;gap:6px;padding:10px 14px;border-top:1px solid #D9E2EC">'
-      +'<button onclick="go(\'visits\')" style="flex:1;padding:6px;border-radius:6px;font-size:11px;font-weight:600;cursor:pointer;border:1px solid #D9E2EC;background:#F8FAFC;color:#718096;font-family:Tajawal,sans-serif">Reports</button>'
-      +'<button style="flex:1;padding:6px;border-radius:6px;font-size:11px;font-weight:600;cursor:pointer;border:1px solid #D9E2EC;background:#F8FAFC;color:#718096;font-family:Tajawal,sans-serif">History</button>'
-      +'<button style="flex:1;padding:6px;border-radius:6px;font-size:11px;font-weight:600;cursor:pointer;border:1px solid #D9E2EC;background:#F8FAFC;color:#718096;font-family:Tajawal,sans-serif">Edit</button></div>';
+      +'<button onclick="viewClientReports('+c.id+')" style="flex:1;padding:6px;border-radius:6px;font-size:11px;font-weight:600;cursor:pointer;border:1px solid #D9E2EC;background:#F8FAFC;color:#718096;font-family:Tajawal,sans-serif">Reports</button>'
+      +'<button onclick="viewClientHistory('+c.id+')" style="flex:1;padding:6px;border-radius:6px;font-size:11px;font-weight:600;cursor:pointer;border:1px solid #D9E2EC;background:#F8FAFC;color:#718096;font-family:Tajawal,sans-serif">History</button>'
+      +'<button onclick="editClient('+c.id+')" style="flex:1;padding:6px;border-radius:6px;font-size:11px;font-weight:600;cursor:pointer;border:1px solid #D9E2EC;background:#F8FAFC;color:#718096;font-family:Tajawal,sans-serif">Edit</button></div>';
     g.appendChild(card);
   });
   updateClientStats();
 }
 
 function filterClients(q){cSrch=q;renderClientGrid();}
+
+function viewClientReports(id){
+  var cl = clientsData.find(function(x){ return x.id==id; });
+  if(!cl) return;
+  // Go to reports page and filter by client name
+  go('reports');
+  setTimeout(function(){
+    var el = document.getElementById('rf-client');
+    if(el){ el.value = cl.name; runReport(); }
+  }, 300);
+}
+
+function viewClientHistory(id){
+  var cl = clientsData.find(function(x){ return x.id==id; });
+  if(!cl) return;
+  // Go to visits and filter by client name
+  go('visits');
+  setTimeout(function(){
+    var el = document.getElementById('visSearch');
+    if(el){ el.value = cl.name; filterVis(cl.name); }
+  }, 300);
+}
+
+function editClient(id){
+  var cl = clientsData.find(function(x){ return x.id==id; });
+  if(!cl) return;
+  // Load client data into modal
+  document.getElementById('cl-name').value = cl.name || '';
+  document.getElementById('cl-loc').value = cl.loc || '';
+  document.getElementById('cl-phone').value = cl.phone || '';
+  var typeEl = document.getElementById('cl-type');
+  if(typeEl && cl.type) typeEl.value = cl.type;
+  var contractEl = document.getElementById('cl-contract');
+  if(contractEl) contractEl.value = cl.contract==='warranty'?'warranty':cl.contract==='contract'?'contract':'paid';
+  // Store ID for update
+  document.getElementById('cl-name').dataset.editId = id;
+  openMod('clientModal');
+}
 function setCF(f,b){cFil=f;document.querySelectorAll('#pg-clients .vtbar .ftab').forEach(function(x){x.style.background='';x.style.color='#718096';});b.style.background='#1D4E89';b.style.color='#fff';renderClientGrid();}
 function renderDonut(){
   var el=document.getElementById('donutChart');if(!el)return;
@@ -1685,8 +1723,35 @@ function renderTopClients(){
   });
 }
 async function saveClient(){
-  var name=document.getElementById('cl-name').value.trim();
+  var nameEl = document.getElementById('cl-name');
+  var name = nameEl.value.trim();
   if(!name){alert('Enter client name');return;}
+  var editId = nameEl.dataset.editId;
+  // If editing existing client
+  if(editId){
+    var existing = clientsData.find(function(c){ return c.id==editId; });
+    if(existing){
+      var contractRawE = document.getElementById('cl-contract').value;
+      var contractMapE = {'contract':'عقد صيانة','warranty':'ضمان','paid':'مدفوع'};
+      existing.name = name;
+      existing.loc = document.getElementById('cl-loc').value;
+      existing.phone = document.getElementById('cl-phone').value;
+      existing.type = document.getElementById('cl-type').value;
+      existing.contract = contractRawE;
+      existing.warranty = contractRawE==='warranty';
+      await dbSave('clients', {
+        id: existing.id, name: existing.name,
+        location: existing.loc, phone: existing.phone,
+        type: existing.type, contract: contractMapE[contractRawE]||'بدون عقد',
+        warranty: existing.warranty
+      });
+      nameEl.dataset.editId = '';
+      closeMod('clientModal');
+      renderClientGrid();
+      alert('✅ Client updated!');
+      return;
+    }
+  }
   var contractRaw=document.getElementById('cl-contract').value;
   // Map contract to match DB CHECK constraint: 'عقد صيانة','ضمان','مدفوع','بدون عقد'
   var contractMap={'contract':'عقد صيانة','warranty':'ضمان','paid':'مدفوع'};
