@@ -940,7 +940,8 @@ async function loadAllFromDB(){
   try {
     // Load clients
     var r2 = await _sb.from('clients').select('*').order('name');
-    if(r2.data && r2.data.length){
+    if(r2.data){
+      // Always load from DB (even if empty - overrides hardcoded defaults)
       clientsData = r2.data.map(function(cl){
         return {
           id: cl.id, name: cl.name, type: cl.type||'',
@@ -953,6 +954,8 @@ async function loadAllFromDB(){
         };
       });
       console.log('Loaded', clientsData.length, 'clients from DB');
+      // Update autocomplete with DB clients
+      acData.client = clientsData.map(function(cl){ return cl.name; });
     }
   } catch(e){ console.log('loadClients error:', e); }
 
@@ -1906,10 +1909,46 @@ async function saveVisitDraft() {
 
 async function saveAndSign() {
   var visit = collectVisitData();
+  
+  // Auto-add client to DB if not already in clients list
+  var clientName = visit.client;
+  if(clientName && clientName !== 'Unknown'){
+    var exists = clientsData.find(function(c){ return c.name.toLowerCase()===clientName.toLowerCase(); });
+    if(!exists){
+      var newClient = {
+        name: clientName,
+        type: 'Unknown',
+        location: document.getElementById('inp-location').value || '',
+        contract: visit.visit_type==='ضمان'?'warranty':visit.visit_type==='عقد'?'contract':'paid',
+        warranty: visit.visit_type==='ضمان',
+        total_visits: 1, completed: 0, pending: 1,
+        needs_parts: 0, warranty_visits: visit.visit_type==='ضمان'?1:0,
+        paid_visits: 0, contract_visits: 0,
+        initials: clientName.slice(0,2),
+        color: '#1D4E89', bg: '#E6F1FB'
+      };
+      var savedClient = await dbSave('clients', newClient);
+      var localClient = {
+        id: (savedClient&&savedClient[0]) ? savedClient[0].id : Date.now(),
+        name: clientName,
+        type: 'Unknown',
+        loc: newClient.location,
+        color: '#1D4E89', bg: '#E6F1FB',
+        init: clientName.slice(0,2),
+        contract: newClient.contract,
+        warranty: newClient.warranty,
+        total: 1, completed: 0, pending: 1, parts: 0, wv: 0
+      };
+      clientsData.push(localClient);
+      // Update autocomplete
+      if(!acData.client.includes(clientName)) acData.client.push(clientName);
+      console.log('Auto-added new client:', clientName);
+    }
+  }
+
   var result = await dbSave('visits', visit);
   if(result && result[0]){
     currentVisitId = result[0].id;
-    // Add to local visData for immediate display
     var localVisit = Object.assign({}, visit, {
       id: result[0].id,
       equip: visit.equipment,
