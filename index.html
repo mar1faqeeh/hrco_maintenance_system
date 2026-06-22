@@ -532,11 +532,11 @@ html,body{height:100%;font-family:Tajawal,sans-serif;font-size:14px;background:#
 <div id="pg-clients" style="display:none">
   <div class="ph"><div><div class="pt" id="t-clients-pg">Clients</div><div class="ps" id="t-clients-sub">Visit analytics per client</div></div><button class="btn btn-p" onclick="openMod('clientModal')"><i class="ti ti-building-plus"></i><span id="t-add-client">Add Client</span></button></div>
   <div class="sg sg-5">
-    <div class="sc"><div class="si" style="background:#E6F1FB"><i class="ti ti-building" style="color:#1D4E89"></i></div><div class="sv">8</div><div class="sl" id="t-total-clients">Total Clients</div></div>
-    <div class="sc"><div class="si" style="background:#EAF3DE"><i class="ti ti-circle-check" style="color:#2D7D3A"></i></div><div class="sv">54</div><div class="sl" id="t-comp-vis">Completed Visits</div></div>
-    <div class="sc"><div class="si" style="background:#FDF0E0"><i class="ti ti-clock-pause" style="color:#C4680A"></i></div><div class="sv">13</div><div class="sl" id="t-pend-vis">Pending Visits</div></div>
-    <div class="sc"><div class="si" style="background:#DBEAFE"><i class="ti ti-shield-check" style="color:#1D4ED8"></i></div><div class="sv">5</div><div class="sl" id="t-warr-clients">Warranty Clients</div></div>
-    <div class="sc"><div class="si" style="background:#EAF3DE"><i class="ti ti-file-invoice" style="color:#2D7D3A"></i></div><div class="sv">6</div><div class="sl" id="t-active-con">Active Contracts</div></div>
+    <div class="sc" onclick="filterClients('');setCF('all',document.querySelector('#pg-clients .vtbar .ftab'))" style="cursor:pointer"><div class="si" style="background:#E6F1FB"><i class="ti ti-building" style="color:#1D4E89"></i></div><div class="sv" id="cl-stat-total">8</div><div class="sl" id="t-total-clients">Total Clients</div></div>
+    <div class="sc" onclick="go('visits');setTimeout(function(){setVF('Completed',document.getElementById('vf-done'));},300)" style="cursor:pointer"><div class="si" style="background:#EAF3DE"><i class="ti ti-circle-check" style="color:#2D7D3A"></i></div><div class="sv" id="cl-stat-completed">54</div><div class="sl" id="t-comp-vis">Completed Visits</div></div>
+    <div class="sc" onclick="go('pending')" style="cursor:pointer"><div class="si" style="background:#FDF0E0"><i class="ti ti-clock-pause" style="color:#C4680A"></i></div><div class="sv" id="cl-stat-pending">13</div><div class="sl" id="t-pend-vis">Pending Visits</div></div>
+    <div class="sc" onclick="setCF('warranty',document.querySelectorAll('#pg-clients .vtbar .ftab')[2])" style="cursor:pointer"><div class="si" style="background:#DBEAFE"><i class="ti ti-shield-check" style="color:#1D4ED8"></i></div><div class="sv" id="cl-stat-warranty">5</div><div class="sl" id="t-warr-clients">Warranty Clients</div></div>
+    <div class="sc" onclick="setCF('contract',document.querySelectorAll('#pg-clients .vtbar .ftab')[1])" style="cursor:pointer"><div class="si" style="background:#EAF3DE"><i class="ti ti-file-invoice" style="color:#2D7D3A"></i></div><div class="sv" id="cl-stat-contracts">6</div><div class="sl" id="t-active-con">Active Contracts</div></div>
   </div>
   <div class="vtbar">
     <div class="sbox" style="max-width:280px"><i class="ti ti-search"></i><input type="text" placeholder="Search clients..." oninput="filterClients(this.value)"></div>
@@ -1588,6 +1588,71 @@ async function savePart(){
   renderInvList();
   alert('✅ Part saved!');
 }
+// ══════════════════════════════════════
+// CLIENTS DATA & RENDERING
+// ══════════════════════════════════════
+var clientsData = [
+  {id:1,name:'Ritz Carlton',type:'Hotel',loc:'Riyadh',color:'#1D4E89',bg:'#E6F1FB',init:'RC',contract:'contract',warranty:true,total:32,completed:28,pending:3,parts:1,wv:8},
+  {id:2,name:'Al-Aseel Restaurant',type:'Restaurant',loc:'Riyadh',color:'#2D7D3A',bg:'#EAF3DE',init:'AA',contract:'contract',warranty:false,total:18,completed:17,pending:1,parts:0,wv:0},
+  {id:3,name:"McDonald's",type:'Chain',loc:'Riyadh',color:'#C4680A',bg:'#FDF0E0',init:'MC',contract:'contract',warranty:true,total:45,completed:40,pending:4,parts:2,wv:12},
+  {id:4,name:'Hilton Hotel',type:'Hotel',loc:'Riyadh',color:'#7C3AED',bg:'#EDE9FE',init:'HH',contract:'warranty',warranty:true,total:22,completed:18,pending:4,parts:2,wv:15},
+  {id:5,name:'Burger King',type:'Chain',loc:'Riyadh',color:'#BE185D',bg:'#FCE7F3',init:'BK',contract:'paid',warranty:false,total:14,completed:11,pending:3,parts:1,wv:0},
+  {id:6,name:'King Faisal Hospital',type:'Hospital',loc:'Riyadh',color:'#0891B2',bg:'#CFFAFE',init:'KF',contract:'contract',warranty:true,total:28,completed:26,pending:2,parts:1,wv:10},
+  {id:7,name:'KFC Saudi Arabia',type:'Chain',loc:'Riyadh',color:'#C0392B',bg:'#FCEBEB',init:'KC',contract:'contract',warranty:false,total:19,completed:17,pending:2,parts:0,wv:0},
+  {id:8,name:'King Khalid Airport',type:'Airport',loc:'Riyadh',color:'#047857',bg:'#D1FAE5',init:'KA',contract:'contract',warranty:true,total:11,completed:10,pending:1,parts:0,wv:4}
+];
+var cSrch='', cFil='all';
+
+function updateClientStats(){
+  var total = clientsData.length;
+  var completed = clientsData.reduce(function(s,c){return s+(c.completed||0);},0);
+  var pending = clientsData.reduce(function(s,c){return s+(c.pending||0);},0);
+  var warranty = clientsData.filter(function(c){return c.warranty;}).length;
+  var contracts = clientsData.filter(function(c){return c.contract==='contract';}).length;
+
+  var e1=document.getElementById('cl-stat-total'); if(e1) e1.textContent=total;
+  var e2=document.getElementById('cl-stat-completed'); if(e2) e2.textContent=completed;
+  var e3=document.getElementById('cl-stat-pending'); if(e3) e3.textContent=pending;
+  var e4=document.getElementById('cl-stat-warranty'); if(e4) e4.textContent=warranty;
+  var e5=document.getElementById('cl-stat-contracts'); if(e5) e5.textContent=contracts;
+}
+
+function renderClientGrid(){
+  var g=document.getElementById('clientGrid');if(!g)return;g.innerHTML='';
+  var fl=clientsData.filter(function(c){
+    return(!cSrch||c.name.toLowerCase().includes(cSrch.toLowerCase()))
+      &&(cFil==='all'||(cFil==='contract'&&c.contract==='contract')||(cFil==='warranty'&&c.warranty)||(cFil==='paid'&&c.contract==='paid'));
+  });
+  fl.forEach(function(c){
+    var cp=Math.round((c.completed/Math.max(c.total,1))*100);
+    var pp=Math.round((c.pending/Math.max(c.total,1))*100);
+    var wp=Math.round((c.wv/Math.max(c.total,1))*100);
+    var ctag={'contract':'background:#EAF3DE;color:#2D7D3A','warranty':'background:#DBEAFE;color:#1D4ED8','paid':'background:#F1F5F9;color:#64748B'}[c.contract]||'background:#F1F5F9;color:#64748B';
+    var card=document.createElement('div');
+    card.style.cssText='background:#fff;border:1px solid #D9E2EC;border-radius:12px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,.06)';
+    card.innerHTML='<div style="padding:14px 16px 10px;border-bottom:1px solid #D9E2EC;display:flex;align-items:flex-start;gap:12px">'
+      +'<div style="width:44px;height:44px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:16px;font-weight:700;flex-shrink:0;background:'+c.bg+';color:'+c.color+'">'+c.init+'</div>'
+      +'<div style="flex:1;min-width:0"><div style="font-size:14px;font-weight:700">'+c.name+'</div><div style="font-size:11px;color:#718096;margin-top:2px">'+c.type+' · '+c.loc+'</div>'
+      +'<div style="display:flex;gap:5px;margin-top:5px;flex-wrap:wrap"><span style="font-size:10px;padding:2px 7px;border-radius:99px;font-weight:700;display:inline-flex;align-items:center;gap:3px;'+ctag+'"><i class="ti ti-file-invoice" style="font-size:10px"></i>'+c.contract+'</span>'
+      +(c.warranty?'<span style="font-size:10px;padding:2px 7px;border-radius:99px;font-weight:700;background:#DBEAFE;color:#1D4ED8">Warranty</span>':'')+'</div></div></div>'
+      +'<div style="display:grid;grid-template-columns:repeat(4,1fr);border-bottom:1px solid #D9E2EC">'
+      +'<div style="padding:10px 8px;text-align:center;border-left:1px solid #D9E2EC"><div style="font-size:15px;font-weight:700">'+c.total+'</div><div style="font-size:10px;color:#718096">Total</div></div>'
+      +'<div style="padding:10px 8px;text-align:center;border-left:1px solid #D9E2EC"><div style="font-size:15px;font-weight:700;color:#2D7D3A">'+c.completed+'</div><div style="font-size:10px;color:#718096">Done</div></div>'
+      +'<div style="padding:10px 8px;text-align:center;border-left:1px solid #D9E2EC"><div style="font-size:15px;font-weight:700;color:#C4680A">'+c.pending+'</div><div style="font-size:10px;color:#718096">Pending</div></div>'
+      +'<div style="padding:10px 8px;text-align:center;border-left:1px solid #D9E2EC"><div style="font-size:15px;font-weight:700;color:#C0392B">'+c.parts+'</div><div style="font-size:10px;color:#718096">Parts</div></div></div>'
+      +'<div style="padding:12px 14px">'
+      +'<div style="display:flex;align-items:center;gap:8px;margin-bottom:6px"><div style="font-size:11px;color:#718096;min-width:65px">Completed</div><div style="flex:1;height:8px;background:#F0F4F8;border-radius:99px;overflow:hidden"><div style="height:100%;width:'+cp+'%;background:#2D7D3A;border-radius:99px"></div></div><div style="font-size:11px;font-weight:700;min-width:28px">'+cp+'%</div></div>'
+      +'<div style="display:flex;align-items:center;gap:8px;margin-bottom:6px"><div style="font-size:11px;color:#718096;min-width:65px">Pending</div><div style="flex:1;height:8px;background:#F0F4F8;border-radius:99px;overflow:hidden"><div style="height:100%;width:'+pp+'%;background:#C4680A;border-radius:99px"></div></div><div style="font-size:11px;font-weight:700;min-width:28px">'+pp+'%</div></div>'
+      +'<div style="display:flex;align-items:center;gap:8px"><div style="font-size:11px;color:#718096;min-width:65px">Warranty</div><div style="flex:1;height:8px;background:#F0F4F8;border-radius:99px;overflow:hidden"><div style="height:100%;width:'+wp+'%;background:#1D4ED8;border-radius:99px"></div></div><div style="font-size:11px;font-weight:700;min-width:28px">'+c.wv+'</div></div></div>'
+      +'<div style="display:flex;gap:6px;padding:10px 14px;border-top:1px solid #D9E2EC">'
+      +'<button onclick="go(\'visits\')" style="flex:1;padding:6px;border-radius:6px;font-size:11px;font-weight:600;cursor:pointer;border:1px solid #D9E2EC;background:#F8FAFC;color:#718096;font-family:Tajawal,sans-serif">Reports</button>'
+      +'<button style="flex:1;padding:6px;border-radius:6px;font-size:11px;font-weight:600;cursor:pointer;border:1px solid #D9E2EC;background:#F8FAFC;color:#718096;font-family:Tajawal,sans-serif">History</button>'
+      +'<button style="flex:1;padding:6px;border-radius:6px;font-size:11px;font-weight:600;cursor:pointer;border:1px solid #D9E2EC;background:#F8FAFC;color:#718096;font-family:Tajawal,sans-serif">Edit</button></div>';
+    g.appendChild(card);
+  });
+  updateClientStats();
+}
+
 function filterClients(q){cSrch=q;renderClientGrid();}
 function setCF(f,b){cFil=f;document.querySelectorAll('#pg-clients .vtbar .ftab').forEach(function(x){x.style.background='';x.style.color='#718096';});b.style.background='#1D4E89';b.style.color='#fff';renderClientGrid();}
 function renderDonut(){
