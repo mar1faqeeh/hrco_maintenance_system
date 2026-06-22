@@ -432,10 +432,10 @@ html,body{height:100%;font-family:Tajawal,sans-serif;font-size:14px;background:#
     <div class="card">
       <div class="ch"><div class="ct"><i class="ti ti-clipboard-list"></i><span id="t-summary">Visit Summary</span></div></div>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;padding:14px">
-        <div style="background:#F8FAFC;border:1px solid #D9E2EC;border-radius:8px;padding:10px 14px"><div style="font-size:11px;color:#718096;margin-bottom:3px" id="t-sum-client">Client</div><div style="font-size:14px;font-weight:600">Ritz Carlton</div></div>
-        <div style="background:#F8FAFC;border:1px solid #D9E2EC;border-radius:8px;padding:10px 14px"><div style="font-size:11px;color:#718096;margin-bottom:3px" id="t-sum-tasks">Tasks Done</div><div style="font-size:15px;font-weight:700">2 / 3</div></div>
-        <div style="background:#F8FAFC;border:1px solid #D9E2EC;border-radius:8px;padding:10px 14px"><div style="font-size:11px;color:#718096;margin-bottom:3px" id="t-sum-dur">Duration</div><div style="font-size:15px;font-weight:700">1h 45m</div></div>
-        <div style="background:#F8FAFC;border:1px solid #D9E2EC;border-radius:8px;padding:10px 14px"><div style="font-size:11px;color:#718096;margin-bottom:3px" id="t-sum-parts">Missing Parts</div><div style="font-size:15px;font-weight:700;color:#C0392B">1</div></div>
+        <div style="background:#F8FAFC;border:1px solid #D9E2EC;border-radius:8px;padding:10px 14px"><div style="font-size:11px;color:#718096;margin-bottom:3px" id="t-sum-client">Client</div><div style="font-size:14px;font-weight:600" id="sum-client">—</div></div>
+        <div style="background:#F8FAFC;border:1px solid #D9E2EC;border-radius:8px;padding:10px 14px"><div style="font-size:11px;color:#718096;margin-bottom:3px" id="t-sum-tasks">Tasks Done</div><div style="font-size:15px;font-weight:700" id="sum-tasks">0 / 0</div></div>
+        <div style="background:#F8FAFC;border:1px solid #D9E2EC;border-radius:8px;padding:10px 14px"><div style="font-size:11px;color:#718096;margin-bottom:3px" id="t-sum-dur">Duration</div><div style="font-size:15px;font-weight:700" id="sum-dur">—</div></div>
+        <div style="background:#F8FAFC;border:1px solid #D9E2EC;border-radius:8px;padding:10px 14px"><div style="font-size:11px;color:#718096;margin-bottom:3px" id="t-sum-parts">Missing Parts</div><div style="font-size:15px;font-weight:700;color:#C0392B" id="sum-parts">0</div></div>
       </div>
       <div style="margin:0 14px 10px;background:#FDF0E0;border:1px solid #FAC775;border-radius:8px;padding:10px 12px;display:flex;gap:8px">
         <i class="ti ti-alert-triangle" style="color:#C4680A;flex-shrink:0;margin-top:1px;font-size:16px"></i>
@@ -1922,6 +1922,27 @@ function updateDashStats(){
   var e5=document.getElementById('dash-comp-pct'); if(e5) e5.textContent=pct+'%';
 }
 
+function updateSignatureSummary(){
+  // Pull data from the new visit form
+  var clientName = (document.getElementById('inp-client')||{}).value || '—';
+  var tasks = document.querySelectorAll('#tasklist input[type=checkbox]');
+  var checkedTasks = document.querySelectorAll('#tasklist input[type=checkbox]:checked');
+  var partsCount = selParts ? selParts.length : 0;
+
+  // Calculate duration (time since page opened - approximate)
+  var dur = '—';
+  if(window._visitStartTime){
+    var mins = Math.round((Date.now() - window._visitStartTime) / 60000);
+    var h = Math.floor(mins/60), m = mins%60;
+    dur = (h>0?h+'h ':'')+m+'m';
+  }
+
+  var sc = document.getElementById('sum-client'); if(sc) sc.textContent = clientName;
+  var st = document.getElementById('sum-tasks'); if(st) st.textContent = checkedTasks.length + ' / ' + tasks.length;
+  var sd = document.getElementById('sum-dur'); if(sd) sd.textContent = dur;
+  var sp = document.getElementById('sum-parts'); if(sp){ sp.textContent = partsCount; sp.style.color = partsCount>0?'#C0392B':'#2D7D3A'; }
+}
+
 function resetNewVisitForm(){
   // Clear all inputs
   ['inp-client','inp-location','inp-serial','inp-model','inp-fault','inp-part'].forEach(function(id){
@@ -1941,6 +1962,7 @@ function resetNewVisitForm(){
   if(micOn&&_recog){try{_recog.stop();}catch(e){}}
   micOn=false;_updateMicUI(false);
   currentVisitId=null;
+  window._visitStartTime = Date.now(); // track when visit started
 }
 
 function populateTechSelect(){
