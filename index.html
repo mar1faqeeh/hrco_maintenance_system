@@ -1019,13 +1019,18 @@ function go(pg){
   var ma=document.getElementById('main');if(ma)ma.scrollTop=0;
   if(window.innerWidth<960){document.getElementById('sidebar').style.right='-240px';document.getElementById('ovl').style.display='none';}
   }catch(e){console.log('go() error:',e);}
-  if(pg==='signature')setTimeout(function(){initSig('tech');initSig('client');},80);
+  if(pg==='signature') setTimeout(function(){initSig('tech');initSig('client');},80);
+  if(pg==='newvisit'){
+    window._visitStartTime = Date.now();
+    populateTechSelect();
+    resetNewVisitForm();
+  }
   if(pg==='technicians'){renderTechGrid();renderTechCharts();}
   if(pg==='parts'){renderInvList();renderHistList();}
   if(pg==='clients'){renderClientGrid();renderDonut();renderTopClients();}
-  if(pg==='reports')runReport();
-  if(pg==='visits')renderVisits('all','');
-  if(pg==='archive')loadArchive();
+  if(pg==='reports') runReport();
+  if(pg==='visits') renderVisits('all','');
+  if(pg==='archive') loadArchive();
   if(pg==='settings'){renderUsersList();checkDBStatus();}
 }
 function setBn(b){document.querySelectorAll('.bn').forEach(function(x){x.style.color='#A0AEC0';});b.style.color='#1D4E89';}
@@ -2064,29 +2069,35 @@ async function saveAndSign() {
   var _partsN = selParts ? selParts.length : 0;
   // Always calculate duration; if no start time, show actual elapsed or "< 1m"
   var _now = Date.now();
-  var _startT = window._visitStartTime || _now;
-  var _elapsed = Math.round((_now - _startT) / 60000);
-  var _mins = _elapsed < 1 ? 1 : _elapsed; // minimum 1 minute
-  var _h = Math.floor(_mins/60), _m = _mins%60;
-  var _dur = (_h>0 ? _h+'h ' : '') + _m+'m';
+  var _startT = window._visitStartTime;
+  var _dur;
+  if(!_startT){
+    _dur = '< 1m';
+  } else {
+    var _elapsed = Math.round((_now - _startT) / 60000);
+    var _mins = _elapsed < 1 ? 1 : _elapsed;
+    var _h = Math.floor(_mins/60), _m = _mins%60;
+    _dur = (_h>0 ? _h+'h ' : '') + _m+'m';
+  }
 
   // Set values in summary BEFORE page switch
   var _sc=document.getElementById('sum-client'); if(_sc) _sc.textContent=(_client&&_client.value)||'—';
   var _st=document.getElementById('sum-tasks');  if(_st) _st.textContent=_doneTasks.length+' / '+_allTasks.length;
   var _sd=document.getElementById('sum-dur');    if(_sd) _sd.textContent=_dur;
+  // Re-read selParts at the moment of clicking (most current value)
+  var _finalParts = (typeof selParts !== 'undefined' && selParts) ? selParts.slice() : [];
+  var _partsNFinal = _finalParts.length;
   var _sp=document.getElementById('sum-parts');
-  if(_sp){_sp.textContent=_partsN; _sp.style.color=_partsN>0?'#C0392B':'#2D7D3A';}
+  if(_sp){_sp.textContent=_partsNFinal; _sp.style.color=_partsNFinal>0?'#C0392B':'#2D7D3A';}
   var _spl=document.getElementById('sum-parts-list');
   if(_spl){
     _spl.innerHTML='';
-    if(selParts && selParts.length){
-      selParts.forEach(function(p){
-        var tag=document.createElement('span');
-        tag.textContent=p;
-        tag.style.cssText='background:#FCEBEB;color:#C0392B;border-radius:99px;padding:2px 8px;font-size:11px;font-weight:500';
-        _spl.appendChild(tag);
-      });
-    }
+    _finalParts.forEach(function(p){
+      var tag=document.createElement('span');
+      tag.textContent=p;
+      tag.style.cssText='background:#FCEBEB;color:#C0392B;border-radius:99px;padding:2px 8px;font-size:11px;font-weight:500;display:inline-block;margin:1px';
+      _spl.appendChild(tag);
+    });
   }
 
   go('signature');
