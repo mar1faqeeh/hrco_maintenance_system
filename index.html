@@ -1087,7 +1087,7 @@ function renderVisits(f,q){
     row.innerHTML='<div class="tc"><div style="font-weight:500">'+(r.client||'—')+'</div><div class="tc2">'+(r.equipment||r.equip||'—')+'</div></div>'
       +'<div class="tc">'+(r.tech||'—')+'</div>'
       +'<div class="tc"><span class="bdg b-i" style="font-size:10px">'+tlbl+'</span></div>'
-      +'<div class="tc tc2">'+(r.date||'—')+'</div>'
+      +'<div class="tc tc2"><div>'+(r.date||'—')+'</div><div style="font-size:10px;color:#A0AEC0">'+(r.time||'')+'</div></div>'
       +'<div class="tc"><span class="bdg '+stb+'">'+(r.status||'—')+'</span></div>'
       +'<div style="display:flex;gap:4px">'
       +'<button class="rbtn" onclick="viewVisit('+rid+')" title="View"><i class="ti ti-eye"></i></button>'
@@ -2062,9 +2062,13 @@ async function saveAndSign() {
   var _allTasks = document.querySelectorAll('#tasklist input[type=checkbox]');
   var _doneTasks = document.querySelectorAll('#tasklist input[type=checkbox]:checked');
   var _partsN = selParts ? selParts.length : 0;
-  var _mins = window._visitStartTime ? Math.max(1, Math.round((Date.now()-window._visitStartTime)/60000)) : 0;
+  // Always calculate duration; if no start time, show actual elapsed or "< 1m"
+  var _now = Date.now();
+  var _startT = window._visitStartTime || _now;
+  var _elapsed = Math.round((_now - _startT) / 60000);
+  var _mins = _elapsed < 1 ? 1 : _elapsed; // minimum 1 minute
   var _h = Math.floor(_mins/60), _m = _mins%60;
-  var _dur = _mins > 0 ? (_h>0?_h+'h ':'')+_m+'m' : '—';
+  var _dur = (_h>0 ? _h+'h ' : '') + _m+'m';
 
   // Set values in summary BEFORE page switch
   var _sc=document.getElementById('sum-client'); if(_sc) _sc.textContent=(_client&&_client.value)||'—';
@@ -2090,7 +2094,8 @@ function collectVisitData() {
     fault:         document.getElementById('inp-fault').value,
     notes:         document.getElementById('notesArea').value,
     parts:         selParts,
-    date:          new Date().toISOString().split('T')[0]
+    date:          new Date().toISOString().split('T')[0],
+    time:          new Date().toLocaleTimeString('ar-SA', {hour:'2-digit', minute:'2-digit'})
   };
 }
 
