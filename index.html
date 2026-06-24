@@ -979,7 +979,7 @@ async function loadAllFromDB(){
           equip: v.equipment||v.equip||'—', equipment: v.equipment||'',
           type: v.visit_type||v.type||'paid',
           status: v.status==='مكتملة'?'Completed':v.status==='معلقة'?'Pending':v.status||'Pending',
-          date: v.date||'', parts: v.parts||[], notes: v.notes||'',
+          date: v.date||'', time: v.time||'', parts: v.parts||[], notes: v.notes||'',
           location: v.location||''
         };
       });
@@ -2095,7 +2095,7 @@ function collectVisitData() {
     notes:         document.getElementById('notesArea').value,
     parts:         selParts,
     date:          new Date().toISOString().split('T')[0],
-    time:          new Date().toLocaleTimeString('ar-SA', {hour:'2-digit', minute:'2-digit'})
+    time:          new Date().toLocaleTimeString('en-GB', {hour:'2-digit', minute:'2-digit'})
   };
 }
 
