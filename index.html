@@ -2057,14 +2057,21 @@ async function saveAndSign() {
     visData.unshift(localVisit);
     rData = visData.map(function(v,i){ return Object.assign({id:i+1}, v, {parts:v.parts||[]}); });
   }
-  // Capture summary data BEFORE go() hides the form fields
-  window._sigSummary = {
-    client: document.getElementById('inp-client').value || '—',
-    tasksDone: document.querySelectorAll('#tasklist input[type=checkbox]:checked').length,
-    tasksTotal: document.querySelectorAll('#tasklist input[type=checkbox]').length,
-    partsCount: selParts ? selParts.length : 0,
-    startTime: window._visitStartTime
-  };
+  // Write values DIRECTLY to summary elements before navigating
+  var _client = document.getElementById('inp-client');
+  var _allTasks = document.querySelectorAll('#tasklist input[type=checkbox]');
+  var _doneTasks = document.querySelectorAll('#tasklist input[type=checkbox]:checked');
+  var _partsN = selParts ? selParts.length : 0;
+  var _mins = window._visitStartTime ? Math.max(1, Math.round((Date.now()-window._visitStartTime)/60000)) : 0;
+  var _h = Math.floor(_mins/60), _m = _mins%60;
+  var _dur = _mins > 0 ? (_h>0?_h+'h ':'')+_m+'m' : '—';
+
+  // Set values in summary BEFORE page switch
+  var _sc=document.getElementById('sum-client'); if(_sc) _sc.textContent=(_client&&_client.value)||'—';
+  var _st=document.getElementById('sum-tasks');  if(_st) _st.textContent=_doneTasks.length+' / '+_allTasks.length;
+  var _sd=document.getElementById('sum-dur');    if(_sd) _sd.textContent=_dur;
+  var _sp=document.getElementById('sum-parts');  if(_sp){_sp.textContent=_partsN; _sp.style.color=_partsN>0?'#C0392B':'#2D7D3A';}
+
   go('signature');
 }
 
