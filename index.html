@@ -371,7 +371,14 @@ html,body{height:100%;font-family:Tajawal,sans-serif;font-size:14px;background:#
       </div>
       <div class="field"><label id="t-lbl-fault">Fault Description</label><input type="text" id="inp-fault" placeholder="Fault..."></div>
       <div class="field"><label id="t-lbl-parts">Required Spare Parts</label>
-        <input type="text" id="inp-part" placeholder="Add part..." onkeydown="if(event.key==='Enter'){addPart();event.preventDefault()}">
+        <div style="position:relative"><div style="display:flex;gap:6px">
+          <input type="text" id="inp-part" placeholder="Add part..." 
+            onkeydown="if(event.key==='Enter'){addPart();event.preventDefault()}" oninput="showPartAC(this.value)"
+            style="flex:1">
+          <button onclick="addPart()" style="padding:8px 14px;background:#1D4E89;color:#fff;border:none;border-radius:8px;cursor:pointer;font-size:13px;font-weight:700;font-family:inherit;flex-shrink:0">
+            <i class="ti ti-plus"></i>
+          </button>
+        </div>
         <div id="parts-tags" style="display:flex;flex-wrap:wrap;gap:5px;margin-top:6px"></div>
       </div>
     </div>
@@ -1431,7 +1438,37 @@ function triggerAutoTranslate(){
 }
 function addTask(){var txt=prompt(t('addTask')+':');if(txt){var d=document.createElement('div');d.style.cssText='display:flex;align-items:center;gap:10px;padding:8px 12px;background:#F8FAFC;border:1px solid #D9E2EC;border-radius:8px';d.innerHTML='<input type="checkbox"><span>'+txt+'</span>';document.getElementById('tasklist').appendChild(d);}}
 var selParts=[];
-function addPart(){var v=document.getElementById('inp-part').value.trim();if(!v)return;if(!selParts.includes(v))selParts.push(v);document.getElementById('inp-part').value='';renderTags();}
+function addPart(){
+  var v=document.getElementById('inp-part').value.trim();
+  if(!v) return;
+  if(!selParts.includes(v)) selParts.push(v);
+  document.getElementById('inp-part').value='';
+  var dd=document.getElementById('dd-partAC');
+  if(dd) dd.style.display='none';
+  renderTags();
+}
+
+function showPartAC(val){
+  var dd=document.getElementById('dd-partAC');
+  if(!dd) return;
+  if(!val){dd.style.display='none';return;}
+  var sugg=partsData.filter(function(p){return p.name.toLowerCase().includes(val.toLowerCase());}).slice(0,5);
+  if(!sugg.length){dd.style.display='none';return;}
+  dd.style.cssText='display:block;position:absolute;background:#fff;border:1px solid #D9E2EC;border-radius:8px;box-shadow:0 4px 16px rgba(0,0,0,.1);z-index:50;width:100%;max-height:180px;overflow-y:auto';
+  dd.innerHTML='';
+  sugg.forEach(function(p){
+    var item=document.createElement('div');
+    item.textContent=p.name;
+    item.style.cssText='padding:8px 12px;cursor:pointer;font-size:13px;border-bottom:1px solid #F0F4F8';
+    item.onmouseover=function(){this.style.background='#F0F4F8';};
+    item.onmouseout=function(){this.style.background='#fff';};
+    item.onclick=function(){
+      document.getElementById('inp-part').value=p.name;
+      addPart();
+    };
+    dd.appendChild(item);
+  });
+}
 function renderTags(){var w=document.getElementById('parts-tags');if(!w)return;w.innerHTML='';selParts.forEach(function(p,i){var t2=document.createElement('div');t2.style.cssText='display:inline-flex;align-items:center;gap:4px;background:#E6F1FB;color:#1D4E89;border-radius:99px;padding:3px 10px;font-size:12px';t2.innerHTML=p+'<button onclick="selParts.splice('+i+',1);renderTags()" style="background:none;border:none;color:#1D4E89;cursor:pointer;font-size:14px;padding:0">×</button>';w.appendChild(t2);});}
 function handleCam(field,inp){if(!inp.files||!inp.files[0])return;var fr=new FileReader();fr.onload=function(e){document.getElementById('inp-'+field).value='SN-'+Math.random().toString(36).substr(2,8).toUpperCase();};fr.readAsDataURL(inp.files[0]);}
 
