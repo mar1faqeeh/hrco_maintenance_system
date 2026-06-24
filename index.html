@@ -435,7 +435,7 @@ html,body{height:100%;font-family:Tajawal,sans-serif;font-size:14px;background:#
         <div style="background:#F8FAFC;border:1px solid #D9E2EC;border-radius:8px;padding:10px 14px"><div style="font-size:11px;color:#718096;margin-bottom:3px" id="t-sum-client">Client</div><div style="font-size:14px;font-weight:600" id="sum-client">—</div></div>
         <div style="background:#F8FAFC;border:1px solid #D9E2EC;border-radius:8px;padding:10px 14px"><div style="font-size:11px;color:#718096;margin-bottom:3px" id="t-sum-tasks">Tasks Done</div><div style="font-size:15px;font-weight:700" id="sum-tasks">0 / 0</div></div>
         <div style="background:#F8FAFC;border:1px solid #D9E2EC;border-radius:8px;padding:10px 14px"><div style="font-size:11px;color:#718096;margin-bottom:3px" id="t-sum-dur">Duration</div><div style="font-size:15px;font-weight:700" id="sum-dur">—</div></div>
-        <div style="background:#F8FAFC;border:1px solid #D9E2EC;border-radius:8px;padding:10px 14px"><div style="font-size:11px;color:#718096;margin-bottom:3px" id="t-sum-parts">Missing Parts</div><div style="font-size:15px;font-weight:700;color:#C0392B" id="sum-parts">0</div></div>
+        <div style="background:#F8FAFC;border:1px solid #D9E2EC;border-radius:8px;padding:10px 14px"><div style="font-size:11px;color:#718096;margin-bottom:3px" id="t-sum-parts">Missing Parts</div><div style="font-size:15px;font-weight:700;color:#C0392B" id="sum-parts">0</div><div id="sum-parts-list" style="margin-top:6px;display:flex;flex-wrap:wrap;gap:4px"></div></div>
       </div>
       <div style="margin:0 14px 10px;background:#FDF0E0;border:1px solid #FAC775;border-radius:8px;padding:10px 12px;display:flex;gap:8px">
         <i class="ti ti-alert-triangle" style="color:#C4680A;flex-shrink:0;margin-top:1px;font-size:16px"></i>
@@ -2074,7 +2074,20 @@ async function saveAndSign() {
   var _sc=document.getElementById('sum-client'); if(_sc) _sc.textContent=(_client&&_client.value)||'—';
   var _st=document.getElementById('sum-tasks');  if(_st) _st.textContent=_doneTasks.length+' / '+_allTasks.length;
   var _sd=document.getElementById('sum-dur');    if(_sd) _sd.textContent=_dur;
-  var _sp=document.getElementById('sum-parts');  if(_sp){_sp.textContent=_partsN; _sp.style.color=_partsN>0?'#C0392B':'#2D7D3A';}
+  var _sp=document.getElementById('sum-parts');
+  if(_sp){_sp.textContent=_partsN; _sp.style.color=_partsN>0?'#C0392B':'#2D7D3A';}
+  var _spl=document.getElementById('sum-parts-list');
+  if(_spl){
+    _spl.innerHTML='';
+    if(selParts && selParts.length){
+      selParts.forEach(function(p){
+        var tag=document.createElement('span');
+        tag.textContent=p;
+        tag.style.cssText='background:#FCEBEB;color:#C0392B;border-radius:99px;padding:2px 8px;font-size:11px;font-weight:500';
+        _spl.appendChild(tag);
+      });
+    }
+  }
 
   go('signature');
 }
