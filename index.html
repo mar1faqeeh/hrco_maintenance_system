@@ -1923,24 +1923,41 @@ function updateDashStats(){
 }
 
 function updateSignatureSummary(){
-  // Pull data from the new visit form
-  var clientName = (document.getElementById('inp-client')||{}).value || '—';
-  var tasks = document.querySelectorAll('#tasklist input[type=checkbox]');
-  var checkedTasks = document.querySelectorAll('#tasklist input[type=checkbox]:checked');
-  var partsCount = selParts ? selParts.length : 0;
+  // Use stored visit data (set by saveAndSign before navigation)
+  var v = window._currentVisitData || {};
+  var tk = window._currentVisitTasks || {total:0, done:0};
 
-  // Calculate duration (time since page opened - approximate)
+  var clientName = v.client || (document.getElementById('inp-client')||{}).value || '—';
+  var partsCount = (v.parts && v.parts.length) ? v.parts.length : (selParts ? selParts.length : 0);
+
+  // Duration from visit start time
   var dur = '—';
   if(window._visitStartTime){
     var mins = Math.round((Date.now() - window._visitStartTime) / 60000);
+    if(mins < 1) mins = 1;
     var h = Math.floor(mins/60), m = mins%60;
-    dur = (h>0?h+'h ':'')+m+'m';
+    dur = (h>0 ? h+'h ' : '') + m+'m';
   }
 
-  var sc = document.getElementById('sum-client'); if(sc) sc.textContent = clientName;
-  var st = document.getElementById('sum-tasks'); if(st) st.textContent = checkedTasks.length + ' / ' + tasks.length;
-  var sd = document.getElementById('sum-dur'); if(sd) sd.textContent = dur;
-  var sp = document.getElementById('sum-parts'); if(sp){ sp.textContent = partsCount; sp.style.color = partsCount>0?'#C0392B':'#2D7D3A'; }
+  var sc = document.getElementById('sum-client');
+  if(sc) sc.textContent = clientName;
+
+  var st = document.getElementById('sum-tasks');
+  if(st) st.textContent = tk.done + ' / ' + tk.total;
+
+  var sd = document.getElementById('sum-dur');
+  if(sd) sd.textContent = dur;
+
+  var sp = document.getElementById('sum-parts');
+  if(sp){
+    sp.textContent = partsCount;
+    sp.style.color = partsCount > 0 ? '#C0392B' : '#2D7D3A';
+  }
+
+  // Also update the technician name in signature section
+  var techName = v.tech || (document.getElementById('sel-tech')||{}).value || '—';
+  var techHint = document.getElementById('techHint');
+  if(techHint) techHint.innerHTML = '<i class="ti ti-pencil" style="font-size:22px"></i><span id="t-sign-here">Sign here</span>';
 }
 
 function resetNewVisitForm(){
@@ -2049,6 +2066,12 @@ async function saveAndSign() {
     visData.unshift(localVisit);
     rData = visData.map(function(v,i){ return Object.assign({id:i+1}, v, {parts:v.parts||[]}); });
   }
+  // Store current visit data for signature summary BEFORE navigating
+  window._currentVisitData = visit;
+  window._currentVisitTasks = {
+    total: document.querySelectorAll('#tasklist input[type=checkbox]').length,
+    done: document.querySelectorAll('#tasklist input[type=checkbox]:checked').length
+  };
   go('signature');
 }
 
