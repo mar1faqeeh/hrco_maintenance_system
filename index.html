@@ -371,13 +371,17 @@ html,body{height:100%;font-family:Tajawal,sans-serif;font-size:14px;background:#
       </div>
       <div class="field"><label id="t-lbl-fault">Fault Description</label><input type="text" id="inp-fault" placeholder="Fault..."></div>
       <div class="field"><label id="t-lbl-parts">Required Spare Parts</label>
-        <div style="position:relative"><div style="display:flex;gap:6px">
-          <input type="text" id="inp-part" placeholder="Add part..." 
-            onkeydown="if(event.key==='Enter'){addPart();event.preventDefault()}" oninput="showPartAC(this.value)"
-            style="flex:1">
-          <button onclick="addPart()" style="padding:8px 14px;background:#1D4E89;color:#fff;border:none;border-radius:8px;cursor:pointer;font-size:13px;font-weight:700;font-family:inherit;flex-shrink:0">
-            <i class="ti ti-plus"></i>
-          </button>
+        <div style="position:relative">
+          <div style="display:flex;gap:6px">
+            <input type="text" id="inp-part" placeholder="Add part..."
+              onkeydown="if(event.key==='Enter'){addPart();event.preventDefault()}"
+              oninput="showPartAC(this.value)"
+              style="flex:1">
+            <button onclick="addPart()" style="padding:8px 14px;background:#1D4E89;color:#fff;border:none;border-radius:8px;cursor:pointer;font-size:16px;font-family:inherit;flex-shrink:0">
+              <i class="ti ti-plus"></i>
+            </button>
+          </div>
+          <div id="dd-partAC" style="display:none;position:absolute;background:#fff;border:1px solid #D9E2EC;border-radius:8px;box-shadow:0 4px 16px rgba(0,0,0,.1);z-index:50;width:100%;max-height:180px;overflow-y:auto"></div>
         </div>
         <div id="parts-tags" style="display:flex;flex-wrap:wrap;gap:5px;margin-top:6px"></div>
       </div>
