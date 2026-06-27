@@ -445,7 +445,7 @@ html,body{height:100%;font-family:Tajawal,sans-serif;font-size:14px;background:#
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;padding:14px">
         <div style="background:#F8FAFC;border:1px solid #D9E2EC;border-radius:8px;padding:10px 14px"><div style="font-size:11px;color:#718096;margin-bottom:3px" id="t-sum-client">Client</div><div style="font-size:14px;font-weight:600" id="sum-client">—</div></div>
         <div style="background:#F8FAFC;border:1px solid #D9E2EC;border-radius:8px;padding:10px 14px"><div style="font-size:11px;color:#718096;margin-bottom:3px" id="t-sum-tasks">Tasks Done</div><div style="font-size:15px;font-weight:700" id="sum-tasks">0 / 0</div></div>
-        <div style="background:#F8FAFC;border:1px solid #D9E2EC;border-radius:8px;padding:10px 14px"><div style="font-size:11px;color:#718096;margin-bottom:3px" id="t-sum-dur">Duration</div><div style="font-size:15px;font-weight:700" id="sum-dur">—</div></div>
+        <div style="background:#F8FAFC;border:1px solid #D9E2EC;border-radius:8px;padding:10px 14px"><div style="font-size:11px;color:#718096;margin-bottom:3px" id="t-sum-dur">Duration</div><div style="font-size:15px;font-weight:700" id="sum-dur">—</div><div style="font-size:11px;color:#718096;margin-top:3px" id="sum-time">—</div></div>
         <div style="background:#F8FAFC;border:1px solid #D9E2EC;border-radius:8px;padding:10px 14px"><div style="font-size:11px;color:#718096;margin-bottom:3px" id="t-sum-parts">Missing Parts</div><div style="font-size:15px;font-weight:700;color:#C0392B" id="sum-parts">0</div><div id="sum-parts-list" style="margin-top:6px;display:flex;flex-wrap:wrap;gap:4px"></div></div>
       </div>
       <div style="margin:0 14px 10px;background:#FDF0E0;border:1px solid #FAC775;border-radius:8px;padding:10px 12px;display:flex;gap:8px">
@@ -2122,7 +2122,9 @@ async function saveAndSign() {
   }
 
   // Set values in summary BEFORE page switch
+  var _nowTime = new Date().toLocaleTimeString('en-GB', {hour:'2-digit', minute:'2-digit'});
   var _sc=document.getElementById('sum-client'); if(_sc) _sc.textContent=(_client&&_client.value)||'—';
+  var _stEl=document.getElementById('sum-time'); if(_stEl) _stEl.textContent=_nowTime;
   var _st=document.getElementById('sum-tasks');  if(_st) _st.textContent=_doneTasks.length+' / '+_allTasks.length;
   var _sd=document.getElementById('sum-dur');    if(_sd) _sd.textContent=_dur;
   // Re-read selParts at the moment of clicking (most current value)
@@ -2211,26 +2213,87 @@ function filterArchive(q) { renderArchiveBody(archiveData.length ? archiveData :
 // ══════════════════════════════════════
 function printVisit(id) {
   var v = visData.find(function(x){ return x.id == id; }) || {};
+  
+  // Get signatures as images if available
+  var techSigImg = '';
+  var clientSigImg = '';
+  var techC = document.getElementById('techC');
+  var clientC = document.getElementById('clientC');
+  if(techC) try { techSigImg = techC.toDataURL(); } catch(e){}
+  if(clientC) try { clientSigImg = clientC.toDataURL(); } catch(e){}
+  
+  // Get visit time
+  var visitTime = v.time || window._visitEndTime || '';
+  var visitDate = (v.date || new Date().toISOString().split('T')[0]) + (visitTime ? ' ' + visitTime : '');
+  
   var w = window.open('', '_blank');
-  w.document.write('<html dir="rtl"><head><meta charset="UTF-8"><title>Visit Report #'+id+'</title><style>body{font-family:Tajawal,sans-serif;padding:30px;direction:rtl} h1{color:#0F2D52;border-bottom:3px solid #0F2D52;padding-bottom:10px} table{width:100%;border-collapse:collapse;margin-top:16px} td,th{border:1px solid #D9E2EC;padding:10px;text-align:right} th{background:#F0F4F8;font-weight:700} .sig-box{border:1px solid #D9E2EC;height:80px;margin-top:8px;border-radius:8px} @media print{button{display:none}}</style></head><body>');
-  w.document.write('<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px"><div><h1 style="margin:0">HRCO — كشف زيارة صيانة</h1><div style="color:#718096;font-size:13px">رقم الكشف: #'+id+' | التاريخ: '+(v.date||new Date().toISOString().split('T')[0])+'</div></div></div>');
-  w.document.write('<table><tr><th>البند</th><th>التفاصيل</th></tr>');
-  w.document.write('<tr><td>اسم العميل</td><td>'+(v.client||'—')+'</td></tr>');
-  w.document.write('<tr><td>الموقع</td><td>'+(v.location||'—')+'</td></tr>');
-  w.document.write('<tr><td>المعدة</td><td>'+(v.equipment||v.equip||'—')+'</td></tr>');
-  w.document.write('<tr><td>الرقم التسلسلي</td><td>'+(v.serial_number||'—')+'</td></tr>');
-  w.document.write('<tr><td>الموديل</td><td>'+(v.model||'—')+'</td></tr>');
-  w.document.write('<tr><td>الفني</td><td>'+(v.tech||'—')+'</td></tr>');
-  w.document.write('<tr><td>نوع الزيارة</td><td>'+(v.type||v.visit_type||'—')+'</td></tr>');
-  w.document.write('<tr><td>نوع العطل</td><td>'+(v.fault||'—')+'</td></tr>');
-  w.document.write('<tr><td>قطع الغيار</td><td>'+(Array.isArray(v.parts)?v.parts.join('، '):'—')+'</td></tr>');
-  w.document.write('<tr><td>ملاحظات الفني</td><td>'+(v.notes||'—')+'</td></tr>');
-  w.document.write('<tr><td>الحالة</td><td>'+(v.status||'—')+'</td></tr>');
+  w.document.write('<!DOCTYPE html><html dir="rtl"><head><meta charset="UTF-8"><title>كشف زيارة #'+id+'</title><style>');
+  w.document.write('body{font-family:Tajawal,sans-serif;padding:30px;direction:rtl;color:#1a202c;margin:0}');
+  w.document.write('.header{display:flex;align-items:center;gap:16px;padding-bottom:16px;border-bottom:3px solid #0F2D52;margin-bottom:20px}');
+  w.document.write('.logo{width:56px;height:56px;background:#0F2D52;border-radius:10px;display:flex;align-items:center;justify-content:center;color:#7EC8E3;font-size:28px;flex-shrink:0}');
+  w.document.write('h1{color:#0F2D52;margin:0;font-size:20px}');
+  w.document.write('.sub{color:#718096;font-size:13px;margin-top:4px}');
+  w.document.write('table{width:100%;border-collapse:collapse;margin-bottom:20px;font-size:13px}');
+  w.document.write('td,th{border:1px solid #D9E2EC;padding:10px 12px;text-align:right}');
+  w.document.write('th{background:#F0F4F8;font-weight:700;color:#4A5568;font-size:12px;width:30%}');
+  w.document.write('.sig-section{display:grid;grid-template-columns:1fr 1fr;gap:24px;margin-top:24px}');
+  w.document.write('.sig-box{border:1.5px solid #D9E2EC;border-radius:10px;padding:12px;min-height:100px;background:#F8FAFC}');
+  w.document.write('.sig-label{font-size:12px;font-weight:700;color:#4A5568;margin-bottom:8px}');
+  w.document.write('.sig-img{max-width:100%;height:80px;object-fit:contain}');
+  w.document.write('.badge{display:inline-block;padding:3px 10px;border-radius:99px;font-size:11px;font-weight:700}');
+  w.document.write('.status-done{background:#EAF3DE;color:#2D7D3A}.status-pend{background:#FDF0E0;color:#C4680A}');
+  w.document.write('@media print{.no-print{display:none!important}body{padding:15px}}');
+  w.document.write('</style></head><body>');
+  
+  // Header
+  w.document.write('<div class="header"><div class="logo">❄</div><div>');
+  w.document.write('<h1>HRCO — كشف زيارة صيانة</h1>');
+  w.document.write('<div class="sub">رقم الكشف: <strong>#'+id+'</strong> &nbsp;|&nbsp; '+visitDate+'</div>');
+  w.document.write('</div></div>');
+  
+  // Details table
+  w.document.write('<table>');
+  w.document.write('<tr><th>اسم العميل</th><td><strong>'+(v.client||'—')+'</strong></td></tr>');
+  w.document.write('<tr><th>الموقع / الفرع</th><td>'+(v.location||'—')+'</td></tr>');
+  w.document.write('<tr><th>المعدة / الجهاز</th><td>'+(v.equipment||v.equip||'—')+'</td></tr>');
+  w.document.write('<tr><th>الرقم التسلسلي</th><td>'+(v.serial_number||'—')+'</td></tr>');
+  w.document.write('<tr><th>الموديل</th><td>'+(v.model||'—')+'</td></tr>');
+  w.document.write('<tr><th>الفني المسؤول</th><td>'+(v.tech||'—')+'</td></tr>');
+  var typeMap={'ضمان':'زيارة ضمان','مدفوعة':'زيارة مدفوعة','عقد':'زيارة دورية (عقد)','warranty':'زيارة ضمان','paid':'زيارة مدفوعة','contract':'زيارة دورية'};
+  w.document.write('<tr><th>نوع الزيارة</th><td>'+(typeMap[v.visit_type||v.type]||v.visit_type||v.type||'—')+'</td></tr>');
+  w.document.write('<tr><th>نوع العطل</th><td>'+(v.fault||'—')+'</td></tr>');
+  var partsStr = Array.isArray(v.parts) && v.parts.length ? v.parts.join(' ، ') : '—';
+  w.document.write('<tr><th>قطع الغيار المطلوبة</th><td style="color:'+(partsStr!=='—'?'#C0392B':'inherit')+'">'+partsStr+'</td></tr>');
+  w.document.write('<tr><th>ملاحظات الفني</th><td style="white-space:pre-wrap;line-height:1.6">'+(v.notes||'—')+'</td></tr>');
+  var stClass = (v.status==='مكتملة'||v.status==='Completed')?'status-done':'status-pend';
+  w.document.write('<tr><th>الحالة</th><td><span class="badge '+stClass+'">'+(v.status||'—')+'</span></td></tr>');
   w.document.write('</table>');
-  w.document.write('<div style="display:grid;grid-template-columns:1fr 1fr;gap:30px;margin-top:30px"><div><div style="font-weight:700;margin-bottom:8px">توقيع الفني:</div><div class="sig-box"></div></div><div><div style="font-weight:700;margin-bottom:8px">توقيع العميل / المشرف:</div><div class="sig-box"></div></div></div>');
-  w.document.write('<div style="text-align:center;margin-top:30px;font-size:11px;color:#718096">HRCO — نظام إدارة الصيانة | تم الإنشاء: '+new Date().toLocaleString('ar-SA')+'</div>');
-  w.document.write('<div style="text-align:center;margin-top:16px"><button onclick="window.print()" style="padding:10px 24px;background:#0F2D52;color:#fff;border:none;border-radius:8px;cursor:pointer;font-size:14px;font-family:Tajawal,sans-serif">🖨️ طباعة</button></div>');
-  w.document.write('</body></html>');
+  
+  // Signatures
+  w.document.write('<div class="sig-section">');
+  w.document.write('<div class="sig-box"><div class="sig-label">✍ توقيع الفني</div>');
+  if(techSigImg && techSigImg !== 'data:,') {
+    w.document.write('<img src="'+techSigImg+'" class="sig-img">');
+  } else {
+    w.document.write('<div style="color:#A0AEC0;font-size:12px;margin-top:20px;text-align:center">لم يتم التوقيع</div>');
+  }
+  w.document.write('</div>');
+  w.document.write('<div class="sig-box"><div class="sig-label">✍ توقيع العميل / المشرف</div>');
+  if(clientSigImg && clientSigImg !== 'data:,') {
+    w.document.write('<img src="'+clientSigImg+'" class="sig-img">');
+  } else {
+    w.document.write('<div style="color:#A0AEC0;font-size:12px;margin-top:20px;text-align:center">لم يتم التوقيع</div>');
+  }
+  w.document.write('</div></div>');
+  
+  // Footer
+  w.document.write('<div style="margin-top:24px;padding-top:14px;border-top:1px solid #D9E2EC;display:flex;justify-content:space-between;align-items:center;font-size:11px;color:#718096">');
+  w.document.write('<span>HRCO — نظام إدارة الصيانة للمطابخ المركزية والغرف الباردة</span>');
+  w.document.write('<span>تم الإنشاء: '+new Date().toLocaleString('ar-SA')+'</span>');
+  w.document.write('</div>');
+  w.document.write('<div class="no-print" style="text-align:center;margin-top:20px">');
+  w.document.write('<button onclick="window.print()" style="padding:10px 30px;background:#0F2D52;color:#fff;border:none;border-radius:8px;cursor:pointer;font-size:15px;font-family:Tajawal,sans-serif;font-weight:700">🖨️ طباعة الكشف</button>');
+  w.document.write('</div></body></html>');
   w.document.close();
 }
 
