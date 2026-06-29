@@ -1508,38 +1508,46 @@ function suspendV(){
     });
   }
 }
-function closeV(){
+async function closeV(){
   var ab=document.getElementById('closeAB');
-  if(ab)ab.innerHTML='<div style="padding:10px;color:#2D7D3A;font-size:13px;font-weight:700;display:flex;align-items:center;gap:8px"><i class="ti ti-circle-check" style="font-size:18px"></i>'+t('closed')+'</div>';
   
-  // Get signature images
+  // Get signature images FIRST before any DOM changes
   var techSig='', clientSig='';
   var tc=document.getElementById('techC');
   var cc=document.getElementById('clientC');
-  if(tc) try{ techSig=tc.toDataURL('image/png'); }catch(e){}
-  if(cc) try{ clientSig=cc.toDataURL('image/png'); }catch(e){}
+  if(tc){ try{ var td=tc.toDataURL('image/png'); if(td && td.length>500) techSig=td; }catch(e){ console.log('techSig error:',e); }}
+  if(cc){ try{ var cd=cc.toDataURL('image/png'); if(cd && cd.length>500) clientSig=cd; }catch(e){ console.log('clientSig error:',e); }}
+  
+  console.log('Closing visit #'+currentVisitId);
+  console.log('Tech sig length:', techSig.length, 'Client sig length:', clientSig.length);
   
   // Update status + save signatures in Supabase
   if(currentVisitId && _sb){
     var updateData = {status:'مكتملة'};
-    // Only save if signatures were actually drawn (>500 chars = has content)
-    if(techSig && techSig.length > 500) updateData.sig_tech = techSig;
-    if(clientSig && clientSig.length > 500) updateData.sig_client = clientSig;
+    if(techSig) updateData.sig_tech = techSig;
+    if(clientSig) updateData.sig_client = clientSig;
     
-    _sb.from('visits').update(updateData).eq('id',currentVisitId).then(function(r){
-      if(r.error) console.log('closeV error:', r.error.message);
-      else{
-        console.log('Visit closed + signatures saved');
-        // Also update local visData
+    try{
+      var r = await _sb.from('visits').update(updateData).eq('id',currentVisitId);
+      if(r.error){ 
+        console.error('closeV DB error:', r.error.message);
+        alert('Error saving: ' + r.error.message);
+      } else {
+        console.log('✅ Visit closed + signatures saved to DB');
+        // Update local visData
         var v = visData.find(function(x){ return x.id==currentVisitId; });
         if(v){
-          v.status='مكتملة';
-          if(updateData.sig_tech) v.sig_tech=updateData.sig_tech;
-          if(updateData.sig_client) v.sig_client=updateData.sig_client;
+          v.status='Completed';
+          if(techSig) v.sig_tech=techSig;
+          if(clientSig) v.sig_client=clientSig;
         }
       }
-    });
+    }catch(e){
+      console.error('closeV exception:', e);
+    }
   }
+  
+  if(ab) ab.innerHTML='<div style="padding:10px;color:#2D7D3A;font-size:13px;font-weight:700;display:flex;align-items:center;gap:8px"><i class="ti ti-circle-check" style="font-size:18px"></i>'+t('closed')+'</div>';
 }
 
 // ══════════════════════════════════════
