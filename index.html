@@ -2303,130 +2303,114 @@ var FOOTER_IMG = "/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAAYEBQYFBAYGBQYHBwYIChAKCgkJCh
 function _doPrintVisit(id, v, techSigImg, clientSigImg, visitDateTime, vtype, partsStr, statusAr, statusEn, isDone, HEADER, FOOTER) {
   var hasTechSig = techSigImg && techSigImg.length > 500;
   var hasClientSig = clientSigImg && clientSigImg.length > 500;
+
+  var typeAr = {'ضمان':'ضمان','مدفوعة':'مدفوعة','عقد':'عقد صيانة','warranty':'ضمان','paid':'مدفوعة','contract':'عقد صيانة'};
+  var typeEn = {'ضمان':'Warranty','مدفوعة':'Paid','عقد':'Contract','warranty':'Warranty','paid':'Paid','contract':'Contract'};
+
+  var html = '<!DOCTYPE html><html dir="rtl"><head><meta charset="UTF-8">'
+    + '<title>كشف زيارة صيانة HRCO #' + id + '</title>'
+    + '<style>'
+    + '* { margin:0; padding:0; box-sizing:border-box; }'
+    + 'body { font-family: "Tajawal", "Arial", sans-serif; color:#1a202c; background:#fff; direction:rtl; font-size:13px; }'
+    + '@import url("https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700&display=swap");'
+    + '.page { width:210mm; min-height:297mm; margin:0 auto; padding:0; position:relative; display:flex; flex-direction:column; }'
+    + '.header-img { width:100%; display:block; }'
+    + '.footer-img { width:100%; display:block; margin-top:auto; }'
+    + '.content { padding:14px 28px; flex:1; }'
+    + '.report-title { display:flex; justify-content:space-between; align-items:center; margin-bottom:14px; padding-bottom:10px; border-bottom:2px solid #0F2D52; }'
+    + '.title-ar { font-size:18px; font-weight:700; color:#0F2D52; }'
+    + '.title-en { font-size:13px; color:#718096; margin-top:3px; }'
+    + '.report-num { text-align:left; background:#F0F4F8; border-radius:8px; padding:8px 14px; }'
+    + '.report-num .num { font-size:20px; font-weight:700; color:#0F2D52; }'
+    + '.report-num .dt { font-size:11px; color:#718096; margin-top:2px; }'
+    + 'table { width:100%; border-collapse:collapse; margin-bottom:16px; }'
+    + 'th, td { border:1px solid #D9E2EC; padding:8px 12px; vertical-align:top; }'
+    + '.lbl { background:#F8FAFC; width:18%; text-align:center; }'
+    + '.lbl-ar { font-size:12px; font-weight:700; color:#0F2D52; display:block; }'
+    + '.lbl-en { font-size:10px; color:#718096; display:block; margin-top:1px; }'
+    + '.val { width:32%; font-size:13px; }'
+    + '.val.highlight { color:#C0392B; font-weight:600; }'
+    + '.val.done { color:#2D7D3A; font-weight:600; }'
+    + '.sec-title { font-size:13px; font-weight:700; color:#0F2D52; margin:14px 0 8px; display:flex; align-items:center; gap:6px; padding-bottom:5px; border-bottom:1px solid #D9E2EC; }'
+    + '.sig-grid { display:grid; grid-template-columns:1fr 1fr; gap:16px; margin-top:14px; }'
+    + '.sig-box { border:1.5px solid #D9E2EC; border-radius:8px; padding:10px; background:#FAFBFC; min-height:110px; }'
+    + '.sig-lbl { font-size:11px; font-weight:700; color:#0F2D52; margin-bottom:6px; }'
+    + '.sig-lbl span { color:#718096; font-weight:400; }'
+    + '.sig-img { max-width:100%; height:70px; object-fit:contain; display:block; margin:0 auto; }'
+    + '.no-sig { color:#A0AEC0; font-size:11px; text-align:center; margin-top:20px; }'
+    + '.status-done { background:#EAF3DE; color:#2D7D3A; padding:3px 10px; border-radius:99px; font-size:12px; font-weight:700; }'
+    + '.status-pend { background:#FDF0E0; color:#C4680A; padding:3px 10px; border-radius:99px; font-size:12px; font-weight:700; }'
+    + '@media print { .no-print{display:none!important} body{-webkit-print-color-adjust:exact;print-color-adjust:exact} .page{width:100%;min-height:auto} }'
+    + '</style></head><body>'
+    + '<div class="page">'
+    + '<img src="data:image/jpeg;base64,' + HEADER + '" class="header-img" alt="HRCO Header">'
+    + '<div class="content">'
+    + '<div class="report-title">'
+    + '<div><div class="title-ar">كشف زيارة صيانة</div><div class="title-en">Maintenance Visit Report</div></div>'
+    + '<div class="report-num"><div class="num">#' + id + '</div><div class="dt">' + visitDateTime + '</div></div>'
+    + '</div>'
+    + '<table>'
+    + '<tr>'
+    + '<th class="lbl"><span class="lbl-ar">اسم العميل</span><span class="lbl-en">Client</span></th>'
+    + '<td class="val"><strong>' + (v.client||'—') + '</strong></td>'
+    + '<th class="lbl"><span class="lbl-ar">الموقع / الفرع</span><span class="lbl-en">Location</span></th>'
+    + '<td class="val">' + (v.location||'—') + '</td>'
+    + '</tr>'
+    + '<tr>'
+    + '<th class="lbl"><span class="lbl-ar">المعدة / الجهاز</span><span class="lbl-en">Equipment</span></th>'
+    + '<td class="val">' + (v.equipment||v.equip||'—') + '</td>'
+    + '<th class="lbl"><span class="lbl-ar">الرقم التسلسلي</span><span class="lbl-en">Serial No.</span></th>'
+    + '<td class="val">' + (v.serial_number||'—') + '</td>'
+    + '</tr>'
+    + '<tr>'
+    + '<th class="lbl"><span class="lbl-ar">الموديل</span><span class="lbl-en">Model</span></th>'
+    + '<td class="val">' + (v.model||'—') + '</td>'
+    + '<th class="lbl"><span class="lbl-ar">الفني المسؤول</span><span class="lbl-en">Technician</span></th>'
+    + '<td class="val">' + (v.tech||'—') + '</td>'
+    + '</tr>'
+    + '<tr>'
+    + '<th class="lbl"><span class="lbl-ar">نوع الزيارة</span><span class="lbl-en">Visit Type</span></th>'
+    + '<td class="val">' + (typeAr[vtype]||vtype||'—') + ' / ' + (typeEn[vtype]||'—') + '</td>'
+    + '<th class="lbl"><span class="lbl-ar">نوع العطل</span><span class="lbl-en">Fault Type</span></th>'
+    + '<td class="val">' + (v.fault||'—') + '</td>'
+    + '</tr>'
+    + '<tr>'
+    + '<th class="lbl"><span class="lbl-ar">قطع الغيار المطلوبة</span><span class="lbl-en">Required Parts</span></th>'
+    + '<td class="val highlight" colspan="3">' + partsStr + '</td>'
+    + '</tr>'
+    + '<tr>'
+    + '<th class="lbl"><span class="lbl-ar">ملاحظات الفني</span><span class="lbl-en">Tech Notes</span></th>'
+    + '<td class="val" colspan="3" style="white-space:pre-wrap;line-height:1.7">' + (v.notes||'—') + '</td>'
+    + '</tr>'
+    + '<tr>'
+    + '<th class="lbl"><span class="lbl-ar">الحالة</span><span class="lbl-en">Status</span></th>'
+    + '<td class="val" colspan="3"><span class="' + (isDone?"status-done":"status-pend") + '">' + statusAr + ' / ' + statusEn + '</span></td>'
+    + '</tr>'
+    + '</table>'
+    + '<div class="sec-title">✍ التوقيعات / Signatures</div>'
+    + '<div class="sig-grid">'
+    + '<div class="sig-box">'
+    + '<div class="sig-lbl">توقيع الفني <span>/ Technician Signature</span></div>'
+    + (hasTechSig ? '<img src="' + techSigImg + '" class="sig-img">' : '<div class="no-sig">لم يتم التوقيع / Not Signed</div>')
+    + '</div>'
+    + '<div class="sig-box">'
+    + '<div class="sig-lbl">توقيع العميل / المشرف <span>/ Client Signature</span></div>'
+    + (hasClientSig ? '<img src="' + clientSigImg + '" class="sig-img">' : '<div class="no-sig">لم يتم التوقيع / Not Signed</div>')
+    + '</div>'
+    + '</div>'
+    + '</div>'
+    + '<img src="data:image/jpeg;base64,' + FOOTER + '" class="footer-img" alt="HRCO Footer">'
+    + '</div>'
+    + '<div class="no-print" style="text-align:center;padding:16px;background:#F0F4F8">'
+    + '<button onclick="window.print()" style="padding:10px 32px;background:#0F2D52;color:#fff;border:none;border-radius:8px;cursor:pointer;font-size:15px;font-family:Tajawal,Arial,sans-serif;font-weight:700;margin-left:10px">🖨️ طباعة / Print</button>'
+    + '<button onclick="window.close()" style="padding:10px 20px;background:#718096;color:#fff;border:none;border-radius:8px;cursor:pointer;font-size:14px;font-family:Tajawal,Arial,sans-serif">✕ إغلاق</button>'
+    + '</div>'
+    + '</body></html>';
+
   var w = window.open('', '_blank');
-  w.document.write('<!DOCTYPE html><html dir="rtl"><head><meta charset="UTF-8">');
-  w.document.write('<title>كشف زيارة صيانة HRCO #'+id+'</title>');
-  w.document.write('<style>');
-  w.document.write('* { margin:0; padding:0; box-sizing:border-box; }');
-  w.document.write('body { font-family: "Tajawal", "Arial", sans-serif; color:#1a202c; background:#fff; direction:rtl; font-size:13px; }');
-  w.document.write('@import url("https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700&display=swap");');
-  w.document.write('.page { width:210mm; min-height:297mm; margin:0 auto; padding:0; position:relative; display:flex; flex-direction:column; }');
-  w.document.write('.header-img { width:100%; display:block; }');
-  w.document.write('.footer-img { width:100%; display:block; margin-top:auto; }');
-  w.document.write('.content { padding:14px 28px; flex:1; }');
-  w.document.write('.report-title { display:flex; justify-content:space-between; align-items:center; margin-bottom:14px; padding-bottom:10px; border-bottom:2px solid #0F2D52; }');
-  w.document.write('.title-ar { font-size:18px; font-weight:700; color:#0F2D52; }');
-  w.document.write('.title-en { font-size:13px; color:#718096; margin-top:3px; }');
-  w.document.write('.report-num { text-align:left; background:#F0F4F8; border-radius:8px; padding:8px 14px; }');
-  w.document.write('.report-num .num { font-size:20px; font-weight:700; color:#0F2D52; }');
-  w.document.write('.report-num .dt { font-size:11px; color:#718096; margin-top:2px; }');
-  w.document.write('table { width:100%; border-collapse:collapse; margin-bottom:16px; }');
-  w.document.write('th, td { border:1px solid #D9E2EC; padding:8px 12px; vertical-align:top; }');
-  w.document.write('.lbl { background:#F8FAFC; width:18%; text-align:center; }');
-  w.document.write('.lbl-ar { font-size:12px; font-weight:700; color:#0F2D52; display:block; }');
-  w.document.write('.lbl-en { font-size:10px; color:#718096; display:block; margin-top:1px; }');
-  w.document.write('.val { width:32%; font-size:13px; }');
-  w.document.write('.val.highlight { color:#C0392B; font-weight:600; }');
-  w.document.write('.val.done { color:#2D7D3A; font-weight:600; }');
-  w.document.write('.sec-title { font-size:13px; font-weight:700; color:#0F2D52; margin:14px 0 8px; display:flex; align-items:center; gap:6px; padding-bottom:5px; border-bottom:1px solid #D9E2EC; }');
-  w.document.write('.sig-grid { display:grid; grid-template-columns:1fr 1fr; gap:16px; margin-top:14px; }');
-  w.document.write('.sig-box { border:1.5px solid #D9E2EC; border-radius:8px; padding:10px; background:#FAFBFC; min-height:110px; }');
-  w.document.write('.sig-lbl { font-size:11px; font-weight:700; color:#0F2D52; margin-bottom:6px; }');
-  w.document.write('.sig-lbl span { color:#718096; font-weight:400; }');
-  w.document.write('.sig-img { max-width:100%; height:70px; object-fit:contain; display:block; margin:0 auto; }');
-  w.document.write('.no-sig { color:#A0AEC0; font-size:11px; text-align:center; margin-top:20px; }');
-  w.document.write('.status-done { background:#EAF3DE; color:#2D7D3A; padding:3px 10px; border-radius:99px; font-size:12px; font-weight:700; }');
-  w.document.write('.status-pend { background:#FDF0E0; color:#C4680A; padding:3px 10px; border-radius:99px; font-size:12px; font-weight:700; }');
-  w.document.write('@media print { .no-print{display:none!important} body{-webkit-print-color-adjust:exact;print-color-adjust:exact} .page{width:100%;min-height:auto} }');
-  w.document.write('</style></head><body>');
-
-  w.document.write('<div class="page">');
-  // Header image
-  w.document.write('<img src="data:image/jpeg;base64,'+HEADER+'" class="header-img" alt="HRCO Header">');
-
-  w.document.write('<div class="content">');
-
-  // Report title
-  w.document.write('<div class="report-title">');
-  w.document.write('<div><div class="title-ar">كشف زيارة صيانة</div><div class="title-en">Maintenance Visit Report</div></div>');
-  w.document.write('<div class="report-num"><div class="num">#'+id+'</div><div class="dt">'+visitDateTime+'</div></div>');
-  w.document.write('</div>');
-
-  // Main data table - bilingual
-  w.document.write('<table>');
-  w.document.write('<tr>');
-  w.document.write('<th class="lbl"><span class="lbl-ar">اسم العميل</span><span class="lbl-en">Client</span></th>');
-  w.document.write('<td class="val"><strong>'+(v.client||'—')+'</strong></td>');
-  w.document.write('<th class="lbl"><span class="lbl-ar">الموقع / الفرع</span><span class="lbl-en">Location</span></th>');
-  w.document.write('<td class="val">'+(v.location||'—')+'</td>');
-  w.document.write('</tr>');
-  w.document.write('<tr>');
-  w.document.write('<th class="lbl"><span class="lbl-ar">المعدة / الجهاز</span><span class="lbl-en">Equipment</span></th>');
-  w.document.write('<td class="val">'+(v.equipment||v.equip||'—')+'</td>');
-  w.document.write('<th class="lbl"><span class="lbl-ar">الرقم التسلسلي</span><span class="lbl-en">Serial No.</span></th>');
-  w.document.write('<td class="val">'+(v.serial_number||'—')+'</td>');
-  w.document.write('</tr>');
-  w.document.write('<tr>');
-  w.document.write('<th class="lbl"><span class="lbl-ar">الموديل</span><span class="lbl-en">Model</span></th>');
-  w.document.write('<td class="val">'+(v.model||'—')+'</td>');
-  w.document.write('<th class="lbl"><span class="lbl-ar">الفني المسؤول</span><span class="lbl-en">Technician</span></th>');
-  w.document.write('<td class="val">'+(v.tech||'—')+'</td>');
-  w.document.write('</tr>');
-  w.document.write('<tr>');
-  w.document.write('<th class="lbl"><span class="lbl-ar">نوع الزيارة</span><span class="lbl-en">Visit Type</span></th>');
-  w.document.write('<td class="val">'+(typeAr[vtype]||vtype||'—')+' / '+(typeEn[vtype]||'—')+'</td>');
-  w.document.write('<th class="lbl"><span class="lbl-ar">نوع العطل</span><span class="lbl-en">Fault Type</span></th>');
-  w.document.write('<td class="val">'+(v.fault||'—')+'</td>');
-  w.document.write('</tr>');
-  w.document.write('<tr>');
-  w.document.write('<th class="lbl"><span class="lbl-ar">قطع الغيار المطلوبة</span><span class="lbl-en">Required Parts</span></th>');
-  w.document.write('<td class="val highlight" colspan="3">'+partsStr+'</td>');
-  w.document.write('</tr>');
-  w.document.write('<tr>');
-  w.document.write('<th class="lbl"><span class="lbl-ar">ملاحظات الفني</span><span class="lbl-en">Tech Notes</span></th>');
-  w.document.write('<td class="val" colspan="3" style="white-space:pre-wrap;line-height:1.7">'+(v.notes||'—')+'</td>');
-  w.document.write('</tr>');
-  w.document.write('<tr>');
-  w.document.write('<th class="lbl"><span class="lbl-ar">الحالة</span><span class="lbl-en">Status</span></th>');
-  var isDone = v.status==="مكتملة"||v.status==="Completed";
-  w.document.write('<td class="val" colspan="3"><span class="'+(isDone?"status-done":"status-pend")+'">'+statusAr+' / '+statusEn+'</span></td>');
-  w.document.write('</tr>');
-  w.document.write('</table>');
-
-  // Signatures
-  w.document.write('<div class="sec-title">✍ التوقيعات / Signatures</div>');
-  w.document.write('<div class="sig-grid">');
-  w.document.write('<div class="sig-box">');
-  w.document.write('<div class="sig-lbl">توقيع الفني <span>/ Technician Signature</span></div>');
-  if(hasTechSig) {
-    w.document.write('<img src="'+techSigImg+'" class="sig-img">');
-  } else {
-    w.document.write('<div class="no-sig">لم يتم التوقيع / Not Signed</div>');
-  }
-  w.document.write('</div>');
-  w.document.write('<div class="sig-box">');
-  w.document.write('<div class="sig-lbl">توقيع العميل / المشرف <span>/ Client Signature</span></div>');
-  if(hasClientSig) {
-    w.document.write('<img src="'+clientSigImg+'" class="sig-img">');
-  } else {
-    w.document.write('<div class="no-sig">لم يتم التوقيع / Not Signed</div>');
-  }
-  w.document.write('</div>');
-  w.document.write('</div>');
-
-  w.document.write('</div>'); // end content
-
-  // Footer image
-  w.document.write('<img src="data:image/jpeg;base64,'+FOOTER+'" class="footer-img" alt="HRCO Footer">');
-  w.document.write('</div>'); // end page
-
-  // Print button
-  w.document.write('<div class="no-print" style="text-align:center;padding:16px;background:#F0F4F8">');
-  w.document.write('<button onclick="window.print()" style="padding:10px 32px;background:#0F2D52;color:#fff;border:none;border-radius:8px;cursor:pointer;font-size:15px;font-family:Tajawal,Arial,sans-serif;font-weight:700;margin-left:10px">🖨️ طباعة / Print</button>');
-  w.document.write('<button onclick="window.close()" style="padding:10px 20px;background:#718096;color:#fff;border:none;border-radius:8px;cursor:pointer;font-size:14px;font-family:Tajawal,Arial,sans-serif">✕ إغلاق</button>');
-  w.document.write('</div>');
-
-  w.document.write('</body></html>');
+  if(!w){ alert('Please allow popups to print the report'); return; }
+  w.document.open();
+  w.document.write(html);
   w.document.close();
 }
 
