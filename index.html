@@ -483,6 +483,21 @@ html,body{height:100%;font-family:Tajawal,sans-serif;font-size:14px;background:#
         <button id="suspBtn" disabled onclick="suspendV()" class="btn btn-w" style="flex:1"><i class="ti ti-clock-pause"></i><span id="t-suspend">Suspend</span></button>
         <button id="closeBtn" disabled onclick="closeV()" class="btn btn-p" style="flex:1"><i class="ti ti-lock"></i><span id="t-close-rep">Close</span></button>
       </div>
+      <!-- Actions after close -->
+      <div id="closeActions" style="display:none;padding:12px 14px;border-top:1px solid #D9E2EC;background:#F8FAFC;border-radius:0 0 12px 12px">
+        <div style="font-size:12px;color:#718096;margin-bottom:8px;text-align:center">اختر الإجراء التالي / Choose next action</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px">
+          <button onclick="printVisit(currentVisitId)" style="padding:10px 4px;border-radius:8px;border:1.5px solid #1D4E89;background:#E6F1FB;color:#1D4E89;cursor:pointer;font-size:11px;font-weight:700;font-family:inherit;display:flex;flex-direction:column;align-items:center;gap:4px">
+            <i class="ti ti-eye" style="font-size:18px"></i>Preview PDF
+          </button>
+          <button onclick="printVisit(currentVisitId)" style="padding:10px 4px;border-radius:8px;border:1.5px solid #2D7D3A;background:#EAF3DE;color:#2D7D3A;cursor:pointer;font-size:11px;font-weight:700;font-family:inherit;display:flex;flex-direction:column;align-items:center;gap:4px">
+            <i class="ti ti-download" style="font-size:18px"></i>Save as PDF
+          </button>
+          <button onclick="sendByEmail(currentVisitId)" style="padding:10px 4px;border-radius:8px;border:1.5px solid #C4680A;background:#FDF0E0;color:#C4680A;cursor:pointer;font-size:11px;font-weight:700;font-family:inherit;display:flex;flex-direction:column;align-items:center;gap:4px">
+            <i class="ti ti-mail" style="font-size:18px"></i>Send Email
+          </button>
+        </div>
+      </div>
     </div>
   </div>
 </div>
@@ -1544,6 +1559,9 @@ async function closeV(){
         console.log('✅ Visit status = مكتملة');
         var ca2 = document.getElementById('closeActions');
         if(ca2) ca2.style.display='block';
+        // Hide the main action buttons row
+        var cab = document.getElementById('closeAB');
+        if(cab) cab.style.display='none';
       }
 
       // 2. Save signatures to visit_signatures table (separate table - no schema cache issues)
@@ -2101,6 +2119,8 @@ function resetNewVisitForm(){
   window._visitStartTime = Date.now();
   var ca = document.getElementById('closeActions');
   if(ca) ca.style.display='none';
+  var cab = document.getElementById('closeAB');
+  if(cab) cab.style.display='flex';
 }
 
 function populateTechSelect(){
