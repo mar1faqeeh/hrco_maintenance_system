@@ -1790,79 +1790,47 @@ async function sendByEmail(id){
       'كشف زيارة صيانة HRCO #' + id + ' | Maintenance Visit Report - ' + (v.client||'')
     );
 
-    var body = encodeURIComponent(
-      'السلام عليكم ورحمة الله وبركاته،
-' +
-      'Dear Sir/Madam,
-
-' +
-      'نرفق لكم كشف زيارة الصيانة رقم #' + id + '.
-' +
-      'Please find attached maintenance visit report #' + id + '.
-
-' +
-      '══════════════════════════
-' +
-      '           تفاصيل الزيارة / Visit Details
-' +
-      '══════════════════════════
-' +
-      '• العميل / Client:      ' + (v.client||'—') + '
-' +
-      '• الفني / Technician:   ' + (v.tech||'—') + '
-' +
-      '• التاريخ / Date:       ' + (v.date||'—') + '
-' +
-      '• المعدة / Equipment:   ' + equip + '
-' +
-      '• نوع الزيارة / Type:   ' + (v.visit_type||v.type||'—') + '
-' +
-      '• قطع الغيار / Parts:   ' + parts + '
-' +
-      '• الحالة / Status:      ' + status_ar + ' / ' + status_en + '
-' +
-      '══════════════════════════
-
-' +
-      'للاطلاع على الكشف الكامل يرجى تحميله من المرفقات.
-' +
-      'Please find the full report in the attachments.
-
-' +
-      '──────────────────────────
-' +
-      'اطيب التمنيات،
-' +
-      'Best Regards,
-
-' +
-      'قسم الصيانة | Maintenance Department
-' +
-      'شركة هركو للتبريد المحدودة
-' +
-      'HRCO Refrigeration Co. Ltd.
-
-' +
-      '📞 جدة / Jeddah:   +966 12 636 4884
-' +
-      '📍 جدة: المدينة الصناعية الأولى، المرحلة 5، طريق 47
-' +
-      '    Jeddah: 1st Industrial City, Phase 5, Road 47
-
-' +
-      '📍 الرياض: مركز الفالح، الطابق الرابع، شارع العليا
-' +
-      '    Riyadh: Al-Faleh Center, 4th Floor, Olaya St.
-
-' +
-      '🌐 www.hrcoksa.com
-' +
-      '──────────────────────────
-' +
-      '⚠ ملاحظة: يرجى حفظ نافذة PDF التي فُتحت للتو كمرفق قبل الإرسال.
-' +
-      '  Note: Please save the PDF window that just opened as attachment before sending.'
-    );
+    var bodyText = [
+      'السلام عليكم ورحمة الله وبركاته / Dear Sir/Madam,',
+      '',
+      'نرفق لكم كشف زيارة الصيانة رقم #' + id + '.',
+      'Please find the maintenance visit report #' + id + '.',
+      '',
+      '══════════════════════════',
+      'تفاصيل الزيارة / Visit Details',
+      '══════════════════════════',
+      'العميل / Client:    ' + (v.client||'—'),
+      'الفني / Technician: ' + (v.tech||'—'),
+      'التاريخ / Date:     ' + (v.date||'—'),
+      'المعدة / Equipment: ' + equip,
+      'النوع / Type:       ' + (v.visit_type||v.type||'—'),
+      'القطع / Parts:      ' + parts,
+      'الحالة / Status:    ' + status_ar + ' / ' + status_en,
+      '══════════════════════════',
+      '',
+      (reportURL ? 'رابط الكشف / Report Link:' : ''),
+      (reportURL ? reportURL : ''),
+      (reportURL ? '' : ''),
+      '──────────────────────────',
+      'اطيب التمنيات / Best Regards,',
+      '',
+      'قسم الصيانة | Maintenance Department',
+      'شركة هركو للتبريد المحدودة',
+      'HRCO Refrigeration Co. Ltd.',
+      '',
+      'جدة / Jeddah: +966 12 636 4884',
+      'جدة: المدينة الصناعية الاولى، المرحلة 5، طريق 47',
+      'Jeddah: 1st Industrial City, Phase 5, Road 47',
+      '',
+      'الرياض: مركز الفالح، الطابق الرابع، شارع العليا',
+      'Riyadh: Al-Faleh Center, 4th Floor, Olaya St.',
+      '',
+      'www.hrcoksa.com',
+      '──────────────────────────',
+      (reportURL ? 'الرابط مشفر وخاص بهذه الزيارة فقط.' : ''),
+      (reportURL ? 'This link is encrypted and unique to this visit.' : '')
+    ].join('\n');
+    var body = encodeURIComponent(bodyText);
 
     window.open('mailto:?subject=' + subject + '&body=' + body);
   }, 800);
