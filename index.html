@@ -1772,11 +1772,32 @@ async function sendByEmail(id){
   var v = visData.find(function(x){ return x.id==id; });
   if(!v){ alert('Visit not found'); return; }
 
-  // Get or create secure token for this visit
+  // Get or create secure token
   var token = await getOrCreateReportToken(id);
   var reportURL = token ? getReportURL(token) : '';
 
-  // Open email directly with token URL
+  // Store for use in modal
+  window._emailVisitId = id;
+  window._emailVisitData = v;
+  window._emailReportURL = reportURL;
+
+  // Pre-fill modal
+  var subj = document.getElementById('email-subject');
+  if(subj) subj.value = 'كشف زيارة صيانة HRCO #' + id + ' - ' + (v.client||'');
+  var nameEl = document.getElementById('email-name');
+  if(nameEl) nameEl.value = v.client || '';
+  var toEl = document.getElementById('email-to');
+  if(toEl) toEl.value = '';
+  var msgEl = document.getElementById('email-msg');
+  if(msgEl) msgEl.value = '';
+  var preview = document.getElementById('email-link-preview');
+  if(preview) preview.textContent = reportURL || 'جاري إنشاء الرابط...';
+  var status = document.getElementById('email-status');
+  if(status) status.style.display='none';
+
+  // Show modal
+  var modal = document.getElementById('emailModal');
+  if(modal){ modal.style.display='flex'; }
   setTimeout(function(){
     var status_ar = v.status==='Completed'||v.status==='مكتملة' ? 'مكتملة ✓' : 'معلقة';
     var status_en = v.status==='Completed'||v.status==='مكتملة' ? 'Completed ✓' : 'Pending';
@@ -1829,8 +1850,107 @@ async function sendByEmail(id){
     ].join('\n');
     var body = encodeURIComponent(bodyText);
 
-    window.open('mailto:?subject=' + subject + '&body=' + body);
   }, 100);
+}
+
+function closeEmailModal(){
+  var modal = document.getElementById('emailModal');
+  if(modal) modal.style.display='none';
+}
+
+async function doSendEmail(){
+  var to = (document.getElementById('email-to')||{}).value||'';
+  var name = (document.getElementById('email-name')||{}).value||'';
+  var subject = (document.getElementById('email-subject')||{}).value||'';
+  var extraMsg = (document.getElementById('email-msg')||{}).value||'';
+  var reportURL = window._emailReportURL || '';
+  var v = window._emailVisitData || {};
+  var id = window._emailVisitId || '';
+
+  if(!to){ alert('الرجاء إدخال إيميل المستلم'); return; }
+
+  var btn = document.getElementById('email-send-btn');
+  var statusEl = document.getElementById('email-status');
+  if(btn){ btn.disabled=true; btn.innerHTML='<i class="ti ti-loader"></i> جاري الإرسال...'; }
+  if(statusEl){ statusEl.style.display='none'; }
+
+  var partsStr = Array.isArray(v.parts)&&v.parts.length ? v.parts.join(' / ') : '—';
+  var isDone = v.status==='Completed'||v.status==='مكتملة';
+  var statusAr = isDone?'مكتملة ✓':'معلقة ⏳';
+  var statusEn = isDone?'Completed ✓':'Pending ⏳';
+
+  // Build HTML email body
+  var htmlBody = [
+    '<div dir="rtl" style="font-family:Arial,Tajawal,sans-serif;max-width:600px;margin:0 auto;background:#fff;border-radius:12px;overflow:hidden;box-shadow:0 4px 20px rgba(0,0,0,.08)">',
+    // Header
+    '<div style="background:#0F2D52;padding:24px 28px;color:#fff">',
+    '<div style="font-size:22px;font-weight:700">🔧 كشف زيارة صيانة</div>',
+    '<div style="font-size:13px;color:#7EC8E3;margin-top:4px">Maintenance Visit Report — HRCO</div>',
+    '</div>',
+    // Greeting
+    extraMsg ? '<div style="padding:16px 28px;background:#FDF0E0;border-right:4px solid #C4680A;font-size:14px;color:#4A5568">'+extraMsg+'</div>' : '',
+    '<div style="padding:20px 28px">',
+    '<p style="font-size:14px;color:#4A5568;margin:0 0 16px">السلام عليكم '+(name?'/ Dear '+name+',':',')+'<br>نرفق لكم كشف زيارة الصيانة رقم <strong>#'+id+'</strong>.</p>',
+    // Table
+    '<table style="width:100%;border-collapse:collapse;font-size:13px;margin-bottom:20px">',
+    '<tr style="background:#F0F4F8"><th colspan="2" style="padding:10px 14px;text-align:right;color:#0F2D52;font-size:14px">تفاصيل الزيارة / Visit Details</th></tr>',
+    _emailRow('اسم العميل','Client',(v.client||'—')),
+    _emailRow('الفني المسؤول','Technician',(v.tech||'—')),
+    _emailRow('التاريخ','Date',(v.date||'—')),
+    _emailRow('المعدة','Equipment',(v.equipment||v.equip||'—')),
+    _emailRow('نوع الزيارة','Visit Type',(v.visit_type||v.type||'—')),
+    _emailRow('قطع الغيار','Required Parts',partsStr),
+    _emailRow('الحالة','Status','<span style="background:'+(isDone?'#EAF3DE':'#FDF0E0')+';color:'+(isDone?'#2D7D3A':'#C4680A')+';padding:2px 10px;border-radius:99px;font-weight:700">'+statusAr+' / '+statusEn+'</span>'),
+    '</table>',
+    // Report link
+    reportURL ? '<div style="background:#E6F1FB;border-radius:8px;padding:14px 18px;margin-bottom:20px;text-align:center"><div style="font-size:13px;font-weight:700;color:#0F2D52;margin-bottom:8px">🔗 رابط الكشف الكامل / Full Report Link</div><a href="'+reportURL+'" style="color:#1D4E89;font-size:12px;word-break:break-all">'+reportURL+'</a></div>' : '',
+    '</div>',
+    // Footer
+    '<div style="background:#F8FAFC;padding:16px 28px;border-top:1px solid #D9E2EC;font-size:11px;color:#718096">',
+    '<strong style="color:#0F2D52">قسم الصيانة | Maintenance Dept.</strong><br>',
+    'شركة هركو للتبريد المحدودة — HRCO Refrigeration Co. Ltd.<br>',
+    '📞 +966 12 636 4884 &nbsp;|&nbsp; 🌐 www.hrcoksa.com<br>',
+    '📍 جدة: المدينة الصناعية الأولى، المرحلة 5، طريق 47<br>',
+    '📍 الرياض: مركز الفالح، الطابق الرابع، شارع العليا',
+    '</div>',
+    '</div>'
+  ].join('');
+
+  // Send via Resend API
+  try{
+    var res = await fetch('https://api.resend.com/emails', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer ''' + RESEND_KEY + ''''
+      },
+      body: JSON.stringify({
+        from: 'HRCO Maintenance <onboarding@resend.dev>',
+        to: [to],
+        subject: subject || ('كشف زيارة صيانة HRCO #'+id),
+        html: htmlBody
+      })
+    });
+    var data = await res.json();
+    if(res.ok && data.id){
+      if(statusEl){ statusEl.style.cssText='display:block;background:#EAF3DE;color:#2D7D3A;padding:10px 12px;border-radius:8px;margin-bottom:12px;font-size:13px;font-weight:600;text-align:center'; statusEl.textContent='✅ تم الإرسال بنجاح! / Email sent successfully!'; }
+      if(btn){ btn.innerHTML='<i class="ti ti-check"></i> تم الإرسال'; btn.style.background='#2D7D3A'; }
+      setTimeout(function(){ closeEmailModal(); if(btn){btn.disabled=false;btn.innerHTML=\'<i class="ti ti-send"></i> إرسال الكشف\';btn.style.background=\'#0F2D52\';} },2500);
+    } else {
+      throw new Error(data.message||'Send failed');
+    }
+  } catch(err){
+    console.error('Email error:', err);
+    if(statusEl){ statusEl.style.cssText='display:block;background:#FCEBEB;color:#C0392B;padding:10px 12px;border-radius:8px;margin-bottom:12px;font-size:13px;font-weight:600;text-align:center'; statusEl.textContent='❌ خطأ في الإرسال: '+err.message; }
+    if(btn){ btn.disabled=false; btn.innerHTML='<i class="ti ti-send"></i> إرسال الكشف'; }
+  }
+}
+
+function _emailRow(ar, en, val){
+  return '<tr style="border-bottom:1px solid #D9E2EC">'
+    +'<td style="padding:8px 14px;background:#F8FAFC;font-weight:700;color:#0F2D52;width:35%;white-space:nowrap">'+ar+'<br><span style="font-size:10px;color:#718096;font-weight:400">'+en+'</span></td>'
+    +'<td style="padding:8px 14px;color:#1a202c">'+val+'</td>'
+    +'</tr>';
 }
 
 function updateClientStats(){
@@ -2873,6 +2993,48 @@ async function showPublicReport(token){
 </div>
 
 <!-- LOGIN SCREEN - completely separate from #app -->
+<!-- ═══ EMAIL MODAL ═══ -->
+<div id="emailModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:8000;align-items:center;justify-content:center">
+  <div style="background:#fff;border-radius:16px;width:min(500px,95vw);max-height:90vh;overflow-y:auto;box-shadow:0 20px 60px rgba(0,0,0,.3)">
+    <div style="padding:16px 20px;border-bottom:1px solid #D9E2EC;display:flex;align-items:center;justify-content:space-between">
+      <div style="font-size:16px;font-weight:700;color:#0F2D52;display:flex;align-items:center;gap:8px">
+        <i class="ti ti-mail" style="color:#C4680A"></i> إرسال كشف الزيارة بالإيميل
+      </div>
+      <button onclick="closeEmailModal()" style="background:none;border:none;font-size:20px;cursor:pointer;color:#718096">✕</button>
+    </div>
+    <div style="padding:20px">
+      <div style="margin-bottom:14px">
+        <label style="font-size:12px;font-weight:700;color:#4A5568;display:block;margin-bottom:6px">إيميل المستلم / Recipient Email *</label>
+        <input id="email-to" type="email" placeholder="example@company.com" style="width:100%;padding:10px 12px;border:1.5px solid #D9E2EC;border-radius:8px;font-size:14px;font-family:inherit;outline:none">
+      </div>
+      <div style="margin-bottom:14px">
+        <label style="font-size:12px;font-weight:700;color:#4A5568;display:block;margin-bottom:6px">اسم المستلم / Recipient Name</label>
+        <input id="email-name" type="text" placeholder="اسم الشخص أو الشركة" style="width:100%;padding:10px 12px;border:1.5px solid #D9E2EC;border-radius:8px;font-size:14px;font-family:inherit;outline:none">
+      </div>
+      <div style="margin-bottom:14px">
+        <label style="font-size:12px;font-weight:700;color:#4A5568;display:block;margin-bottom:6px">موضوع الإيميل / Subject</label>
+        <input id="email-subject" type="text" style="width:100%;padding:10px 12px;border:1.5px solid #D9E2EC;border-radius:8px;font-size:14px;font-family:inherit;outline:none">
+      </div>
+      <div style="margin-bottom:14px">
+        <label style="font-size:12px;font-weight:700;color:#4A5568;display:block;margin-bottom:6px">رسالة إضافية / Additional Message (اختياري)</label>
+        <textarea id="email-msg" rows="3" placeholder="أي ملاحظات إضافية..." style="width:100%;padding:10px 12px;border:1.5px solid #D9E2EC;border-radius:8px;font-size:13px;font-family:inherit;outline:none;resize:vertical"></textarea>
+      </div>
+      <!-- Preview of report link -->
+      <div style="background:#F0F4F8;border-radius:8px;padding:10px 12px;margin-bottom:16px;font-size:12px;color:#718096">
+        <i class="ti ti-link" style="color:#1D4E89"></i> <strong>رابط الكشف:</strong> 
+        <span id="email-link-preview" style="color:#1D4E89;word-break:break-all"></span>
+      </div>
+      <div id="email-status" style="display:none;padding:10px 12px;border-radius:8px;margin-bottom:12px;font-size:13px;font-weight:600;text-align:center"></div>
+      <div style="display:flex;gap:10px">
+        <button onclick="closeEmailModal()" style="flex:1;padding:11px;border-radius:8px;border:1.5px solid #D9E2EC;background:#fff;color:#718096;cursor:pointer;font-size:14px;font-weight:600;font-family:inherit">إلغاء</button>
+        <button onclick="doSendEmail()" id="email-send-btn" style="flex:2;padding:11px;border-radius:8px;border:none;background:#0F2D52;color:#fff;cursor:pointer;font-size:14px;font-weight:700;font-family:inherit;display:flex;align-items:center;justify-content:center;gap:8px">
+          <i class="ti ti-send"></i> إرسال الكشف
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
 <div id="loginScreen" style="position:fixed;inset:0;background:#0F2D52;z-index:9999;display:flex;align-items:center;justify-content:center;padding:16px;font-family:Tajawal,sans-serif">
   <div style="background:#fff;border-radius:16px;width:100%;max-width:400px;overflow:hidden;box-shadow:0 20px 60px rgba(0,0,0,.3)">
     <div style="background:#0F2D52;padding:24px 20px;text-align:center">
