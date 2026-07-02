@@ -1776,10 +1776,7 @@ async function sendByEmail(id){
   var token = await getOrCreateReportToken(id);
   var reportURL = token ? getReportURL(token) : '';
 
-  // Step 1: Open print window so user can save PDF first
-  printVisit(id);
-
-  // Step 2: After short delay, open email with token URL
+  // Open email directly with token URL
   setTimeout(function(){
     var status_ar = v.status==='Completed'||v.status==='مكتملة' ? 'مكتملة ✓' : 'معلقة';
     var status_en = v.status==='Completed'||v.status==='مكتملة' ? 'Completed ✓' : 'Pending';
@@ -1833,7 +1830,7 @@ async function sendByEmail(id){
     var body = encodeURIComponent(bodyText);
 
     window.open('mailto:?subject=' + subject + '&body=' + body);
-  }, 800);
+  }, 100);
 }
 
 function updateClientStats(){
