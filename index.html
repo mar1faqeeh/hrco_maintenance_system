@@ -998,6 +998,21 @@ async function loadAllFromDB(){
       rData = visData.map(function(v,i){ return Object.assign({id:i+1},v); });
       console.log('Loaded', visData.length, 'visits from DB');
     }
+  } catch(e){ console.log('loadVisits error:',e); }
+
+  try {
+    // Load signatures from visit_signatures table and merge into visData
+    var rSig = await _sb.from('visit_signatures').select('*');
+    if(rSig.data && rSig.data.length){
+      rSig.data.forEach(function(sig){
+        var v = visData.find(function(x){ return x.id == sig.visit_id; });
+        if(v){
+          if(sig.sig_tech) v.sig_tech = sig.sig_tech;
+          if(sig.sig_client) v.sig_client = sig.sig_client;
+        }
+      });
+      console.log('Loaded', rSig.data.length, 'signatures from DB');
+    }
   } catch(e){ console.log('loadVisits error:', e); }
 
   try {
