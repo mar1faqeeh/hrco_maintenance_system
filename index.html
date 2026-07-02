@@ -1735,14 +1735,51 @@ function saveAsPDF(id){
   }, 500);
 }
 
-function sendByEmail(id){
+
+// ══════════════════════════════════════
+// SECURE REPORT TOKENS
+// ══════════════════════════════════════
+function generateToken(){
+  // 24-char random alphanumeric token - impossible to guess
+  var chars = 'ABCDEFGHJKMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789';
+  var token = '';
+  for(var i=0; i<24; i++){
+    token += chars.charAt(Math.floor(Math.random() * chars.length));
+  }
+  return token;
+}
+
+async function getOrCreateReportToken(visitId){
+  if(!_sb) return null;
+  // Check if token already exists
+  var existing = await _sb.from('report_tokens').select('token').eq('visit_id', visitId).single();
+  if(existing.data && existing.data.token) return existing.data.token;
+  // Create new token
+  var token = generateToken();
+  var ins = await _sb.from('report_tokens').insert({
+    visit_id: visitId,
+    token: token
+  });
+  if(ins.error){ console.error('Token error:', ins.error.message); return null; }
+  return token;
+}
+
+function getReportURL(token){
+  return window.location.origin + window.location.pathname + '?report=' + token;
+}
+
+async function sendByEmail(id){
   var v = visData.find(function(x){ return x.id==id; });
   if(!v){ alert('Visit not found'); return; }
+
+  // Get or create secure token for this visit
+  var token = await getOrCreateReportToken(id);
+  var reportURL = token ? getReportURL(token) : '';
 
   // Step 1: Open print window so user can save PDF first
   printVisit(id);
 
-  // Step 2: After short delay, open email with bilingual body
+  // Step 2: After short delay, open email with token URL
   setTimeout(function(){
     var status_ar = v.status==='Completed'||v.status==='مكتملة' ? 'مكتملة ✓' : 'معلقة';
     var status_en = v.status==='Completed'||v.status==='مكتملة' ? 'Completed ✓' : 'Pending';
@@ -2741,10 +2778,68 @@ function setupRealtime() {
 // ══════════════════════════════════════
 var _origDOMReady = document.addEventListener;
 window.addEventListener('load', async function() {
+  // Check if this is a public report link (?report=TOKEN)
+  var urlParams = new URLSearchParams(window.location.search);
+  var reportToken = urlParams.get('report');
+  if(reportToken){
+    await showPublicReport(reportToken);
+    return; // Don't show login or load system
+  }
   await loadVisitsFromDB();
   await loadAC();
   setupRealtime();
 });
+
+async function showPublicReport(token){
+  // Hide everything - show loading
+  document.body.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;min-height:100vh;background:#F0F4F8;font-family:Tajawal,Arial,sans-serif"><div style="text-align:center;color:#718096"><div style="font-size:48px;margin-bottom:16px">⏳</div><div>جاري تحميل الكشف...</div><div style="font-size:12px;margin-top:4px">Loading report...</div></div></div>';
+
+  // Init Supabase
+  var sb = window.supabase ? window.supabase.createClient(
+    "https://luuvvbevhdtpzywlrtux.supabase.co",
+    "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imx1dXZ2YmV2aGR0cHp5d2xydHV4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzg2NjQyMjUsImV4cCI6MjA5NDI0MDIyNX0.AuIn2FChEWEeAeKG_SLJf8H_AptwXBibNWKoQFgNb18"
+  ) : null;
+  if(!sb){ document.body.innerHTML = '<div style="text-align:center;padding:60px;font-family:Tajawal">خطأ في الاتصال / Connection error</div>'; return; }
+
+  // Load token
+  var tr = await sb.from('report_tokens').select('visit_id').eq('token', token).single();
+  if(!tr.data || tr.error){
+    document.body.innerHTML = '<div style="text-align:center;padding:60px;font-family:Tajawal,Arial,sans-serif;direction:rtl"><div style="font-size:48px;margin-bottom:16px">🔒</div><div style="font-size:20px;font-weight:700;color:#C0392B">رابط غير صالح</div><div style="color:#718096;margin-top:8px">Invalid or expired report link</div></div>';
+    return;
+  }
+  var visitId = tr.data.visit_id;
+
+  // Load visit data
+  var vr = await sb.from('visits').select('*').eq('id', visitId).single();
+  if(!vr.data){ document.body.innerHTML = '<div style="text-align:center;padding:60px">التقرير غير موجود / Report not found</div>'; return; }
+  var v = vr.data;
+
+  // Load signatures
+  var sigr = await sb.from('visit_signatures').select('*').eq('visit_id', visitId).single();
+  var techSig = sigr.data ? sigr.data.sig_tech||'' : '';
+  var clientSig = sigr.data ? sigr.data.sig_client||'' : '';
+
+  // Load header/footer images (embedded in this file)
+  var HEADER = HEADER_IMG;
+  var FOOTER = FOOTER_IMG;
+
+  var typeAr = {'ضمان':'ضمان','مدفوعة':'مدفوعة','عقد':'عقد صيانة','warranty':'ضمان','paid':'مدفوعة','contract':'عقد صيانة'};
+  var typeEn = {'ضمان':'Warranty','مدفوعة':'Paid','عقد':'Contract','warranty':'Warranty','paid':'Paid','contract':'Contract'};
+  var vtype = v.visit_type || v.type || '';
+  var partsStr = Array.isArray(v.parts)&&v.parts.length ? v.parts.join(' / ') : '—';
+  var isDone = v.status==='مكتملة'||v.status==='Completed';
+  var statusAr = isDone?'مكتملة ✓':'معلقة';
+  var statusEn = isDone?'Completed ✓':'Pending';
+  var visitDateTime = (v.date||'') + (v.time?' '+v.time:'');
+
+  // Render using _doPrintVisit equivalent inline
+  document.body.innerHTML = '';
+  _doPrintVisit(visitId, {
+    client: v.client, location: v.location, equipment: v.equipment,
+    serial_number: v.serial_number, model: v.model, tech: v.tech,
+    fault: v.fault, notes: v.notes, parts: v.parts||[], status: v.status
+  }, techSig, clientSig, visitDateTime, vtype, partsStr, statusAr, statusEn, isDone, HEADER, FOOTER);
+}
 
 </script>
 <!-- VISIT DETAIL MODAL -->
