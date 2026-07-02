@@ -1738,19 +1738,97 @@ function saveAsPDF(id){
 function sendByEmail(id){
   var v = visData.find(function(x){ return x.id==id; });
   if(!v){ alert('Visit not found'); return; }
-  var subject = encodeURIComponent('كشف زيارة صيانة HRCO #' + id + ' - ' + (v.client||''));
-  var body = encodeURIComponent(
-    'السلام عليكم،\n\n' +
-    'مرفق كشف زيارة الصيانة:\n' +
-    '• العميل: ' + (v.client||'—') + '\n' +
-    '• الفني: ' + (v.tech||'—') + '\n' +
-    '• التاريخ: ' + (v.date||'—') + '\n' +
-    '• المعدة: ' + (v.equipment||v.equip||'—') + '\n' +
-    '• الحالة: ' + (v.status||'—') + '\n\n' +
-    'للاطلاع على الكشف الكامل يرجى فتح الرابط المرفق.\n\n' +
-    'شركة هركو للتبريد المحدودة\nwww.hrcoksa.com'
-  );
-  window.open('mailto:?subject=' + subject + '&body=' + body);
+
+  // Step 1: Open print window so user can save PDF first
+  printVisit(id);
+
+  // Step 2: After short delay, open email with bilingual body
+  setTimeout(function(){
+    var status_ar = v.status==='Completed'||v.status==='مكتملة' ? 'مكتملة ✓' : 'معلقة';
+    var status_en = v.status==='Completed'||v.status==='مكتملة' ? 'Completed ✓' : 'Pending';
+    var equip = v.equipment||v.equip||'—';
+    var parts = Array.isArray(v.parts)&&v.parts.length ? v.parts.join(', ') : '—';
+
+    var subject = encodeURIComponent(
+      'كشف زيارة صيانة HRCO #' + id + ' | Maintenance Visit Report - ' + (v.client||'')
+    );
+
+    var body = encodeURIComponent(
+      'السلام عليكم ورحمة الله وبركاته،
+' +
+      'Dear Sir/Madam,
+
+' +
+      'نرفق لكم كشف زيارة الصيانة رقم #' + id + '.
+' +
+      'Please find attached maintenance visit report #' + id + '.
+
+' +
+      '══════════════════════════
+' +
+      '           تفاصيل الزيارة / Visit Details
+' +
+      '══════════════════════════
+' +
+      '• العميل / Client:      ' + (v.client||'—') + '
+' +
+      '• الفني / Technician:   ' + (v.tech||'—') + '
+' +
+      '• التاريخ / Date:       ' + (v.date||'—') + '
+' +
+      '• المعدة / Equipment:   ' + equip + '
+' +
+      '• نوع الزيارة / Type:   ' + (v.visit_type||v.type||'—') + '
+' +
+      '• قطع الغيار / Parts:   ' + parts + '
+' +
+      '• الحالة / Status:      ' + status_ar + ' / ' + status_en + '
+' +
+      '══════════════════════════
+
+' +
+      'للاطلاع على الكشف الكامل يرجى تحميله من المرفقات.
+' +
+      'Please find the full report in the attachments.
+
+' +
+      '──────────────────────────
+' +
+      'اطيب التمنيات،
+' +
+      'Best Regards,
+
+' +
+      'قسم الصيانة | Maintenance Department
+' +
+      'شركة هركو للتبريد المحدودة
+' +
+      'HRCO Refrigeration Co. Ltd.
+
+' +
+      '📞 جدة / Jeddah:   +966 12 636 4884
+' +
+      '📍 جدة: المدينة الصناعية الأولى، المرحلة 5، طريق 47
+' +
+      '    Jeddah: 1st Industrial City, Phase 5, Road 47
+
+' +
+      '📍 الرياض: مركز الفالح، الطابق الرابع، شارع العليا
+' +
+      '    Riyadh: Al-Faleh Center, 4th Floor, Olaya St.
+
+' +
+      '🌐 www.hrcoksa.com
+' +
+      '──────────────────────────
+' +
+      '⚠ ملاحظة: يرجى حفظ نافذة PDF التي فُتحت للتو كمرفق قبل الإرسال.
+' +
+      '  Note: Please save the PDF window that just opened as attachment before sending.'
+    );
+
+    window.open('mailto:?subject=' + subject + '&body=' + body);
+  }, 800);
 }
 
 function updateClientStats(){
