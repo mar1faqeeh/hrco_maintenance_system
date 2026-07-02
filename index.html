@@ -479,7 +479,7 @@ html,body{height:100%;font-family:Tajawal,sans-serif;font-size:14px;background:#
         </div>
       </div>
       <div id="closeAB" style="display:flex;gap:8px;padding:12px 14px;border-top:1px solid #D9E2EC">
-        <button class="btn btn-o" style="flex:1"><i class="ti ti-file-text"></i><span id="t-pdf">Preview PDF</span></button>
+        <button class="btn btn-o" onclick="printVisit(currentVisitId)" style="flex:1"><i class="ti ti-file-text"></i><span id="t-pdf">Preview PDF</span></button>
         <button id="suspBtn" disabled onclick="suspendV()" class="btn btn-w" style="flex:1"><i class="ti ti-clock-pause"></i><span id="t-suspend">Suspend</span></button>
         <button id="closeBtn" disabled onclick="closeV()" class="btn btn-p" style="flex:1"><i class="ti ti-lock"></i><span id="t-close-rep">Close</span></button>
       </div>
@@ -1540,7 +1540,11 @@ async function closeV(){
       // 1. Update visit status
       var r1 = await _sb.from('visits').update({status:'مكتملة'}).eq('id',currentVisitId);
       if(r1.error) console.error('Status error:', r1.error.message);
-      else console.log('✅ Visit status = مكتملة');
+      else {
+        console.log('✅ Visit status = مكتملة');
+        var ca2 = document.getElementById('closeActions');
+        if(ca2) ca2.style.display='block';
+      }
 
       // 2. Save signatures to visit_signatures table (separate table - no schema cache issues)
       if(techSig || clientSig){
@@ -1701,6 +1705,35 @@ var clientsData = [
   {id:8,name:'King Khalid Airport',type:'Airport',loc:'Riyadh',color:'#047857',bg:'#D1FAE5',init:'KA',contract:'contract',warranty:true,total:11,completed:10,pending:1,parts:0,wv:4}
 ];
 var cSrch='', cFil='all';
+
+function saveAsPDF(id){
+  // Open print dialog with PDF save option
+  var v = visData.find(function(x){ return x.id==id; });
+  if(!v){ alert('Visit not found'); return; }
+  // Same as printVisit but auto-triggers print dialog
+  printVisit(id);
+  setTimeout(function(){
+    // The print window will open - user can Save as PDF from print dialog
+  }, 500);
+}
+
+function sendByEmail(id){
+  var v = visData.find(function(x){ return x.id==id; });
+  if(!v){ alert('Visit not found'); return; }
+  var subject = encodeURIComponent('كشف زيارة صيانة HRCO #' + id + ' - ' + (v.client||''));
+  var body = encodeURIComponent(
+    'السلام عليكم،\n\n' +
+    'مرفق كشف زيارة الصيانة:\n' +
+    '• العميل: ' + (v.client||'—') + '\n' +
+    '• الفني: ' + (v.tech||'—') + '\n' +
+    '• التاريخ: ' + (v.date||'—') + '\n' +
+    '• المعدة: ' + (v.equipment||v.equip||'—') + '\n' +
+    '• الحالة: ' + (v.status||'—') + '\n\n' +
+    'للاطلاع على الكشف الكامل يرجى فتح الرابط المرفق.\n\n' +
+    'شركة هركو للتبريد المحدودة\nwww.hrcoksa.com'
+  );
+  window.open('mailto:?subject=' + subject + '&body=' + body);
+}
 
 function updateClientStats(){
   var total = clientsData.length;
@@ -2065,7 +2098,9 @@ function resetNewVisitForm(){
   if(micOn&&_recog){try{_recog.stop();}catch(e){}}
   micOn=false;_updateMicUI(false);
   currentVisitId=null;
-  window._visitStartTime = Date.now(); // track when visit started
+  window._visitStartTime = Date.now();
+  var ca = document.getElementById('closeActions');
+  if(ca) ca.style.display='none';
 }
 
 function populateTechSelect(){
