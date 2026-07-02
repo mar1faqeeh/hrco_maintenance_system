@@ -1922,7 +1922,7 @@ async function doSendEmail(){
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': 'Bearer ''' + RESEND_KEY + ''''
+        'Authorization': 'Bearer re_GGxENiGm_JbdJWU8aeAakCU2JYLoEhaAo'
       },
       body: JSON.stringify({
         from: 'HRCO Maintenance <onboarding@resend.dev>',
@@ -1935,7 +1935,7 @@ async function doSendEmail(){
     if(res.ok && data.id){
       if(statusEl){ statusEl.style.cssText='display:block;background:#EAF3DE;color:#2D7D3A;padding:10px 12px;border-radius:8px;margin-bottom:12px;font-size:13px;font-weight:600;text-align:center'; statusEl.textContent='✅ تم الإرسال بنجاح! / Email sent successfully!'; }
       if(btn){ btn.innerHTML='<i class="ti ti-check"></i> تم الإرسال'; btn.style.background='#2D7D3A'; }
-      setTimeout(function(){ closeEmailModal(); if(btn){btn.disabled=false;btn.innerHTML=\'<i class="ti ti-send"></i> إرسال الكشف\';btn.style.background=\'#0F2D52\';} },2500);
+      setTimeout(function(){ closeEmailModal(); if(btn){btn.disabled=false;btn.innerHTML='<i class="ti ti-send"></i> إرسال الكشف';btn.style.background='#0F2D52';} },2500);
     } else {
       throw new Error(data.message||'Send failed');
     }
