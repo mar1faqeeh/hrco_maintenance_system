@@ -1916,17 +1916,16 @@ async function doSendEmail(){
     '</div>'
   ].join('');
 
-  // Send via Resend API
+  // Send via Supabase Edge Function (proxy to Resend - avoids CORS)
   try{
-    var res = await fetch('https://api.resend.com/emails', {
+    var res = await fetch('https://luuvvbevhdtpzywlrtux.supabase.co/functions/v1/send-email', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': 'Bearer re_GGxENiGm_JbdJWU8aeAakCU2JYLoEhaAo'
+        'Authorization': 'Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imx1dXZ2YmV2aGR0cHp5d2xydHV4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzg2NjQyMjUsImV4cCI6MjA5NDI0MDIyNX0.AuIn2FChEWEeAeKG_SLJf8H_AptwXBibNWKoQFgNb18'
       },
       body: JSON.stringify({
-        from: 'HRCO Maintenance <onboarding@resend.dev>',
-        to: [to],
+        to: to,
         subject: subject || ('كشف زيارة صيانة HRCO #'+id),
         html: htmlBody
       })
