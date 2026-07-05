@@ -105,7 +105,7 @@ html,body{height:100%;font-family:Tajawal,sans-serif;font-size:14px;background:#
 .trow:last-child{border-bottom:none}.trow:hover{background:#F8FAFC}
 .tc{font-size:12px;color:#1a202c;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .tc2{font-size:11px;color:#718096}
-.rbtn{background:none;border:none;color:#A0AEC0;cursor:pointer;padding:3px;border-radius:4px;font-size:15px}
+.rbtn{background:none;border:none;color:#A0AEC0;cursor:pointer;padding:2px 4px;border-radius:4px;font-size:13px}
 .rbtn:hover{background:#F0F4F8;color:#718096}
 /* Filter tabs */
 .vtbar{display:flex;align-items:center;gap:10px;margin-bottom:12px;flex-wrap:wrap}
@@ -1136,11 +1136,11 @@ function renderVisits(f,q){
       +'<div class="tc"><span class="bdg b-i" style="font-size:10px">'+tlbl+'</span></div>'
       +'<div class="tc tc2"><div>'+(r.date||'—')+'</div><div style="font-size:10px;color:#A0AEC0">'+(r.time||'')+'</div></div>'
       +'<div class="tc"><span class="bdg '+stb+'">'+(r.status||'—')+'</span></div>'
-      +'<div style="display:flex;gap:4px">'
-      +'<button class="rbtn" onclick="viewVisit('+rid+')" title="View"><i class="ti ti-eye"></i></button>'
-      +'<button class="rbtn" onclick="printVisit('+rid+')" title="Print"><i class="ti ti-printer"></i></button>'
-      +'<button class="rbtn" onclick="sendByEmail('+rid+')" title="Send Email" style="color:#C4680A"><i class="ti ti-mail"></i></button>'
-      +'<button class="rbtn" onclick="deleteVisit('+rid+')" title="Delete" style="color:#C0392B"><i class="ti ti-trash"></i></button>'
+      +'<div style="display:flex;gap:2px">'
+      +'<button class="rbtn" onclick="viewVisit('+rid+')" title="View" style="padding:3px 5px;font-size:13px"><i class="ti ti-eye"></i></button>'
+      +'<button class="rbtn" onclick="printVisit('+rid+')" title="Print" style="padding:3px 5px;font-size:13px"><i class="ti ti-printer"></i></button>'
+      +'<button class="rbtn" onclick="sendByEmail('+rid+')" title="Send Email" style="padding:3px 5px;font-size:13px;color:#C4680A"><i class="ti ti-mail"></i></button>'
+      +'<button class="rbtn" onclick="deleteVisit('+rid+')" title="Delete" style="padding:3px 5px;font-size:13px;color:#C0392B"><i class="ti ti-trash"></i></button>'
       +'</div>';
     body.appendChild(row);
   });
