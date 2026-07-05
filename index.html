@@ -1139,6 +1139,8 @@ function renderVisits(f,q){
       +'<div style="display:flex;gap:4px">'
       +'<button class="rbtn" onclick="viewVisit('+rid+')" title="View"><i class="ti ti-eye"></i></button>'
       +'<button class="rbtn" onclick="printVisit('+rid+')" title="Print"><i class="ti ti-printer"></i></button>'
+      +'<button class="rbtn" onclick="sendByEmail('+rid+')" title="Send Email" style="color:#C4680A"><i class="ti ti-mail"></i></button>'
+      +'<button class="rbtn" onclick="deleteVisit('+rid+')" title="Delete" style="color:#C0392B"><i class="ti ti-trash"></i></button>'
       +'</div>';
     body.appendChild(row);
   });
