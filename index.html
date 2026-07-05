@@ -1136,7 +1136,7 @@ function renderVisits(f,q){
       +'<div class="tc"><span class="bdg b-i" style="font-size:10px">'+tlbl+'</span></div>'
       +'<div class="tc tc2"><div>'+(r.date||'—')+'</div><div style="font-size:10px;color:#A0AEC0">'+(r.time||'')+'</div></div>'
       +'<div class="tc"><span class="bdg '+stb+'">'+(r.status||'—')+'</span></div>'
-      +'<div style="display:flex;gap:2px">'
+      +'<div style="display:flex;gap:2px;flex-shrink:0;min-width:110px">'
       +'<button class="rbtn" onclick="viewVisit('+rid+')" title="View" style="padding:3px 5px;font-size:13px"><i class="ti ti-eye"></i></button>'
       +'<button class="rbtn" onclick="printVisit('+rid+')" title="Print" style="padding:3px 5px;font-size:13px"><i class="ti ti-printer"></i></button>'
       +'<button class="rbtn" onclick="sendByEmail('+rid+')" title="Send Email" style="padding:3px 5px;font-size:13px;color:#C4680A"><i class="ti ti-mail"></i></button>'
