@@ -1145,6 +1145,28 @@ function renderVisits(f,q){
 }
 function filterVis(q){renderVisits(visFil,q);}
 
+async function deleteVisit(id){
+  if(!confirm('هل تريد حذف هذه الزيارة؟\nAre you sure you want to delete this visit?')) return;
+  if(!_sb) return;
+  try{
+    // Delete signatures first
+    await _sb.from('visit_signatures').delete().eq('visit_id', id);
+    // Delete report token
+    await _sb.from('report_tokens').delete().eq('visit_id', id);
+    // Delete visit
+    var r = await _sb.from('visits').delete().eq('id', id);
+    if(r.error){ alert('خطأ في الحذف: ' + r.error.message); return; }
+    // Remove from local data
+    visData = visData.filter(function(v){ return v.id != id; });
+    rData = visData.map(function(v,i){ return Object.assign({id:i+1},v); });
+    renderVisits(visFil, '');
+    updateDashStats();
+    console.log('✅ Visit #'+id+' deleted');
+  } catch(e){
+    alert('خطأ: ' + e.message);
+  }
+}
+
 function renderPending(){
   var body = document.getElementById('pendingBody');
   var countEl = document.getElementById('pend-count');
