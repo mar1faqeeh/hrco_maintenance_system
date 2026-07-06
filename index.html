@@ -253,10 +253,7 @@ html,body{height:100%;font-family:Tajawal,sans-serif;font-size:14px;background:#
   <div class="g2">
     <div class="card">
       <div class="ch"><div class="ct"><i class="ti ti-users"></i><span id="t-tech-status">Technician Status</span></div><button class="ca" onclick="go('technicians')" id="t-view-all">View All</button></div>
-      <div class="lr"><div class="av" style="background:#E6F1FB;color:#1D4E89">أع</div><div class="ri"><div class="rn">أحمد العتيبي</div><div class="rs">Ritz Carlton — B3</div></div><span class="bdg b-w" id="t-inprog">In Progress</span></div>
-      <div class="lr"><div class="av" style="background:#EAF3DE;color:#2D7D3A">مح</div><div class="ri"><div class="rn">محمد الحربي</div><div class="rs">Al-Aseel Restaurant</div></div><span class="bdg b-s" id="t-done">Completed</span></div>
-      <div class="lr"><div class="av" style="background:#FDF0E0;color:#C4680A">سق</div><div class="ri"><div class="rn">سامي القحطاني</div><div class="rs" id="t-onway">On the way — McDonald's</div></div><span class="bdg b-i">On way</span></div>
-      <div class="lr"><div class="av" style="background:#F1F5F9;color:#64748B">خر</div><div class="ri"><div class="rn">خالد الرشيدي</div><div class="rs" id="t-no-visits">No current visits</div></div><span class="bdg b-g" id="t-avail">Available</span></div>
+      <div id="dash-tech-body"><div style="padding:20px;text-align:center;color:#A0AEC0;font-size:13px">Loading...</div></div>
     </div>
     <div class="card">
       <div class="ch"><div class="ct"><i class="ti ti-clock-pause" style="color:#C4680A"></i><span id="t-pend-reports">Pending Reports</span></div><button class="ca" onclick="go('pending')" id="t-view-all2">View All</button></div>
@@ -2314,26 +2311,55 @@ function showTechStats(id) {
 function renderDashTechs(){
   var body = document.getElementById('dash-tech-body');
   if(!body) return;
-  var techs = techsData.slice(0,5);
-  if(!techs.length){
-    body.innerHTML = '<div style="padding:20px;text-align:center;color:#A0AEC0;font-size:13px">No technicians</div>';
+  
+  // Get unique techs who recently worked - sorted by most recent visit
+  var techActivity = {};
+  visData.forEach(function(v){
+    if(!v.tech) return;
+    if(!techActivity[v.tech] || v.date > techActivity[v.tech].date){
+      techActivity[v.tech] = v;
+    }
+  });
+
+  // Sort techs by most recent visit date
+  var recentTechs = Object.keys(techActivity)
+    .sort(function(a,b){ return techActivity[b].date > techActivity[a].date ? 1 : -1; })
+    .slice(0, 5);
+
+  if(!recentTechs.length){
+    body.innerHTML = '<div style="padding:20px;text-align:center;color:#A0AEC0;font-size:13px">No recent activity</div>';
     return;
   }
+
   body.innerHTML = '';
-  techs.forEach(function(t){
-    var activePending = visData.filter(function(v){
-      return v.tech===t.name && (v.status==='Pending'||v.status==='معلقة'||v.status==='قيد التنفيذ');
+  recentTechs.forEach(function(techName){
+    var lastVisit = techActivity[techName];
+    var techInfo = techsData.find(function(t){ return t.name===techName; }) || {};
+    
+    // Check if tech has pending visits
+    var hasPending = visData.some(function(v){
+      return v.tech===techName && (v.status==='Pending'||v.status==='معلقة'||v.status==='قيد التنفيذ');
     });
-    var activeVisit = activePending.length ? activePending[0] : null;
-    var statusLabel = activeVisit ? 'In Progress' : 'Available';
-    var badgeClass = activeVisit ? 'b-w' : 'b-s';
-    var subText = activeVisit ? (activeVisit.client||'') + (activeVisit.equipment||activeVisit.equip ? ' — '+(activeVisit.equipment||activeVisit.equip) : '') : 'No active visits';
+    var isDone = lastVisit.status==='Completed'||lastVisit.status==='مكتملة';
+    
+    var statusLabel = hasPending ? 'Pending' : isDone ? 'Completed' : 'In Progress';
+    var badgeClass = hasPending ? 'b-w' : isDone ? 'b-s' : 'b-i';
+    var subText = (lastVisit.client||'—') + (lastVisit.equipment||lastVisit.equip ? ' — '+(lastVisit.equipment||lastVisit.equip) : '');
+    
+    var initials = techInfo.initials || techInfo.init || techName.slice(0,2);
+    var bg = techInfo.bg || '#E6F1FB';
+    var color = techInfo.color || '#1D4E89';
+    
     var row = document.createElement('div');
     row.className = 'lr';
-    row.style.cursor='pointer';
+    row.style.cursor = 'pointer';
     row.onclick = function(){ go('technicians'); };
-    row.innerHTML = '<div class="av" style="background:'+(t.bg||'#E6F1FB')+';color:'+(t.color||'#1D4E89')+'">'+(t.initials||t.name.slice(0,2))+'</div>'
-      + '<div class="ri"><div class="rn">'+(t.name||'—')+'</div><div class="rs">'+subText+'</div></div>'
+    row.innerHTML = 
+      '<div class="av" style="background:'+bg+';color:'+color+'">'+initials+'</div>'
+      + '<div class="ri">'
+      + '<div class="rn">'+techName+'</div>'
+      + '<div class="rs">'+subText+'</div>'
+      + '</div>'
       + '<span class="bdg '+badgeClass+'">'+statusLabel+'</span>';
     body.appendChild(row);
   });
