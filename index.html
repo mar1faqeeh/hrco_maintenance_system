@@ -269,9 +269,7 @@ html,body{height:100%;font-family:Tajawal,sans-serif;font-size:14px;background:#
   <div class="g2">
     <div class="card">
       <div class="ch"><div class="ct"><i class="ti ti-history"></i><span id="t-recent">Recent Visits</span></div><button class="ca" onclick="go('visits')" id="t-archive-btn">Full Archive</button></div>
-      <div class="lr"><div class="av" style="background:#EAF3DE;border-radius:8px"><i class="ti ti-circle-check" style="color:#2D7D3A;font-size:16px"></i></div><div class="ri"><div class="rn">Al-Aseel — Central Kitchen</div><div class="rs">محمد الحربي · 10:30 AM</div></div><span class="bdg b-s">Completed</span></div>
-      <div class="lr"><div class="av" style="background:#FDF0E0;border-radius:8px"><i class="ti ti-clock-pause" style="color:#C4680A;font-size:16px"></i></div><div class="ri"><div class="rn">Ritz Carlton — Room B3</div><div class="rs">أحمد العتيبي · 09:00 AM</div></div><span class="bdg b-w">Pending</span></div>
-      <div class="lr"><div class="av" style="background:#EAF3DE;border-radius:8px"><i class="ti ti-circle-check" style="color:#2D7D3A;font-size:16px"></i></div><div class="ri"><div class="rn">McDonald's — Main Branch</div><div class="rs">سامي القحطاني · Yesterday</div></div><span class="bdg b-s">Completed</span></div>
+      <div id="dash-recent-body"><div style="padding:20px;text-align:center;color:#A0AEC0;font-size:13px">Loading...</div></div>
     </div>
     <div class="card">
       <div class="ch"><div class="ct"><i class="ti ti-chart-bar"></i><span id="t-weekly">Weekly Progress</span></div><span style="font-size:11px;color:#A0AEC0">Sun—Sat</span></div>
@@ -938,6 +936,8 @@ function lgSuccess(u){
     try { setLang(LNG); } catch(e) { console.log('setLang error:', e); }
     populateTechSelect();
     updateDashStats();
+    renderDashTechs();
+    renderDashRecent();
     renderPending();
     go('dashboard');
     try { initChart(); } catch(e) {}
@@ -2277,6 +2277,63 @@ function showTechStats(id) {
 // ══════════════════════════════════════
 // POPULATE TECH SELECT IN NEW VISIT FORM
 // ══════════════════════════════════════
+function renderDashTechs(){
+  var body = document.getElementById('dash-tech-body');
+  if(!body) return;
+  var techs = techsData.slice(0,5);
+  if(!techs.length){
+    body.innerHTML = '<div style="padding:20px;text-align:center;color:#A0AEC0;font-size:13px">No technicians</div>';
+    return;
+  }
+  body.innerHTML = '';
+  techs.forEach(function(t){
+    var activePending = visData.filter(function(v){
+      return v.tech===t.name && (v.status==='Pending'||v.status==='معلقة'||v.status==='قيد التنفيذ');
+    });
+    var activeVisit = activePending.length ? activePending[0] : null;
+    var statusLabel = activeVisit ? 'In Progress' : 'Available';
+    var badgeClass = activeVisit ? 'b-w' : 'b-s';
+    var subText = activeVisit ? (activeVisit.client||'') + (activeVisit.equipment||activeVisit.equip ? ' — '+(activeVisit.equipment||activeVisit.equip) : '') : 'No active visits';
+    var row = document.createElement('div');
+    row.className = 'lr';
+    row.style.cursor='pointer';
+    row.onclick = function(){ go('technicians'); };
+    row.innerHTML = '<div class="av" style="background:'+(t.bg||'#E6F1FB')+';color:'+(t.color||'#1D4E89')+'">'+(t.initials||t.name.slice(0,2))+'</div>'
+      + '<div class="ri"><div class="rn">'+(t.name||'—')+'</div><div class="rs">'+subText+'</div></div>'
+      + '<span class="bdg '+badgeClass+'">'+statusLabel+'</span>';
+    body.appendChild(row);
+  });
+}
+
+function renderDashRecent(){
+  var body = document.getElementById('dash-recent-body');
+  if(!body) return;
+  var recent = visData.slice(0, 5); // last 5 visits
+  if(!recent.length){
+    body.innerHTML = '<div style="padding:20px;text-align:center;color:#A0AEC0;font-size:13px">No visits yet</div>';
+    return;
+  }
+  body.innerHTML = '';
+  recent.forEach(function(v){
+    var isDone = v.status==='Completed'||v.status==='مكتملة';
+    var isPend = v.status==='Pending'||v.status==='معلقة'||v.status==='قيد التنفيذ';
+    var iconBg = isDone?'#EAF3DE':isPend?'#FDF0E0':'#E6F1FB';
+    var iconColor = isDone?'#2D7D3A':isPend?'#C4680A':'#1D4E89';
+    var iconClass = isDone?'ti-circle-check':isPend?'ti-clock-pause':'ti-loader';
+    var badgeClass = isDone?'b-s':isPend?'b-w':'b-i';
+    var statusLabel = isDone?'Completed':isPend?'Pending':'In Progress';
+    var row = document.createElement('div');
+    row.className = 'lr';
+    row.style.cursor = 'pointer';
+    row.onclick = function(){ viewVisit(v.id); };
+    row.innerHTML = '<div class="av" style="background:'+iconBg+';border-radius:8px"><i class="ti '+iconClass+'" style="color:'+iconColor+';font-size:16px"></i></div>'
+      + '<div class="ri"><div class="rn">'+(v.client||'—')+(v.equipment||v.equip ? ' — '+(v.equipment||v.equip) : '')+'</div>'
+      + '<div class="rs">'+(v.tech||'—')+(v.date?' · '+v.date:'')+'</div></div>'
+      + '<span class="bdg '+badgeClass+'">'+statusLabel+'</span>';
+    body.appendChild(row);
+  });
+}
+
 function updateDashStats(){
   var total = visData.length;
   var completed = visData.filter(function(v){ return v.status==='مكتملة'||v.status==='Completed'; }).length;
