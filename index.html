@@ -1654,9 +1654,16 @@ function closeMod(id){var el=document.getElementById(id);if(el)el.style.display=
 // ══════════════════════════════════════
 // TECHNICIANS
 // ══════════════════════════════════════
-var techsData=[{id:1,name:'أحمد العتيبي',init:'أع',color:'#1D4E89',bg:'#E6F1FB',phone:'0501234567',spec:'Refrigeration & AC',status:'active',visits:142,completed:128,pending:14,rating:4.8,avgTime:1.7},{id:2,name:'محمد الحربي',init:'مح',color:'#2D7D3A',bg:'#EAF3DE',phone:'0507654321',spec:'Central Kitchens',status:'active',visits:118,completed:105,pending:13,rating:4.6,avgTime:2.0},{id:3,name:'سامي القحطاني',init:'سق',color:'#C4680A',bg:'#FDF0E0',phone:'0559876543',spec:'Industrial Electrical',status:'active',visits:97,completed:82,pending:15,rating:4.5,avgTime:2.2},{id:4,name:'خالد الرشيدي',init:'خر',color:'#64748B',bg:'#F1F5F9',phone:'0551122334',spec:'Refrigeration & AC',status:'vacation',visits:76,completed:70,pending:6,rating:4.9,avgTime:1.5}];
+var techsData=[];
 function renderTechGrid(){
   var g=document.getElementById('techGrid');if(!g)return;g.innerHTML='';
+  // Recalculate stats from visData for each tech
+  techsData.forEach(function(tc){
+    var myVisits = visData.filter(function(v){ return v.tech===tc.name; });
+    tc.visits = myVisits.length;
+    tc.completed = myVisits.filter(function(v){ return v.status==='Completed'||v.status==='مكتملة'; }).length;
+    tc.pending = myVisits.filter(function(v){ return v.status==='Pending'||v.status==='معلقة'||v.status==='قيد التنفيذ'; }).length;
+  });
   techsData.forEach(function(tc){
     var pct=Math.round((tc.completed/tc.visits)*100);
     var sdot={active:'#22C55E',vacation:'#F59E0B',suspended:'#EF4444'}[tc.status];
@@ -1667,6 +1674,19 @@ function renderTechGrid(){
     g.appendChild(c);
   });
 }
+async function deleteTech(id){
+  var tc = techsData.find(function(x){ return x.id===id; });
+  if(!tc) return;
+  if(!confirm('حذف الفني: ' + tc.name + '؟\nDelete technician: ' + tc.name + '?')) return;
+  if(_sb){
+    var r = await _sb.from('technicians').delete().eq('id', id);
+    if(r.error){ alert('خطأ في الحذف: ' + r.error.message); return; }
+  }
+  techsData = techsData.filter(function(x){ return x.id!==id; });
+  renderTechGrid();
+  console.log('✅ Technician deleted:', tc.name);
+}
+
 function editTech(id){var tc=techsData.find(function(x){return x.id===id;});if(!tc)return;document.getElementById('t-tech-modal-title').textContent=t('editTechModal');document.getElementById('m-name').value=tc.name;document.getElementById('m-phone').value=tc.phone;openMod('techModal');}
 function renderTechCharts(){
   var el=document.getElementById('techCompare');if(el){el.innerHTML='';var cols=['#1D4E89','#2D7D3A','#C4680A','#64748B'];techsData.forEach(function(tc,i){var pct=Math.round((tc.completed/tc.visits)*100);el.innerHTML+='<div style="display:flex;align-items:center;gap:10px;margin-bottom:10px"><div style="font-size:12px;min-width:80px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+tc.name.split(' ')[0]+'</div><div style="flex:1;height:20px;background:#F0F4F8;border-radius:4px;overflow:hidden"><div style="height:100%;width:'+pct+'%;background:'+cols[i]+';border-radius:4px;display:flex;align-items:center;padding-left:6px;font-size:10px;color:#fff;font-weight:700">'+pct+'%</div></div><div style="font-size:11px;color:#718096;min-width:40px">'+tc.visits+'</div></div>';});}
