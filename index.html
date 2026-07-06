@@ -1061,6 +1061,7 @@ function go(pg){
   var ma=document.getElementById('main');if(ma)ma.scrollTop=0;
   if(window.innerWidth<960){document.getElementById('sidebar').style.right='-240px';document.getElementById('ovl').style.display='none';}
   }catch(e){console.log('go() error:',e);}
+  if(pg==='dashboard'){updateDashStats();renderDashTechs();renderDashRecent();renderPending();}
   if(pg==='signature') setTimeout(function(){initSig('tech');initSig('client');},80);
   if(pg==='newvisit'){
     window._visitStartTime = Date.now();
