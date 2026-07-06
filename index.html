@@ -260,10 +260,7 @@ html,body{height:100%;font-family:Tajawal,sans-serif;font-size:14px;background:#
     </div>
     <div class="card">
       <div class="ch"><div class="ct"><i class="ti ti-clock-pause" style="color:#C4680A"></i><span id="t-pend-reports">Pending Reports</span></div><button class="ca" onclick="go('pending')" id="t-view-all2">View All</button></div>
-      <div class="lr"><div class="ri"><div class="rn">Ritz Carlton — B3</div><div class="rs">Danfoss T2 Expansion Valve</div></div><span style="font-size:11px;color:#C4680A;font-weight:700">Day 1</span></div>
-      <div class="lr"><div class="ri"><div class="rn">Burger King — Central Kitchen</div><div class="rs">Display Fridge Motor</div></div><span style="font-size:11px;color:#C4680A;font-weight:700">Day 3</span></div>
-      <div class="lr"><div class="ri"><div class="rn">Hilton Hotel — Cold Storage</div><div class="rs">Carel pCO5 Controller</div></div><span style="font-size:11px;color:#C0392B;font-weight:700">Day 7</span></div>
-      <div class="lr"><div class="ri"><div class="rn">Al-Kabeer Hotel</div><div class="rs">Embraco Compressor</div></div><span style="font-size:11px;color:#C0392B;font-weight:700">Day 5</span></div>
+      <div id="dash-pending-body"><div style="padding:20px;text-align:center;color:#A0AEC0;font-size:13px">Loading...</div></div>
     </div>
   </div>
   <div class="g2">
@@ -938,6 +935,7 @@ function lgSuccess(u){
     updateDashStats();
     renderDashTechs();
     renderDashRecent();
+    renderDashPending();
     renderPending();
     go('dashboard');
     try { initChart(); } catch(e) {}
@@ -1061,7 +1059,7 @@ function go(pg){
   var ma=document.getElementById('main');if(ma)ma.scrollTop=0;
   if(window.innerWidth<960){document.getElementById('sidebar').style.right='-240px';document.getElementById('ovl').style.display='none';}
   }catch(e){console.log('go() error:',e);}
-  if(pg==='dashboard'){updateDashStats();renderDashTechs();renderDashRecent();renderPending();}
+  if(pg==='dashboard'){updateDashStats();renderDashTechs();renderDashRecent();renderDashPending();renderPending();}
   if(pg==='signature') setTimeout(function(){initSig('tech');initSig('client');},80);
   if(pg==='newvisit'){
     window._visitStartTime = Date.now();
@@ -1168,6 +1166,41 @@ async function deleteVisit(id){
   } catch(e){
     alert('خطأ: ' + e.message);
   }
+}
+
+function renderDashPending(){
+  var body = document.getElementById('dash-pending-body');
+  if(!body) return;
+
+  var pending = visData.filter(function(v){
+    return v.status==='معلقة' || v.status==='Pending' || v.status==='قيد التنفيذ';
+  }).slice(0, 5);
+
+  if(!pending.length){
+    body.innerHTML = '<div style="padding:20px;text-align:center;color:#A0AEC0;font-size:13px"><i class="ti ti-circle-check" style="color:#2D7D3A;font-size:24px;display:block;margin-bottom:6px"></i>No pending reports ✅</div>';
+    return;
+  }
+
+  body.innerHTML = '';
+  pending.forEach(function(v){
+    var days = 0;
+    if(v.date){ days = Math.floor((new Date() - new Date(v.date)) / (1000*60*60*24)); }
+    var dayColor = days >= 5 ? '#C0392B' : days >= 3 ? '#C4680A' : '#2D7D3A';
+    var dayLabel = days === 0 ? 'Today' : 'Day ' + days;
+    var equip = v.equipment || v.equip || '';
+    var sub = equip || (Array.isArray(v.parts)&&v.parts.length ? v.parts[0] : v.tech||'—');
+    var row = document.createElement('div');
+    row.className = 'lr';
+    row.style.cursor = 'pointer';
+    row.onclick = function(){ viewVisit(v.id); };
+    row.innerHTML =
+      '<div class="ri">'
+      + '<div class="rn">'+(v.client||'—')+(equip?' — '+equip:'')+'</div>'
+      + '<div class="rs">'+(sub||v.tech||'—')+'</div>'
+      + '</div>'
+      + '<span style="font-size:11px;color:'+dayColor+';font-weight:700;flex-shrink:0">'+dayLabel+'</span>';
+    body.appendChild(row);
+  });
 }
 
 function renderPending(){
