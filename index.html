@@ -253,17 +253,11 @@ html,body{height:100%;font-family:Tajawal,sans-serif;font-size:14px;background:#
   <div class="g2">
     <div class="card">
       <div class="ch"><div class="ct"><i class="ti ti-users"></i><span id="t-tech-status">Technician Status</span></div><button class="ca" onclick="go('technicians')" id="t-view-all">View All</button></div>
-      <div class="lr"><div class="av" style="background:#E6F1FB;color:#1D4E89">أع</div><div class="ri"><div class="rn">أحمد العتيبي</div><div class="rs">Ritz Carlton — B3</div></div><span class="bdg b-w" id="t-inprog">In Progress</span></div>
-      <div class="lr"><div class="av" style="background:#EAF3DE;color:#2D7D3A">مح</div><div class="ri"><div class="rn">محمد الحربي</div><div class="rs">Al-Aseel Restaurant</div></div><span class="bdg b-s" id="t-done">Completed</span></div>
-      <div class="lr"><div class="av" style="background:#FDF0E0;color:#C4680A">سق</div><div class="ri"><div class="rn">سامي القحطاني</div><div class="rs" id="t-onway">On the way — McDonald's</div></div><span class="bdg b-i">On way</span></div>
-      <div class="lr"><div class="av" style="background:#F1F5F9;color:#64748B">خر</div><div class="ri"><div class="rn">خالد الرشيدي</div><div class="rs" id="t-no-visits">No current visits</div></div><span class="bdg b-g" id="t-avail">Available</span></div>
+      <div id="dash-tech-body"></div>
     </div>
     <div class="card">
       <div class="ch"><div class="ct"><i class="ti ti-clock-pause" style="color:#C4680A"></i><span id="t-pend-reports">Pending Reports</span></div><button class="ca" onclick="go('pending')" id="t-view-all2">View All</button></div>
-      <div class="lr"><div class="ri"><div class="rn">Ritz Carlton — B3</div><div class="rs">Danfoss T2 Expansion Valve</div></div><span style="font-size:11px;color:#C4680A;font-weight:700">Day 1</span></div>
-      <div class="lr"><div class="ri"><div class="rn">Burger King — Central Kitchen</div><div class="rs">Display Fridge Motor</div></div><span style="font-size:11px;color:#C4680A;font-weight:700">Day 3</span></div>
-      <div class="lr"><div class="ri"><div class="rn">Hilton Hotel — Cold Storage</div><div class="rs">Carel pCO5 Controller</div></div><span style="font-size:11px;color:#C0392B;font-weight:700">Day 7</span></div>
-      <div class="lr"><div class="ri"><div class="rn">Al-Kabeer Hotel</div><div class="rs">Embraco Compressor</div></div><span style="font-size:11px;color:#C0392B;font-weight:700">Day 5</span></div>
+      <div id="dash-pending-body"></div>
     </div>
   </div>
   <div class="g2">
@@ -938,6 +932,7 @@ function lgSuccess(u){
     updateDashStats();
     renderDashTechs();
     renderDashRecent();
+    renderDashPending();
     renderPending();
     go('dashboard');
     try { initChart(); } catch(e) {}
@@ -987,7 +982,7 @@ function go(pg){
   var ma=document.getElementById('main');if(ma)ma.scrollTop=0;
   if(window.innerWidth<960){document.getElementById('sidebar').style.right='-240px';document.getElementById('ovl').style.display='none';}
   }catch(e){console.log('go() error:',e);}
-  if(pg==='dashboard'){updateDashStats();renderDashTechs();renderDashRecent();renderPending();}
+  if(pg==='dashboard'){updateDashStats();renderDashTechs();renderDashRecent();renderDashPending();renderPending();}
   if(pg==='signature') setTimeout(function(){initSig('tech');initSig('client');},80);
   if(pg==='newvisit'){
     window._visitStartTime = Date.now();
@@ -1040,7 +1035,7 @@ function initChart(){
 // ══════════════════════════════════════
 // VISITS
 // ══════════════════════════════════════
-var visData=[{client:'Ritz Carlton — B3',tech:'أحمد العتيبي',type:'warranty',status:'Pending',date:'2026-05-10',equip:'Cold Room'},{client:'Al-Aseel Restaurant',tech:'محمد الحربي',type:'contract',status:'Completed',date:'2026-05-10',equip:'Central Kitchen'},{client:"McDonald's — Main Branch",tech:'سامي القحطاني',type:'paid',status:'Completed',date:'2026-05-09',equip:'Display Fridge'},{client:'Hilton Hotel — Storage',tech:'خالد الرشيدي',type:'warranty',status:'Pending',date:'2026-05-09',equip:'Cold Storage'},{client:'Burger King — Central Kitchen',tech:'سامي القحطاني',type:'paid',status:'Pending',date:'2026-05-08',equip:'Central Kitchen'},{client:'King Faisal Hospital',tech:'خالد الرشيدي',type:'contract',status:'Completed',date:'2026-05-08',equip:'Cold Room'},{client:'KFC Saudi Arabia',tech:'أحمد العتيبي',type:'contract',status:'Completed',date:'2026-05-07',equip:'Industrial Freezer'}];
+var visData=[];
 var visFil='all';
 function renderVisits(f,q){
   visFil=f||visFil;q=q||document.getElementById('visSearch').value||'';
@@ -1094,6 +1089,66 @@ async function deleteVisit(id){
   } catch(e){
     alert('خطأ: ' + e.message);
   }
+}
+
+function renderDashPending(){
+  var body=document.getElementById('dash-pending-body');
+  if(!body)return;
+  var pending=visData.filter(function(v){
+    return v.status==='معلقة'||v.status==='Pending'||v.status==='قيد التنفيذ';
+  }).slice(0,5);
+  if(!pending.length){
+    body.innerHTML='<div style="padding:20px;text-align:center;color:#A0AEC0;font-size:13px"><i class="ti ti-circle-check" style="color:#2D7D3A;font-size:22px;display:block;margin-bottom:4px"></i>No pending reports ✅</div>';
+    return;
+  }
+  body.innerHTML='';
+  pending.forEach(function(v){
+    var days=v.date?Math.floor((new Date()-new Date(v.date))/(1000*60*60*24)):0;
+    var col=days>=5?'#C0392B':days>=3?'#C4680A':'#2D7D3A';
+    var lbl=days===0?'Today':'Day '+days;
+    var equip=v.equipment||v.equip||'';
+    var row=document.createElement('div');
+    row.className='lr';row.style.cursor='pointer';
+    row.onclick=function(){viewVisit(v.id);};
+    row.innerHTML='<div class="ri"><div class="rn">'+(v.client||'—')+(equip?' — '+equip:'')+'</div>'
+      +'<div class="rs">'+(v.tech||'—')+'</div></div>'
+      +'<span style="font-size:11px;color:'+col+';font-weight:700;flex-shrink:0">'+lbl+'</span>';
+    body.appendChild(row);
+  });
+}
+
+function renderDashTechs(){
+  var body=document.getElementById('dash-tech-body');
+  if(!body)return;
+  var techActivity={};
+  visData.forEach(function(v){
+    if(!v.tech)return;
+    if(!techActivity[v.tech]||v.date>techActivity[v.tech].date) techActivity[v.tech]=v;
+  });
+  var recent=Object.keys(techActivity)
+    .sort(function(a,b){return techActivity[b].date>techActivity[a].date?1:-1;})
+    .slice(0,5);
+  if(!recent.length){
+    body.innerHTML='<div style="padding:20px;text-align:center;color:#A0AEC0;font-size:13px">No recent activity</div>';
+    return;
+  }
+  body.innerHTML='';
+  recent.forEach(function(techName){
+    var last=techActivity[techName];
+    var ti=techsData.find(function(t){return t.name===techName;})||{};
+    var hasPend=visData.some(function(v){return v.tech===techName&&(v.status==='Pending'||v.status==='معلقة'||v.status==='قيد التنفيذ');});
+    var isDone=last.status==='Completed'||last.status==='مكتملة';
+    var stLabel=hasPend?'Pending':isDone?'Completed':'In Progress';
+    var stClass=hasPend?'b-w':isDone?'b-s':'b-i';
+    var sub=(last.client||'—')+(last.equipment||last.equip?' — '+(last.equipment||last.equip):'');
+    var row=document.createElement('div');
+    row.className='lr';row.style.cursor='pointer';
+    row.onclick=function(){go('technicians');};
+    row.innerHTML='<div class="av" style="background:'+(ti.bg||'#E6F1FB')+';color:'+(ti.color||'#1D4E89')+'">'+(ti.init||ti.initials||techName.slice(0,2))+'</div>'
+      +'<div class="ri"><div class="rn">'+techName+'</div><div class="rs">'+sub+'</div></div>'
+      +'<span class="bdg '+stClass+'">'+stLabel+'</span>';
+    body.appendChild(row);
+  });
 }
 
 function renderPending(){
@@ -1598,7 +1653,7 @@ async function saveTech(){
 // PARTS
 // ══════════════════════════════════════
 var partsData=[{id:1,name:'R410A Gas',cat:'Refrigerant Gases',unit:'KG',qty:45,min:10,supplier:'Gas Co.'},{id:2,name:'R404A Gas',cat:'Refrigerant Gases',unit:'KG',qty:22,min:8,supplier:'Gas Co.'},{id:3,name:'R22 Gas',cat:'Refrigerant Gases',unit:'KG',qty:3,min:5,supplier:'Gas Co.'},{id:4,name:'Danfoss T2 Expansion Valve',cat:'Valves',unit:'Piece',qty:0,min:3,supplier:'Danfoss KSA'},{id:5,name:'Solenoid Valve 24V',cat:'Valves',unit:'Piece',qty:8,min:4,supplier:'Danfoss KSA'},{id:6,name:'Embraco NT2192GK Compressor',cat:'Compressors',unit:'Piece',qty:2,min:2,supplier:'Embraco'},{id:7,name:'Carel pCO5 Controller',cat:'Controllers',unit:'Piece',qty:0,min:2,supplier:'Carel'},{id:8,name:'Fan Motor 220V',cat:'Motors & Fans',unit:'Piece',qty:6,min:3,supplier:'Mitsubishi'},{id:9,name:'35μF Capacitor',cat:'Other',unit:'Piece',qty:12,min:5,supplier:'General'},{id:10,name:'3/8 Filter Dryer',cat:'Filters',unit:'Piece',qty:2,min:5,supplier:'Danfoss KSA'}];
-var histData=[{id:1,partId:4,type:'out',qty:1,dest:'Ritz Carlton — B3',tech:'أحمد العتيبي',note:'Fault repair',date:'2026-05-10'},{id:2,partId:1,type:'out',qty:2,dest:'Al-Aseel Restaurant',tech:'محمد الحربي',note:'Gas recharge',date:'2026-05-10'},{id:3,partId:7,type:'out',qty:1,dest:'Hilton Hotel',tech:'خالد الرشيدي',note:'Controller replace',date:'2026-05-09'},{id:4,partId:1,type:'in',qty:20,dest:'—',tech:'—',note:'Supplier delivery',date:'2026-05-07'},{id:5,partId:3,type:'out',qty:3,dest:"McDonald's",tech:'أحمد العتيبي',note:'Gas recharge',date:'2026-05-06'}];
+var histData=[];
 var stF='all';
 function stk(p){if(p.qty===0)return{l:t('stockOut'),c:'b-d'};if(p.qty<=p.min)return{l:t('stockLow'),c:'b-w'};return{l:t('stockOk'),c:'b-s'};}
 function renderInvList(q,sf){
