@@ -253,11 +253,17 @@ html,body{height:100%;font-family:Tajawal,sans-serif;font-size:14px;background:#
   <div class="g2">
     <div class="card">
       <div class="ch"><div class="ct"><i class="ti ti-users"></i><span id="t-tech-status">Technician Status</span></div><button class="ca" onclick="go('technicians')" id="t-view-all">View All</button></div>
-      <div id="dash-tech-body"><div style="padding:20px;text-align:center;color:#A0AEC0;font-size:13px">Loading...</div></div>
+      <div class="lr"><div class="av" style="background:#E6F1FB;color:#1D4E89">أع</div><div class="ri"><div class="rn">أحمد العتيبي</div><div class="rs">Ritz Carlton — B3</div></div><span class="bdg b-w" id="t-inprog">In Progress</span></div>
+      <div class="lr"><div class="av" style="background:#EAF3DE;color:#2D7D3A">مح</div><div class="ri"><div class="rn">محمد الحربي</div><div class="rs">Al-Aseel Restaurant</div></div><span class="bdg b-s" id="t-done">Completed</span></div>
+      <div class="lr"><div class="av" style="background:#FDF0E0;color:#C4680A">سق</div><div class="ri"><div class="rn">سامي القحطاني</div><div class="rs" id="t-onway">On the way — McDonald's</div></div><span class="bdg b-i">On way</span></div>
+      <div class="lr"><div class="av" style="background:#F1F5F9;color:#64748B">خر</div><div class="ri"><div class="rn">خالد الرشيدي</div><div class="rs" id="t-no-visits">No current visits</div></div><span class="bdg b-g" id="t-avail">Available</span></div>
     </div>
     <div class="card">
       <div class="ch"><div class="ct"><i class="ti ti-clock-pause" style="color:#C4680A"></i><span id="t-pend-reports">Pending Reports</span></div><button class="ca" onclick="go('pending')" id="t-view-all2">View All</button></div>
-      <div id="dash-pending-body"><div style="padding:20px;text-align:center;color:#A0AEC0;font-size:13px">Loading...</div></div>
+      <div class="lr"><div class="ri"><div class="rn">Ritz Carlton — B3</div><div class="rs">Danfoss T2 Expansion Valve</div></div><span style="font-size:11px;color:#C4680A;font-weight:700">Day 1</span></div>
+      <div class="lr"><div class="ri"><div class="rn">Burger King — Central Kitchen</div><div class="rs">Display Fridge Motor</div></div><span style="font-size:11px;color:#C4680A;font-weight:700">Day 3</span></div>
+      <div class="lr"><div class="ri"><div class="rn">Hilton Hotel — Cold Storage</div><div class="rs">Carel pCO5 Controller</div></div><span style="font-size:11px;color:#C0392B;font-weight:700">Day 7</span></div>
+      <div class="lr"><div class="ri"><div class="rn">Al-Kabeer Hotel</div><div class="rs">Embraco Compressor</div></div><span style="font-size:11px;color:#C0392B;font-weight:700">Day 5</span></div>
     </div>
   </div>
   <div class="g2">
@@ -932,7 +938,6 @@ function lgSuccess(u){
     updateDashStats();
     renderDashTechs();
     renderDashRecent();
-    renderDashPending();
     renderPending();
     go('dashboard');
     try { initChart(); } catch(e) {}
@@ -941,104 +946,30 @@ function lgSuccess(u){
 
 async function loadAllFromDB(){
   if(!_sb) return;
-  try {
-    // Load technicians
-    var r1 = await _sb.from('technicians').select('*').order('name');
-    if(r1.data && r1.data.length){
-      techsData = r1.data.map(function(t){
-        return {
-          id: t.id, name: t.name, init: t.initials||t.name.slice(0,2),
-          color: t.color||'#1D4E89', bg: t.bg||'#E6F1FB',
-          phone: t.phone||'', spec: t.spec||'', status: t.status||'active',
-          visits: t.visits||0, completed: t.completed||0, pending: t.pending||0,
-          rating: t.rating||0, avgTime: t.avg_time||0
-        };
-      });
-      console.log('Loaded', techsData.length, 'technicians from DB');
-    }
-  } catch(e){ console.log('loadTechs error:', e); }
+  console.log('Loading all data in parallel...');
 
-  try {
-    // Load clients
-    var r2 = await _sb.from('clients').select('*').order('name');
-    if(r2.data){
-      // Always load from DB (even if empty - overrides hardcoded defaults)
-      clientsData = r2.data.map(function(cl){
-        return {
-          id: cl.id, name: cl.name, type: cl.type||'',
-          loc: cl.location||cl.loc||'', color: cl.color||'#1D4E89',
-          bg: cl.bg||'#E6F1FB', init: cl.initials||cl.name.slice(0,2),
-          contract: cl.contract==='عقد صيانة'?'contract':cl.contract==='ضمان'?'warranty':cl.contract==='مدفوع'?'paid':'paid',
-          warranty: cl.warranty||false,
-          total: cl.total_visits||0, completed: cl.completed||0,
-          pending: cl.pending||0, parts: cl.needs_parts||0,
-          wv: cl.warranty_visits||0
-        };
-      });
-      console.log('Loaded', clientsData.length, 'clients from DB');
-      // Update autocomplete with DB clients
-      acData.client = clientsData.map(function(cl){ return cl.name; });
-    }
-  } catch(e){ console.log('loadClients error:', e); }
+  var results = await Promise.all([
+    _sb.from('technicians').select('*').order('name'),
+    _sb.from('clients').select('*').order('name'),
+    _sb.from('parts').select('*').order('name'),
+    _sb.from('visits').select('*').order('date',{ascending:false}).limit(200),
+    _sb.from('visit_signatures').select('visit_id,sig_tech,sig_client'),
+    _sb.from('parts_history').select('*').order('date',{ascending:false}).limit(50)
+  ]);
 
-  try {
-    // Load parts
-    var r3 = await _sb.from('parts').select('*').order('name');
-    if(r3.data && r3.data.length){
-      partsData = r3.data;
-      console.log('Loaded', partsData.length, 'parts from DB');
-    }
-  } catch(e){ console.log('loadParts error:', e); }
+  var r1=results[0], r2=results[1], r3=results[2], r4=results[3], rSig=results[4], r5=results[5];
 
-  try {
-    // Load visits
-    var r4 = await _sb.from('visits').select('*').order('date', {ascending:false}).limit(100);
-    if(r4.data && r4.data.length){
-      visData = r4.data.map(function(v){
-        return {
-          id: v.id, client: v.client, tech: v.tech,
-          equip: v.equipment||v.equip||'—', equipment: v.equipment||'',
-          type: v.visit_type||v.type||'paid',
-          status: v.status==='مكتملة'?'Completed':v.status==='معلقة'?'Pending':v.status||'Pending',
-          date: v.date||'', time: v.time||'', parts: v.parts||[], notes: v.notes||'',
-          location: v.location||'', fault: v.fault||'',
-          sig_tech: v.sig_tech||'', sig_client: v.sig_client||''
-        };
-      });
-      rData = visData.map(function(v,i){ return Object.assign({id:i+1},v); });
-      console.log('Loaded', visData.length, 'visits from DB');
-    }
-  } catch(e){ console.log('loadVisits error:',e); }
+  try{ if(r1.data){ techsData = r1.data.map(function(t){ return { id:t.id, name:t.name, init:t.initials||t.name.slice(0,2), initials:t.initials||t.name.slice(0,2), color:t.color||'#1D4E89', bg:t.bg||'#E6F1FB', phone:t.phone||'', email:t.email||'', nationality:t.nationality||'', spec:t.spec||'', status:t.status||'active', visits:t.visits||0, completed:t.completed||0, pending:t.pending||0, rating:t.rating||0, avgTime:t.avg_time||0, monthly:t.monthly||[0,0,0,0,0,0,0] }; }); console.log('Loaded', techsData.length, 'technicians from DB'); } }catch(e){ console.log('loadTechs error:',e); }
 
-  try {
-    // Load signatures from visit_signatures table and merge into visData
-    var rSig = await _sb.from('visit_signatures').select('*');
-    if(rSig.data && rSig.data.length){
-      rSig.data.forEach(function(sig){
-        var v = visData.find(function(x){ return x.id == sig.visit_id; });
-        if(v){
-          if(sig.sig_tech) v.sig_tech = sig.sig_tech;
-          if(sig.sig_client) v.sig_client = sig.sig_client;
-        }
-      });
-      console.log('Loaded', rSig.data.length, 'signatures from DB');
-    }
-  } catch(e){ console.log('loadVisits error:', e); }
+  try{ if(r2.data){ clientsData = r2.data.map(function(cl){ return { id:cl.id, name:cl.name, type:cl.type||'', loc:cl.location||cl.loc||'', color:cl.color||'#1D4E89', bg:cl.bg||'#E6F1FB', init:cl.initials||cl.name.slice(0,2), contract:cl.contract==='عقد صيانة'?'contract':cl.contract==='ضمان'?'warranty':cl.contract==='مدفوع'?'paid':'paid', warranty:cl.warranty||false, total:cl.total_visits||0, completed:cl.completed||0, pending:cl.pending||0, parts:cl.needs_parts||0, wv:cl.warranty_visits||0 }; }); acData.client = clientsData.map(function(cl){ return cl.name; }); console.log('Loaded', clientsData.length, 'clients from DB'); } }catch(e){ console.log('loadClients error:',e); }
 
-  try {
-    // Load parts history
-    var r5 = await _sb.from('parts_history').select('*').order('date', {ascending:false}).limit(50);
-    if(r5.data && r5.data.length){
-      histData = r5.data.map(function(h){
-        return {
-          id: h.id, partId: h.part_id, type: h.type,
-          qty: h.qty, dest: h.dest||'—', tech: h.tech||'—',
-          note: h.note||'', date: h.date||''
-        };
-      });
-      console.log('Loaded', histData.length, 'history records from DB');
-    }
-  } catch(e){ console.log('loadHistory error:', e); }
+  try{ if(r3.data){ partsData = r3.data.map(function(p){ return { id:p.id, name:p.name, qty:p.qty||0, unit:p.unit||'pcs', minQty:p.min_qty||0, price:p.price||0, location:p.location||'' }; }); acData.parts = partsData.map(function(p){ return p.name; }); console.log('Loaded', partsData.length, 'parts from DB'); } }catch(e){ console.log('loadParts error:',e); }
+
+  try{ if(r4.data){ visData = r4.data.map(function(v){ return { id:v.id, client:v.client, tech:v.tech, equip:v.equipment||v.equip||'—', equipment:v.equipment||'', type:v.visit_type||v.type||'paid', visit_type:v.visit_type||'', status:v.status==='مكتملة'?'Completed':v.status==='معلقة'?'Pending':v.status||'Pending', date:v.date||'', time:v.time||'', parts:v.parts||[], notes:v.notes||'', location:v.location||'', fault:v.fault||'', sig_tech:'', sig_client:'', serial_number:v.serial_number||'', model:v.model||'' }; }); rData = visData.map(function(v,i){ return Object.assign({id:i+1},v); }); console.log('Loaded', visData.length, 'visits from DB'); } }catch(e){ console.log('loadVisits error:',e); }
+
+  try{ if(rSig.data && rSig.data.length){ rSig.data.forEach(function(sig){ var v=visData.find(function(x){ return x.id==sig.visit_id; }); if(v){ if(sig.sig_tech) v.sig_tech=sig.sig_tech; if(sig.sig_client) v.sig_client=sig.sig_client; } }); console.log('Loaded', rSig.data.length, 'signatures from DB'); } }catch(e){ console.log('loadSigs error:',e); }
+
+  try{ if(r5.data){ histData = r5.data.map(function(h){ return { id:h.id, partId:h.part_id, part:h.part_name||'', qty:h.qty||0, type:h.type||'out', dest:h.destination||'', tech:h.tech||'', date:h.date||'' }; }); console.log('Loaded', histData.length, 'history records from DB'); } }catch(e){ console.log('loadHistory error:',e); }
 }
 function logout(){if(confirm('Sign out?')){document.getElementById('loginScreen').style.display='flex';if(_sb)_sb.auth.signOut().catch(function(){});}}
 
@@ -1056,7 +987,7 @@ function go(pg){
   var ma=document.getElementById('main');if(ma)ma.scrollTop=0;
   if(window.innerWidth<960){document.getElementById('sidebar').style.right='-240px';document.getElementById('ovl').style.display='none';}
   }catch(e){console.log('go() error:',e);}
-  if(pg==='dashboard'){updateDashStats();renderDashTechs();renderDashRecent();renderDashPending();renderPending();}
+  if(pg==='dashboard'){updateDashStats();renderDashTechs();renderDashRecent();renderPending();}
   if(pg==='signature') setTimeout(function(){initSig('tech');initSig('client');},80);
   if(pg==='newvisit'){
     window._visitStartTime = Date.now();
@@ -1163,41 +1094,6 @@ async function deleteVisit(id){
   } catch(e){
     alert('خطأ: ' + e.message);
   }
-}
-
-function renderDashPending(){
-  var body = document.getElementById('dash-pending-body');
-  if(!body) return;
-
-  var pending = visData.filter(function(v){
-    return v.status==='معلقة' || v.status==='Pending' || v.status==='قيد التنفيذ';
-  }).slice(0, 5);
-
-  if(!pending.length){
-    body.innerHTML = '<div style="padding:20px;text-align:center;color:#A0AEC0;font-size:13px"><i class="ti ti-circle-check" style="color:#2D7D3A;font-size:24px;display:block;margin-bottom:6px"></i>No pending reports ✅</div>';
-    return;
-  }
-
-  body.innerHTML = '';
-  pending.forEach(function(v){
-    var days = 0;
-    if(v.date){ days = Math.floor((new Date() - new Date(v.date)) / (1000*60*60*24)); }
-    var dayColor = days >= 5 ? '#C0392B' : days >= 3 ? '#C4680A' : '#2D7D3A';
-    var dayLabel = days === 0 ? 'Today' : 'Day ' + days;
-    var equip = v.equipment || v.equip || '';
-    var sub = equip || (Array.isArray(v.parts)&&v.parts.length ? v.parts[0] : v.tech||'—');
-    var row = document.createElement('div');
-    row.className = 'lr';
-    row.style.cursor = 'pointer';
-    row.onclick = function(){ viewVisit(v.id); };
-    row.innerHTML =
-      '<div class="ri">'
-      + '<div class="rn">'+(v.client||'—')+(equip?' — '+equip:'')+'</div>'
-      + '<div class="rs">'+(sub||v.tech||'—')+'</div>'
-      + '</div>'
-      + '<span style="font-size:11px;color:'+dayColor+';font-weight:700;flex-shrink:0">'+dayLabel+'</span>';
-    body.appendChild(row);
-  });
 }
 
 function renderPending(){
@@ -1654,39 +1550,19 @@ function closeMod(id){var el=document.getElementById(id);if(el)el.style.display=
 // ══════════════════════════════════════
 // TECHNICIANS
 // ══════════════════════════════════════
-var techsData=[];
+var techsData=[{id:1,name:'أحمد العتيبي',init:'أع',color:'#1D4E89',bg:'#E6F1FB',phone:'0501234567',spec:'Refrigeration & AC',status:'active',visits:142,completed:128,pending:14,rating:4.8,avgTime:1.7},{id:2,name:'محمد الحربي',init:'مح',color:'#2D7D3A',bg:'#EAF3DE',phone:'0507654321',spec:'Central Kitchens',status:'active',visits:118,completed:105,pending:13,rating:4.6,avgTime:2.0},{id:3,name:'سامي القحطاني',init:'سق',color:'#C4680A',bg:'#FDF0E0',phone:'0559876543',spec:'Industrial Electrical',status:'active',visits:97,completed:82,pending:15,rating:4.5,avgTime:2.2},{id:4,name:'خالد الرشيدي',init:'خر',color:'#64748B',bg:'#F1F5F9',phone:'0551122334',spec:'Refrigeration & AC',status:'vacation',visits:76,completed:70,pending:6,rating:4.9,avgTime:1.5}];
 function renderTechGrid(){
   var g=document.getElementById('techGrid');if(!g)return;g.innerHTML='';
-  // Recalculate stats from visData for each tech
-  techsData.forEach(function(tc){
-    var myVisits = visData.filter(function(v){ return v.tech===tc.name; });
-    tc.visits = myVisits.length;
-    tc.completed = myVisits.filter(function(v){ return v.status==='Completed'||v.status==='مكتملة'; }).length;
-    tc.pending = myVisits.filter(function(v){ return v.status==='Pending'||v.status==='معلقة'||v.status==='قيد التنفيذ'; }).length;
-  });
   techsData.forEach(function(tc){
     var pct=Math.round((tc.completed/tc.visits)*100);
     var sdot={active:'#22C55E',vacation:'#F59E0B',suspended:'#EF4444'}[tc.status];
     var slbl={active:t('done'),vacation:'On Leave',suspended:'Suspended'}[tc.status];
     var stars='';for(var i=1;i<=5;i++)stars+=(i<=Math.floor(tc.rating)?'★':'☆');
     var c=document.createElement('div');c.className='tccard';
-    c.innerHTML='<div class="tchd"><div class="tsdot" style="background:'+sdot+'"></div><div class="tcav" style="background:'+tc.bg+';color:'+tc.color+'">'+tc.init+'</div><div style="font-size:14px;font-weight:700">'+tc.name+'</div><div style="font-size:11px;color:#718096;margin-top:2px">'+tc.spec+'</div><div style="margin-top:5px"><span class="bdg" style="background:'+tc.bg+';color:'+tc.color+'">'+slbl+'</span></div></div><div style="padding:12px 14px"><div style="display:flex;justify-content:space-between;margin-bottom:10px"><div style="text-align:center;flex:1"><div style="font-size:16px;font-weight:700">'+tc.visits+'</div><div style="font-size:10px;color:#718096">'+t('total')+'</div></div><div style="text-align:center;flex:1;border-left:1px solid #D9E2EC;border-right:1px solid #D9E2EC"><div style="font-size:16px;font-weight:700;color:#2D7D3A">'+tc.completed+'</div><div style="font-size:10px;color:#718096">'+t('done')+'</div></div><div style="text-align:center;flex:1"><div style="font-size:16px;font-weight:700;color:#C4680A">'+tc.pending+'</div><div style="font-size:10px;color:#718096">'+t('pend')+'</div></div></div><div style="margin-bottom:8px"><div style="display:flex;justify-content:space-between;font-size:11px;color:#718096;margin-bottom:4px"><span>'+t('completion')+'</span><span style="font-weight:700">'+pct+'%</span></div><div style="height:6px;background:#D9E2EC;border-radius:99px;overflow:hidden"><div style="height:100%;width:'+pct+'%;background:'+(pct>=85?'#2D7D3A':pct>=70?'#C4680A':'#C0392B')+';border-radius:99px"></div></div></div><div style="display:flex;align-items:center;justify-content:space-between;margin-top:4px"><div style="color:#F59E0B;font-size:12px;letter-spacing:1px">'+stars+'</div><span style="font-size:12px;font-weight:700">'+tc.rating+'/5</span></div></div><div style="display:flex;gap:6px;padding:10px 14px;border-top:1px solid #D9E2EC"><button onclick="editTech('+tc.id+')" style="flex:1;padding:6px;border-radius:6px;font-size:11px;font-weight:600;cursor:pointer;border:1px solid #D9E2EC;background:#F8FAFC;color:#718096;font-family:Tajawal,sans-serif">'+t('editTech')+'</button><button onclick="showTechStats('+tc.id+')" style="flex:1;padding:6px;border-radius:6px;font-size:11px;font-weight:600;cursor:pointer;border:1px solid #D9E2EC;background:#F8FAFC;color:#718096;font-family:Tajawal,sans-serif">'+t('analytics')+'</button><button onclick="techsData.find(function(x){return x.id==='+tc.id+'}).status=techsData.find(function(x){return x.id==='+tc.id+'}).status===\'active\'?\'vacation\':\'active\';renderTechGrid();" style="padding:6px 8px;border-radius:6px;font-size:11px;cursor:pointer;border:1px solid #D9E2EC;background:#F8FAFC;color:#718096;font-family:Tajawal,sans-serif"><i class="ti ti-'+(tc.status==='active'?'player-pause':'player-play')+'"></i></button>'+'<button onclick="deleteTech('+tc.id+')" style="padding:6px 8px;border-radius:6px;font-size:13px;cursor:pointer;border:1px solid #FCEBEB;background:#FCEBEB;color:#C0392B;font-family:Tajawal,sans-serif" title="حذف"><i class="ti ti-trash"></i></button>'+'</div>';
+    c.innerHTML='<div class="tchd"><div class="tsdot" style="background:'+sdot+'"></div><div class="tcav" style="background:'+tc.bg+';color:'+tc.color+'">'+tc.init+'</div><div style="font-size:14px;font-weight:700">'+tc.name+'</div><div style="font-size:11px;color:#718096;margin-top:2px">'+tc.spec+'</div><div style="margin-top:5px"><span class="bdg" style="background:'+tc.bg+';color:'+tc.color+'">'+slbl+'</span></div></div><div style="padding:12px 14px"><div style="display:flex;justify-content:space-between;margin-bottom:10px"><div style="text-align:center;flex:1"><div style="font-size:16px;font-weight:700">'+tc.visits+'</div><div style="font-size:10px;color:#718096">'+t('total')+'</div></div><div style="text-align:center;flex:1;border-left:1px solid #D9E2EC;border-right:1px solid #D9E2EC"><div style="font-size:16px;font-weight:700;color:#2D7D3A">'+tc.completed+'</div><div style="font-size:10px;color:#718096">'+t('done')+'</div></div><div style="text-align:center;flex:1"><div style="font-size:16px;font-weight:700;color:#C4680A">'+tc.pending+'</div><div style="font-size:10px;color:#718096">'+t('pend')+'</div></div></div><div style="margin-bottom:8px"><div style="display:flex;justify-content:space-between;font-size:11px;color:#718096;margin-bottom:4px"><span>'+t('completion')+'</span><span style="font-weight:700">'+pct+'%</span></div><div style="height:6px;background:#D9E2EC;border-radius:99px;overflow:hidden"><div style="height:100%;width:'+pct+'%;background:'+(pct>=85?'#2D7D3A':pct>=70?'#C4680A':'#C0392B')+';border-radius:99px"></div></div></div><div style="display:flex;align-items:center;justify-content:space-between;margin-top:4px"><div style="color:#F59E0B;font-size:12px;letter-spacing:1px">'+stars+'</div><span style="font-size:12px;font-weight:700">'+tc.rating+'/5</span></div></div><div style="display:flex;gap:6px;padding:10px 14px;border-top:1px solid #D9E2EC"><button onclick="editTech('+tc.id+')" style="flex:1;padding:6px;border-radius:6px;font-size:11px;font-weight:600;cursor:pointer;border:1px solid #D9E2EC;background:#F8FAFC;color:#718096;font-family:Tajawal,sans-serif">'+t('editTech')+'</button><button onclick="showTechStats('+tc.id+')" style="flex:1;padding:6px;border-radius:6px;font-size:11px;font-weight:600;cursor:pointer;border:1px solid #D9E2EC;background:#F8FAFC;color:#718096;font-family:Tajawal,sans-serif">'+t('analytics')+'</button><button onclick="techsData.find(function(x){return x.id==='+tc.id+'}).status=techsData.find(function(x){return x.id==='+tc.id+'}).status===\'active\'?\'vacation\':\'active\';renderTechGrid();" style="padding:6px 8px;border-radius:6px;font-size:11px;cursor:pointer;border:1px solid #D9E2EC;background:#F8FAFC;color:#718096;font-family:Tajawal,sans-serif"><i class="ti ti-'+(tc.status==='active'?'player-pause':'player-play')+'"></i></button></div>';
     g.appendChild(c);
   });
 }
-async function deleteTech(id){
-  var tc = techsData.find(function(x){ return x.id===id; });
-  if(!tc) return;
-  if(!confirm('حذف الفني: ' + tc.name + '؟\nDelete technician: ' + tc.name + '?')) return;
-  if(_sb){
-    var r = await _sb.from('technicians').delete().eq('id', id);
-    if(r.error){ alert('خطأ في الحذف: ' + r.error.message); return; }
-  }
-  techsData = techsData.filter(function(x){ return x.id!==id; });
-  renderTechGrid();
-  console.log('✅ Technician deleted:', tc.name);
-}
-
 function editTech(id){var tc=techsData.find(function(x){return x.id===id;});if(!tc)return;document.getElementById('t-tech-modal-title').textContent=t('editTechModal');document.getElementById('m-name').value=tc.name;document.getElementById('m-phone').value=tc.phone;openMod('techModal');}
 function renderTechCharts(){
   var el=document.getElementById('techCompare');if(el){el.innerHTML='';var cols=['#1D4E89','#2D7D3A','#C4680A','#64748B'];techsData.forEach(function(tc,i){var pct=Math.round((tc.completed/tc.visits)*100);el.innerHTML+='<div style="display:flex;align-items:center;gap:10px;margin-bottom:10px"><div style="font-size:12px;min-width:80px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+tc.name.split(' ')[0]+'</div><div style="flex:1;height:20px;background:#F0F4F8;border-radius:4px;overflow:hidden"><div style="height:100%;width:'+pct+'%;background:'+cols[i]+';border-radius:4px;display:flex;align-items:center;padding-left:6px;font-size:10px;color:#fff;font-weight:700">'+pct+'%</div></div><div style="font-size:11px;color:#718096;min-width:40px">'+tc.visits+'</div></div>';});}
@@ -2331,55 +2207,26 @@ function showTechStats(id) {
 function renderDashTechs(){
   var body = document.getElementById('dash-tech-body');
   if(!body) return;
-  
-  // Get unique techs who recently worked - sorted by most recent visit
-  var techActivity = {};
-  visData.forEach(function(v){
-    if(!v.tech) return;
-    if(!techActivity[v.tech] || v.date > techActivity[v.tech].date){
-      techActivity[v.tech] = v;
-    }
-  });
-
-  // Sort techs by most recent visit date
-  var recentTechs = Object.keys(techActivity)
-    .sort(function(a,b){ return techActivity[b].date > techActivity[a].date ? 1 : -1; })
-    .slice(0, 5);
-
-  if(!recentTechs.length){
-    body.innerHTML = '<div style="padding:20px;text-align:center;color:#A0AEC0;font-size:13px">No recent activity</div>';
+  var techs = techsData.slice(0,5);
+  if(!techs.length){
+    body.innerHTML = '<div style="padding:20px;text-align:center;color:#A0AEC0;font-size:13px">No technicians</div>';
     return;
   }
-
   body.innerHTML = '';
-  recentTechs.forEach(function(techName){
-    var lastVisit = techActivity[techName];
-    var techInfo = techsData.find(function(t){ return t.name===techName; }) || {};
-    
-    // Check if tech has pending visits
-    var hasPending = visData.some(function(v){
-      return v.tech===techName && (v.status==='Pending'||v.status==='معلقة'||v.status==='قيد التنفيذ');
+  techs.forEach(function(t){
+    var activePending = visData.filter(function(v){
+      return v.tech===t.name && (v.status==='Pending'||v.status==='معلقة'||v.status==='قيد التنفيذ');
     });
-    var isDone = lastVisit.status==='Completed'||lastVisit.status==='مكتملة';
-    
-    var statusLabel = hasPending ? 'Pending' : isDone ? 'Completed' : 'In Progress';
-    var badgeClass = hasPending ? 'b-w' : isDone ? 'b-s' : 'b-i';
-    var subText = (lastVisit.client||'—') + (lastVisit.equipment||lastVisit.equip ? ' — '+(lastVisit.equipment||lastVisit.equip) : '');
-    
-    var initials = techInfo.initials || techInfo.init || techName.slice(0,2);
-    var bg = techInfo.bg || '#E6F1FB';
-    var color = techInfo.color || '#1D4E89';
-    
+    var activeVisit = activePending.length ? activePending[0] : null;
+    var statusLabel = activeVisit ? 'In Progress' : 'Available';
+    var badgeClass = activeVisit ? 'b-w' : 'b-s';
+    var subText = activeVisit ? (activeVisit.client||'') + (activeVisit.equipment||activeVisit.equip ? ' — '+(activeVisit.equipment||activeVisit.equip) : '') : 'No active visits';
     var row = document.createElement('div');
     row.className = 'lr';
-    row.style.cursor = 'pointer';
+    row.style.cursor='pointer';
     row.onclick = function(){ go('technicians'); };
-    row.innerHTML = 
-      '<div class="av" style="background:'+bg+';color:'+color+'">'+initials+'</div>'
-      + '<div class="ri">'
-      + '<div class="rn">'+techName+'</div>'
-      + '<div class="rs">'+subText+'</div>'
-      + '</div>'
+    row.innerHTML = '<div class="av" style="background:'+(t.bg||'#E6F1FB')+';color:'+(t.color||'#1D4E89')+'">'+(t.initials||t.name.slice(0,2))+'</div>'
+      + '<div class="ri"><div class="rn">'+(t.name||'—')+'</div><div class="rs">'+subText+'</div></div>'
       + '<span class="bdg '+badgeClass+'">'+statusLabel+'</span>';
     body.appendChild(row);
   });
