@@ -512,40 +512,110 @@ html,body{height:100%;font-family:Tajawal,sans-serif;font-size:14px;background:#
 
 <!-- ═══ PARTS ═══ -->
 <div id="pg-parts" style="display:none">
-  <div class="ph"><div><div class="pt" id="t-parts-pg">Spare Parts</div><div class="ps" id="t-parts-sub">Inventory & movement history</div></div>
+  <div class="ph">
+    <div><div class="pt" id="t-parts-pg">Spare Parts</div><div class="ps" id="t-parts-sub">Inventory management & movement history</div></div>
     <div style="display:flex;gap:8px">
-      <button class="btn btn-o" onclick="openMod('partModal')"><i class="ti ti-package-import"></i><span id="t-add-inv">Add Inventory</span></button>
-      <button class="btn btn-p" onclick="openMod('partModal')"><i class="ti ti-plus"></i><span id="t-new-part">New Part</span></button>
+      <button class="btn btn-o" onclick="openMod('partModal')"><i class="ti ti-plus"></i> <span id="t-new-part">New Part</span></button>
     </div>
   </div>
-  <div class="sg sg-4">
-    <div class="sc"><div class="si" style="background:#E6F1FB"><i class="ti ti-packages" style="color:#1D4E89"></i></div><div class="sv" id="ps-total">16</div><div class="sl" id="t-total-parts">Total SKUs</div></div>
-    <div class="sc"><div class="si" style="background:#EAF3DE"><i class="ti ti-circle-check" style="color:#2D7D3A"></i></div><div class="sv" id="ps-ok">12</div><div class="sl" id="t-avail-parts">Available</div></div>
-    <div class="sc"><div class="si" style="background:#FDF0E0"><i class="ti ti-alert-triangle" style="color:#C4680A"></i></div><div class="sv" id="ps-low">2</div><div class="sl" id="t-low-stock">Low Stock</div></div>
-    <div class="sc"><div class="si" style="background:#FCEBEB"><i class="ti ti-package-off" style="color:#C0392B"></i></div><div class="sv" id="ps-out">2</div><div class="sl" id="t-out-stock">Out of Stock</div></div>
+
+  <!-- Stats Row -->
+  <div class="sg sg-4" style="margin-bottom:14px">
+    <div class="sc"><div class="si" style="background:#E6F1FB"><i class="ti ti-package" style="color:#1D4E89"></i></div><div class="sv" id="ps-total">0</div><div class="sl">Total Parts</div></div>
+    <div class="sc"><div class="si" style="background:#FCEBEB"><i class="ti ti-alert-triangle" style="color:#C0392B"></i></div><div class="sv" id="ps-low">0</div><div class="sl">Low Stock</div></div>
+    <div class="sc"><div class="si" style="background:#EAF3DE"><i class="ti ti-arrow-down-circle" style="color:#2D7D3A"></i></div><div class="sv" id="ps-in">0</div><div class="sl">Total In</div></div>
+    <div class="sc"><div class="si" style="background:#FDF0E0"><i class="ti ti-arrow-up-circle" style="color:#C4680A"></i></div><div class="sv" id="ps-out">0</div><div class="sl">Total Out</div></div>
   </div>
-  <div class="ptabs">
-    <button class="ptab" id="ptab-inv" onclick="switchPTab('inv',this)" style="color:#1D4E89;border-bottom:2px solid #1D4E89;font-weight:600" id="t-tab-inv">Current Inventory</button>
-    <button class="ptab" id="ptab-hist" onclick="switchPTab('hist',this)">Movement History</button>
+
+  <!-- Search & Filter -->
+  <div style="display:flex;gap:10px;margin-bottom:12px;align-items:center">
+    <div style="position:relative;flex:1">
+      <i class="ti ti-search" style="position:absolute;right:10px;top:50%;transform:translateY(-50%);color:#A0AEC0"></i>
+      <input id="parts-search" type="text" placeholder="Search parts..." oninput="renderInvList()"
+        style="width:100%;padding:9px 34px 9px 12px;border:1.5px solid #D9E2EC;border-radius:8px;font-size:13px;font-family:inherit;outline:none">
+    </div>
+    <select id="parts-filter" onchange="renderInvList()" style="padding:9px 12px;border:1.5px solid #D9E2EC;border-radius:8px;font-size:13px;font-family:inherit;background:#fff;outline:none">
+      <option value="all">All Parts</option>
+      <option value="low">Low Stock ⚠</option>
+      <option value="ok">In Stock ✅</option>
+      <option value="out">Out of Stock 🔴</option>
+    </select>
   </div>
-  <div id="tab-inv">
-    <div class="vtbar">
-      <div class="sbox" style="max-width:300px"><i class="ti ti-search"></i><input type="text" placeholder="Search parts..." oninput="filterParts(this.value)"></div>
-      <div class="ftabs">
-        <button class="ftab" onclick="setStockF('all',this)" style="background:#1D4E89;color:#fff">All</button>
-        <button class="ftab" onclick="setStockF('ok',this)">Available</button>
-        <button class="ftab" onclick="setStockF('low',this)">Low</button>
-        <button class="ftab" onclick="setStockF('out',this)">Out</button>
+
+  <!-- Inventory Table -->
+  <div class="card" style="margin-bottom:14px">
+    <div class="ch">
+      <div class="ct"><i class="ti ti-package" style="color:#1D4E89"></i> Inventory</div>
+      <span id="inv-count" class="bdg b-i">0 items</span>
+    </div>
+    <div style="overflow-x:auto">
+      <div style="display:grid;grid-template-columns:2fr 1fr 0.8fr 0.8fr 0.8fr 1fr 1.2fr;gap:0;background:#F8FAFC;border-bottom:2px solid #D9E2EC;padding:8px 14px;font-size:11px;font-weight:700;color:#718096;min-width:600px">
+        <div>PART NAME</div><div>CATEGORY</div><div style="text-align:center">QTY</div><div style="text-align:center">MIN</div><div style="text-align:center">STATUS</div><div>UNIT</div><div style="text-align:right">ACTIONS</div>
       </div>
+      <div id="invBody" style="min-width:600px"></div>
     </div>
-    <div class="tbl"><div class="thd" style="grid-template-columns:2fr 1fr 1fr 1fr 1fr 90px"><div>Part Name</div><div>Category</div><div>Qty</div><div>Min</div><div>Status</div><div></div></div><div id="invList"></div></div>
   </div>
-  <div id="tab-hist" style="display:none">
-    <div class="vtbar"><div class="sbox" style="max-width:300px"><i class="ti ti-search"></i><input type="text" placeholder="Search history..." oninput="filterHist(this.value)"></div></div>
-    <div class="tbl"><div class="thd" style="grid-template-columns:1.5fr 0.8fr 0.8fr 1.5fr 1fr 0.9fr"><div>Part</div><div>Type</div><div>Qty</div><div>Dispatched To</div><div>Technician</div><div>Date</div></div><div id="histList"></div></div>
+
+  <!-- Movement History -->
+  <div class="card">
+    <div class="ch">
+      <div class="ct"><i class="ti ti-history" style="color:#C4680A"></i> Movement History</div>
+      <span id="hist-count" class="bdg b-w">0</span>
+    </div>
+    <div style="overflow-x:auto">
+      <div style="display:grid;grid-template-columns:2fr 0.8fr 0.8fr 1fr 1fr 1fr;gap:0;background:#F8FAFC;border-bottom:2px solid #D9E2EC;padding:8px 14px;font-size:11px;font-weight:700;color:#718096;min-width:500px">
+        <div>PART</div><div style="text-align:center">TYPE</div><div style="text-align:center">QTY</div><div>DESTINATION</div><div>TECHNICIAN</div><div>DATE</div>
+      </div>
+      <div id="histBody" style="min-width:500px"></div>
+    </div>
   </div>
 </div>
 
+<!-- USE PART MODAL -->
+<div id="usePartModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:7000;align-items:center;justify-content:center">
+  <div style="background:#fff;border-radius:16px;width:min(420px,95vw);padding:24px;box-shadow:0 20px 60px rgba(0,0,0,.2)">
+    <div style="font-size:16px;font-weight:700;color:#0F2D52;margin-bottom:16px;display:flex;align-items:center;gap:8px">
+      <i class="ti ti-arrow-up-circle" style="color:#C4680A"></i> Use Part from Inventory
+    </div>
+    <div id="use-part-name" style="font-size:14px;font-weight:600;margin-bottom:14px;padding:10px;background:#FDF0E0;border-radius:8px"></div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:14px">
+      <div><label style="font-size:11px;font-weight:700;color:#718096;display:block;margin-bottom:4px">Quantity *</label>
+        <input id="use-qty" type="number" min="1" value="1" style="width:100%;padding:9px;border:1.5px solid #D9E2EC;border-radius:8px;font-size:14px;font-family:inherit;outline:none"></div>
+      <div><label style="font-size:11px;font-weight:700;color:#718096;display:block;margin-bottom:4px">Technician</label>
+        <select id="use-tech" style="width:100%;padding:9px;border:1.5px solid #D9E2EC;border-radius:8px;font-size:13px;font-family:inherit;background:#fff;outline:none"></select></div>
+    </div>
+    <div style="margin-bottom:14px"><label style="font-size:11px;font-weight:700;color:#718096;display:block;margin-bottom:4px">Destination / Client</label>
+      <input id="use-dest" type="text" placeholder="e.g. Ritz Carlton" style="width:100%;padding:9px;border:1.5px solid #D9E2EC;border-radius:8px;font-size:13px;font-family:inherit;outline:none"></div>
+    <div style="margin-bottom:16px"><label style="font-size:11px;font-weight:700;color:#718096;display:block;margin-bottom:4px">Notes</label>
+      <input id="use-notes" type="text" placeholder="Optional notes" style="width:100%;padding:9px;border:1.5px solid #D9E2EC;border-radius:8px;font-size:13px;font-family:inherit;outline:none"></div>
+    <div style="display:flex;gap:10px">
+      <button onclick="closeMod('usePartModal')" style="flex:1;padding:11px;border-radius:8px;border:1.5px solid #D9E2EC;background:#fff;color:#718096;cursor:pointer;font-size:14px;font-weight:600;font-family:inherit">Cancel</button>
+      <button onclick="confirmUsePart()" style="flex:2;padding:11px;border-radius:8px;border:none;background:#C4680A;color:#fff;cursor:pointer;font-size:14px;font-weight:700;font-family:inherit">
+        <i class="ti ti-check"></i> Confirm Use
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- ADD STOCK MODAL -->
+<div id="addStockModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:7000;align-items:center;justify-content:center">
+  <div style="background:#fff;border-radius:16px;width:min(380px,95vw);padding:24px;box-shadow:0 20px 60px rgba(0,0,0,.2)">
+    <div style="font-size:16px;font-weight:700;color:#0F2D52;margin-bottom:16px;display:flex;align-items:center;gap:8px">
+      <i class="ti ti-arrow-down-circle" style="color:#2D7D3A"></i> Add Stock
+    </div>
+    <div id="add-stock-name" style="font-size:14px;font-weight:600;margin-bottom:14px;padding:10px;background:#EAF3DE;border-radius:8px"></div>
+    <div style="margin-bottom:14px"><label style="font-size:11px;font-weight:700;color:#718096;display:block;margin-bottom:4px">Quantity to Add *</label>
+      <input id="add-stock-qty" type="number" min="1" value="1" style="width:100%;padding:9px;border:1.5px solid #D9E2EC;border-radius:8px;font-size:14px;font-family:inherit;outline:none"></div>
+    <div style="margin-bottom:16px"><label style="font-size:11px;font-weight:700;color:#718096;display:block;margin-bottom:4px">Supplier / Notes</label>
+      <input id="add-stock-notes" type="text" placeholder="Optional" style="width:100%;padding:9px;border:1.5px solid #D9E2EC;border-radius:8px;font-size:13px;font-family:inherit;outline:none"></div>
+    <div style="display:flex;gap:10px">
+      <button onclick="closeMod('addStockModal')" style="flex:1;padding:11px;border-radius:8px;border:1.5px solid #D9E2EC;background:#fff;color:#718096;cursor:pointer;font-size:14px;font-weight:600;font-family:inherit">Cancel</button>
+      <button onclick="confirmAddStock()" style="flex:2;padding:11px;border-radius:8px;border:none;background:#2D7D3A;color:#fff;cursor:pointer;font-size:14px;font-weight:700;font-family:inherit">
+        <i class="ti ti-check"></i> Add Stock
+      </button>
+    </div>
+  </div>
+</div>
 <!-- ═══ CLIENTS ═══ -->
 <div id="pg-clients" style="display:none">
   <div class="ph"><div><div class="pt" id="t-clients-pg">Clients</div><div class="ps" id="t-clients-sub">Visit analytics per client</div></div><button class="btn btn-p" onclick="openMod('clientModal')"><i class="ti ti-building-plus"></i><span id="t-add-client">Add Client</span></button></div>
@@ -1656,61 +1726,258 @@ var partsData=[{id:1,name:'R410A Gas',cat:'Refrigerant Gases',unit:'KG',qty:45,m
 var histData=[];
 var stF='all';
 function stk(p){if(p.qty===0)return{l:t('stockOut'),c:'b-d'};if(p.qty<=p.min)return{l:t('stockLow'),c:'b-w'};return{l:t('stockOk'),c:'b-s'};}
-function renderInvList(q,sf){
-  sf=sf||stF;q=q||'';
-  var el=document.getElementById('invList');if(!el)return;el.innerHTML='';
-  var fl=partsData.filter(function(p){return(!q||p.name.toLowerCase().includes(q.toLowerCase()))&&(sf==='all'||(sf==='ok'&&stk(p).c==='b-s')||(sf==='low'&&stk(p).c==='b-w')||(sf==='out'&&stk(p).c==='b-d'));});
-  fl.forEach(function(p){var s=stk(p);var r=document.createElement('div');r.className='trow';r.style.gridTemplateColumns='2fr 1fr 1fr 1fr 1fr 90px';r.innerHTML='<div class="tc"><div style="font-weight:500">'+p.name+'</div><div class="tc2">'+p.supplier+'</div></div><div class="tc2">'+p.cat+'</div><div class="tc" style="font-weight:700">'+p.qty+' <span class="tc2">'+p.unit+'</span></div><div class="tc2">'+p.min+' '+p.unit+'</div><div><span class="bdg '+s.c+'">'+s.l+'</span></div><div style="display:flex;gap:4px"><button class="rbtn" onclick="quickAdd('+p.id+')" title="Add stock"><i class="ti ti-package-import"></i></button><button class="rbtn" onclick="showPH('+p.id+')" title="History"><i class="ti ti-history"></i></button></div>';el.appendChild(r);});
-  var ok=partsData.filter(function(p){return stk(p).c==='b-s';}).length;
-  var low=partsData.filter(function(p){return stk(p).c==='b-w';}).length;
-  var out=partsData.filter(function(p){return stk(p).c==='b-d';}).length;
-  var e1=document.getElementById('ps-total'),e2=document.getElementById('ps-ok'),e3=document.getElementById('ps-low'),e4=document.getElementById('ps-out');
-  if(e1)e1.textContent=partsData.length;if(e2)e2.textContent=ok;if(e3)e3.textContent=low;if(e4)e4.textContent=out;
-}
-function renderHistList(q,hf){
-  q=q||'';hf=hf||'all';
-  var el=document.getElementById('histList');if(!el)return;el.innerHTML='';
-  histData.filter(function(h){var p=partsData.find(function(x){return x.id===h.partId;})||{name:''};return(!q||p.name.toLowerCase().includes(q.toLowerCase())||h.dest.includes(q))&&(hf==='all'||h.type===hf);}).forEach(function(h){
-    var p=partsData.find(function(x){return x.id===h.partId;})||{name:'Unknown',unit:''};
-    var r=document.createElement('div');r.className='trow';r.style.gridTemplateColumns='1.5fr 0.8fr 0.8fr 1.5fr 1fr 0.9fr';
-    r.innerHTML='<div class="tc"><div style="font-weight:500">'+p.name+'</div><div class="tc2">'+h.note+'</div></div><div>'+(h.type==='in'?'<span style="color:#2D7D3A;font-weight:700;font-size:12px">▼ '+t('movIn')+'</span>':'<span style="color:#C0392B;font-weight:700;font-size:12px">▲ '+t('movOut')+'</span>')+'</div><div style="font-weight:700">'+(h.type==='in'?'+':'-')+h.qty+' '+p.unit+'</div><div class="tc2">'+h.dest+'</div><div class="tc2">'+h.tech+'</div><div class="tc2">'+h.date+'</div>';
-    el.appendChild(r);
+var _usePartId = null;
+var _addStockId = null;
+
+function renderInvList(){
+  var body = document.getElementById('invBody');
+  if(!body) return;
+
+  var q = (document.getElementById('parts-search')||{}).value||'';
+  var filt = (document.getElementById('parts-filter')||{}).value||'all';
+
+  var filtered = partsData.filter(function(p){
+    var matchQ = !q || p.name.toLowerCase().includes(q.toLowerCase()) || (p.cat||'').toLowerCase().includes(q.toLowerCase());
+    var matchF = filt==='all' || (filt==='low' && p.qty>0 && p.qty<=p.minQty) || (filt==='ok' && p.qty>p.minQty) || (filt==='out' && p.qty===0);
+    return matchQ && matchF;
+  });
+
+  var countEl = document.getElementById('inv-count');
+  if(countEl) countEl.textContent = filtered.length + ' items';
+
+  // Update stats
+  var lowCount = partsData.filter(function(p){ return p.qty<=p.minQty && p.qty>0; }).length;
+  var outCount = partsData.filter(function(p){ return p.qty===0; }).length;
+  var totalIn = histData.filter(function(h){ return h.type==='in'; }).reduce(function(s,h){ return s+h.qty; },0);
+  var totalOut = histData.filter(function(h){ return h.type==='out'; }).reduce(function(s,h){ return s+h.qty; },0);
+  var el1=document.getElementById('ps-total'); if(el1) el1.textContent=partsData.length;
+  var el2=document.getElementById('ps-low'); if(el2) el2.textContent=lowCount+outCount;
+  var el3=document.getElementById('ps-in'); if(el3) el3.textContent=totalIn;
+  var el4=document.getElementById('ps-out'); if(el4) el4.textContent=totalOut;
+
+  body.innerHTML = '';
+  if(!filtered.length){
+    body.innerHTML = '<div style="padding:30px;text-align:center;color:#A0AEC0"><i class="ti ti-package-off" style="font-size:32px;display:block;margin-bottom:8px"></i>No parts found</div>';
+    return;
+  }
+
+  filtered.forEach(function(p){
+    var pct = Math.min(100, Math.round((p.qty / Math.max(p.minQty*2||10,1))*100));
+    var isOut = p.qty===0;
+    var isLow = !isOut && p.qty<=p.minQty;
+    var statusColor = isOut?'#C0392B':isLow?'#C4680A':'#2D7D3A';
+    var statusBg = isOut?'#FCEBEB':isLow?'#FDF0E0':'#EAF3DE';
+    var statusLabel = isOut?'Out of Stock':isLow?'Low Stock':'In Stock';
+    var barColor = isOut?'#C0392B':isLow?'#C4680A':'#2D7D3A';
+
+    var row = document.createElement('div');
+    row.style.cssText='display:grid;grid-template-columns:2fr 1fr 0.8fr 0.8fr 0.8fr 1fr 1.2fr;align-items:center;padding:10px 14px;border-bottom:1px solid #F0F4F8;gap:0;min-width:600px';
+    if(isOut||isLow) row.style.background = isOut?'#FFF5F5':'#FFFBF0';
+    row.innerHTML =
+      '<div>'
+      +'<div style="font-size:13px;font-weight:600">'+(p.name||'—')+'</div>'
+      +'<div style="height:4px;background:#F0F4F8;border-radius:99px;margin-top:4px;width:80%"><div style="height:100%;width:'+pct+'%;background:'+barColor+';border-radius:99px"></div></div>'
+      +'</div>'
+      +'<div style="font-size:11px;color:#718096">'+(p.cat||'—')+'</div>'
+      +'<div style="text-align:center;font-size:16px;font-weight:700;color:'+statusColor+'">'+p.qty+'</div>'
+      +'<div style="text-align:center;font-size:12px;color:#A0AEC0">'+p.minQty+'</div>'
+      +'<div style="text-align:center"><span style="font-size:10px;font-weight:700;padding:2px 7px;border-radius:99px;background:'+statusBg+';color:'+statusColor+'">'+statusLabel+'</span></div>'
+      +'<div style="font-size:12px;color:#718096">'+(p.unit||'pcs')+'</div>'
+      +'<div style="display:flex;gap:4px;justify-content:flex-end">'
+      +'<button onclick="openAddStock('+p.id+')" style="padding:4px 8px;border-radius:6px;border:1px solid #2D7D3A;background:#EAF3DE;color:#2D7D3A;cursor:pointer;font-size:11px;font-weight:600;font-family:inherit" title="Add Stock"><i class="ti ti-plus"></i></button>'
+      +'<button onclick="openUsePart('+p.id+')" style="padding:4px 8px;border-radius:6px;border:1px solid #C4680A;background:#FDF0E0;color:#C4680A;cursor:pointer;font-size:11px;font-weight:600;font-family:inherit" title="Use Part"><i class="ti ti-arrow-up"></i></button>'
+      +'<button onclick="editPart('+p.id+')" style="padding:4px 8px;border-radius:6px;border:1px solid #D9E2EC;background:#F8FAFC;color:#718096;cursor:pointer;font-size:11px;font-weight:600;font-family:inherit" title="Edit"><i class="ti ti-pencil"></i></button>'
+      +'<button onclick="deletePart('+p.id+')" style="padding:4px 8px;border-radius:6px;border:1px solid #FCEBEB;background:#FCEBEB;color:#C0392B;cursor:pointer;font-size:11px;font-weight:600;font-family:inherit" title="Delete"><i class="ti ti-trash"></i></button>'
+      +'</div>';
+    body.appendChild(row);
   });
 }
-function filterParts(q){renderInvList(q,stF);}
-function filterHist(q){renderHistList(q,'all');}
-function setStockF(f,b){stF=f;document.querySelectorAll('#tab-inv .ftab').forEach(function(x){x.style.background='';x.style.color='#718096';});b.style.background='#1D4E89';b.style.color='#fff';renderInvList('',f);}
-function switchPTab(tab,el){document.querySelectorAll('.ptab').forEach(function(t){t.style.color='#718096';t.style.borderBottomColor='transparent';t.style.fontWeight='';});el.style.color='#1D4E89';el.style.borderBottomColor='#1D4E89';el.style.fontWeight='600';document.getElementById('tab-inv').style.display=tab==='inv'?'block':'none';document.getElementById('tab-hist').style.display=tab==='hist'?'block':'none';}
-function quickAdd(id){var p=partsData.find(function(x){return x.id===id;});if(!p)return;var qty=parseInt(prompt('Add stock for: '+p.name+'\nCurrent: '+p.qty+' '+p.unit));if(isNaN(qty)||qty<=0)return;p.qty+=qty;histData.unshift({id:Date.now(),partId:p.id,type:'in',qty:qty,dest:'—',tech:'Manager',note:'Stock added',date:new Date().toISOString().split('T')[0]});renderInvList();}
-function showPH(id){switchPTab('hist',document.getElementById('ptab-hist'));renderHistList(partsData.find(function(x){return x.id===id;})||{name:''}.name,'all');}
+
+function renderHistList(){
+  var body = document.getElementById('histBody');
+  if(!body) return;
+
+  var countEl = document.getElementById('hist-count');
+  if(countEl) countEl.textContent = histData.length;
+
+  body.innerHTML = '';
+  if(!histData.length){
+    body.innerHTML = '<div style="padding:24px;text-align:center;color:#A0AEC0">No movement history</div>';
+    return;
+  }
+
+  histData.slice().sort(function(a,b){ return b.date>a.date?1:-1; }).forEach(function(h){
+    var isIn = h.type==='in';
+    var typeColor = isIn?'#2D7D3A':'#C4680A';
+    var typeBg = isIn?'#EAF3DE':'#FDF0E0';
+    var typeLabel = isIn?'IN':'OUT';
+    var partName = (partsData.find(function(p){ return p.id===h.partId; })||{}).name || h.part || '—';
+
+    var row = document.createElement('div');
+    row.style.cssText='display:grid;grid-template-columns:2fr 0.8fr 0.8fr 1fr 1fr 1fr;align-items:center;padding:9px 14px;border-bottom:1px solid #F0F4F8;gap:0;min-width:500px;font-size:12px';
+    row.innerHTML =
+      '<div style="font-weight:600;color:#1a202c">'+partName+'</div>'
+      +'<div style="text-align:center"><span style="font-size:10px;font-weight:700;padding:2px 8px;border-radius:99px;background:'+typeBg+';color:'+typeColor+'">'+typeLabel+'</span></div>'
+      +'<div style="text-align:center;font-weight:700;color:'+typeColor+'">'+h.qty+'</div>'
+      +'<div style="color:#718096">'+(h.dest||'—')+'</div>'
+      +'<div style="color:#718096">'+(h.tech||'—')+'</div>'
+      +'<div style="color:#A0AEC0">'+(h.date||'—')+'</div>';
+    body.appendChild(row);
+  });
+}
+
+function openUsePart(id){
+  var p = partsData.find(function(x){ return x.id===id; });
+  if(!p) return;
+  _usePartId = id;
+  var nameEl = document.getElementById('use-part-name');
+  if(nameEl) nameEl.innerHTML = '<i class="ti ti-package" style="color:#C4680A"></i> '+p.name+' <span style="color:#718096;font-size:12px">(Available: '+p.qty+' '+p.unit+')</span>';
+  var qtyEl = document.getElementById('use-qty');
+  if(qtyEl){ qtyEl.value=1; qtyEl.max=p.qty; }
+  var destEl = document.getElementById('use-dest');
+  if(destEl) destEl.value='';
+  var notesEl = document.getElementById('use-notes');
+  if(notesEl) notesEl.value='';
+  // Fill tech select
+  var techSel = document.getElementById('use-tech');
+  if(techSel){
+    techSel.innerHTML = '<option value="">— Select Technician —</option>';
+    techsData.forEach(function(t){ techSel.innerHTML+='<option>'+t.name+'</option>'; });
+  }
+  var modal = document.getElementById('usePartModal');
+  if(modal) modal.style.display='flex';
+}
+
+function openAddStock(id){
+  var p = partsData.find(function(x){ return x.id===id; });
+  if(!p) return;
+  _addStockId = id;
+  var nameEl = document.getElementById('add-stock-name');
+  if(nameEl) nameEl.innerHTML = '<i class="ti ti-package" style="color:#2D7D3A"></i> '+p.name+' <span style="color:#718096;font-size:12px">(Current: '+p.qty+' '+p.unit+')</span>';
+  var qtyEl = document.getElementById('add-stock-qty');
+  if(qtyEl) qtyEl.value=1;
+  var notesEl = document.getElementById('add-stock-notes');
+  if(notesEl) notesEl.value='';
+  var modal = document.getElementById('addStockModal');
+  if(modal) modal.style.display='flex';
+}
+
+async function confirmUsePart(){
+  var p = partsData.find(function(x){ return x.id===_usePartId; });
+  if(!p) return;
+  var qty = parseInt(document.getElementById('use-qty').value)||1;
+  if(qty>p.qty){ alert('Not enough stock! Available: '+p.qty); return; }
+  var tech = document.getElementById('use-tech').value||'';
+  var dest = document.getElementById('use-dest').value||'';
+  var notes = document.getElementById('use-notes').value||'';
+  var today = new Date().toISOString().split('T')[0];
+
+  if(_sb){
+    // Deduct from inventory
+    await _sb.from('parts').update({qty: p.qty-qty}).eq('id', p.id);
+    // Add to history
+    await _sb.from('parts_history').insert({
+      part_id: p.id, part_name: p.name, qty: qty,
+      type: 'out', destination: dest, tech: tech,
+      note: notes, date: today
+    });
+  }
+
+  // Update local data
+  p.qty -= qty;
+  histData.unshift({ id:Date.now(), partId:p.id, part:p.name, qty:qty, type:'out', dest:dest, tech:tech, date:today });
+
+  closeMod('usePartModal');
+  renderInvList();
+  renderHistList();
+
+  // Check low stock alert
+  if(p.qty<=p.minQty){
+    setTimeout(function(){
+      alert('Low Stock: '+p.name+' now at '+p.qty+' '+(p.unit||''));
+    },300);
+  }
+  console.log('✅ Used', qty, p.name);
+}
+
+async function confirmAddStock(){
+  var p = partsData.find(function(x){ return x.id===_addStockId; });
+  if(!p) return;
+  var qty = parseInt(document.getElementById('add-stock-qty').value)||1;
+  var notes = document.getElementById('add-stock-notes').value||'';
+  var today = new Date().toISOString().split('T')[0];
+
+  if(_sb){
+    await _sb.from('parts').update({qty: p.qty+qty}).eq('id', p.id);
+    await _sb.from('parts_history').insert({
+      part_id: p.id, part_name: p.name, qty: qty,
+      type: 'in', destination: notes||'Warehouse', tech: curUser||'', date: today
+    });
+  }
+
+  p.qty += qty;
+  histData.unshift({ id:Date.now(), partId:p.id, part:p.name, qty:qty, type:'in', dest:notes||'Warehouse', tech:curUser||'', date:today });
+
+  closeMod('addStockModal');
+  renderInvList();
+  renderHistList();
+  console.log('✅ Added', qty, p.name);
+}
+
+function editPart(id){
+  var p = partsData.find(function(x){ return x.id===id; });
+  if(!p) return;
+  var el = document.getElementById('ap-name'); if(el) el.value=p.name;
+  var el2 = document.getElementById('ap-qty'); if(el2) el2.value=p.qty;
+  var el3 = document.getElementById('ap-min'); if(el3) el3.value=p.minQty||2;
+  var el4 = document.getElementById('ap-unit'); if(el4) el4.value=p.unit||'pcs';
+  var el5 = document.getElementById('ap-cat'); if(el5) el5.value=p.cat||'';
+  document.getElementById('ap-name').dataset.editId = id;
+  openMod('partModal');
+}
+
+async function deletePart(id){
+  var p = partsData.find(function(x){ return x.id===id; });
+  if(!p) return;
+  if(!confirm('Delete part: '+p.name+'?')) return;
+  if(_sb) await _sb.from('parts').delete().eq('id', id);
+  partsData = partsData.filter(function(x){ return x.id!==id; });
+  renderInvList();
+  console.log('✅ Deleted part:', p.name);
+}
+
 async function savePart(){
-  var name=document.getElementById('ap-name').value.trim();
-  if(!name){alert('Enter part name');return;}
-  var qty=parseInt(document.getElementById('ap-qty').value)||0;
-  var min2=parseInt(document.getElementById('ap-min').value)||2;
-  var np={
-    name: name,
-    cat: document.getElementById('ap-cat').value,
-    unit: document.getElementById('ap-unit').value,
-    qty: qty,
-    min: min2,
-    supplier: document.getElementById('ap-sup').value||'—'
-  };
-  var ex=partsData.find(function(p){return p.name.toLowerCase()===name.toLowerCase();});
-  if(ex){
-    ex.qty+=qty;
-    await dbSave('parts',{id:ex.id,qty:ex.qty});
+  var nameEl = document.getElementById('ap-name');
+  var name = nameEl ? nameEl.value.trim() : '';
+  if(!name){ alert('Enter part name'); return; }
+  var editId = nameEl ? nameEl.dataset.editId : '';
+  var qty = parseInt(document.getElementById('ap-qty').value)||0;
+  var min2 = parseInt(document.getElementById('ap-min').value)||2;
+  var unit = (document.getElementById('ap-unit')||{}).value||'pcs';
+  var cat = (document.getElementById('ap-cat')||{}).value||'';
+
+  var dbData = { name:name, qty:qty, min_qty:min2, unit:unit, cat:cat };
+
+  if(editId){
+    // Update existing
+    var existing = partsData.find(function(p){ return p.id==editId; });
+    if(existing){
+      if(_sb) await _sb.from('parts').update(dbData).eq('id', editId);
+      existing.name=name; existing.qty=qty; existing.minQty=min2; existing.unit=unit; existing.cat=cat;
+      if(nameEl) nameEl.dataset.editId='';
+    }
   } else {
-    var saved=await dbSave('parts',np);
-    if(saved&&saved[0]) np.id=saved[0].id;
-    else np.id=Date.now();
-    partsData.push(np);
+    // New part
+    var saved = null;
+    if(_sb){
+      var r = await _sb.from('parts').insert(dbData).select();
+      saved = r.data;
+    }
+    var newPart = { id:(saved&&saved[0])?saved[0].id:Date.now(), name:name, qty:qty, minQty:min2, unit:unit, cat:cat };
+    partsData.push(newPart);
+    if(!acData.parts.includes(name)) acData.parts.push(name);
   }
-  if(qty>0){
-    var nh={part_id:(ex?ex.id:np.id),type:'in',qty:qty,dest:'—',tech:'Manager',note:'Stock added',date:new Date().toISOString().split('T')[0]};
-    await dbSave('parts_history',nh);
-    histData.unshift(Object.assign({id:Date.now(),partId:(ex?ex.id:np.id)},nh));
-  }
+
   closeMod('partModal');
   renderInvList();
   alert('✅ Part saved!');
