@@ -769,12 +769,43 @@ html,body{height:100%;font-family:Tajawal,sans-serif;font-size:14px;background:#
 
 <!-- SETTINGS PAGE -->
 <div id="pg-settings" style="display:none">
-  <div class="ph"><div><div class="pt" id="t-settings-pg">Settings</div><div class="ps">System configuration</div></div></div>
-  
-  <!-- User Management -->
+  <div class="ph"><div><div class="pt" id="t-settings-pg">Settings</div><div class="ps">System configuration & user management</div></div></div>
+
+  <!-- My Account -->
   <div class="card" style="margin-bottom:14px">
-    <div class="ch"><div class="ct"><i class="ti ti-users"></i> User Management</div><button class="btn btn-p" onclick="openMod('addUserModal')" style="font-size:12px;padding:6px 12px"><i class="ti ti-user-plus"></i> Add User</button></div>
-    <div id="usersList"></div>
+    <div class="ch"><div class="ct"><i class="ti ti-user-circle" style="color:#1D4E89"></i> My Account</div></div>
+    <div style="padding:16px;display:grid;grid-template-columns:1fr 1fr;gap:12px">
+      <div>
+        <label style="font-size:11px;font-weight:700;color:#718096;display:block;margin-bottom:4px">Full Name</label>
+        <input id="my-name" type="text" style="width:100%;padding:9px 12px;border:1.5px solid #D9E2EC;border-radius:8px;font-size:13px;font-family:inherit;outline:none">
+      </div>
+      <div>
+        <label style="font-size:11px;font-weight:700;color:#718096;display:block;margin-bottom:4px">Username</label>
+        <input id="my-username" type="text" style="width:100%;padding:9px 12px;border:1.5px solid #D9E2EC;border-radius:8px;font-size:13px;font-family:inherit;outline:none" disabled>
+      </div>
+      <div>
+        <label style="font-size:11px;font-weight:700;color:#718096;display:block;margin-bottom:4px">New Password</label>
+        <input id="my-pass" type="password" placeholder="Leave empty to keep current" style="width:100%;padding:9px 12px;border:1.5px solid #D9E2EC;border-radius:8px;font-size:13px;font-family:inherit;outline:none">
+      </div>
+      <div>
+        <label style="font-size:11px;font-weight:700;color:#718096;display:block;margin-bottom:4px">Confirm Password</label>
+        <input id="my-pass2" type="password" placeholder="Repeat new password" style="width:100%;padding:9px 12px;border:1.5px solid #D9E2EC;border-radius:8px;font-size:13px;font-family:inherit;outline:none">
+      </div>
+      <div style="grid-column:1/-1">
+        <button onclick="saveMyAccount()" style="padding:10px 24px;border-radius:8px;border:none;background:#1D4E89;color:#fff;cursor:pointer;font-size:13px;font-weight:700;font-family:inherit">
+          <i class="ti ti-device-floppy"></i> Save Changes
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- User Management (Manager only) -->
+  <div class="card" style="margin-bottom:14px" id="users-mgmt-card">
+    <div class="ch">
+      <div class="ct"><i class="ti ti-users" style="color:#2D7D3A"></i> User Management</div>
+      <button class="btn btn-p" onclick="openMod('addUserModal')" style="font-size:12px;padding:6px 12px"><i class="ti ti-user-plus"></i> Add User</button>
+    </div>
+    <div id="usersList" style="padding:4px 0"></div>
   </div>
   
   <!-- System Info -->
@@ -932,7 +963,9 @@ function setLang(l){
 // LOGIN
 // ══════════════════════════════════════
 var LG_ROLE='manager';
-var curUser = 'Manager'; // current logged in user name
+var curUser = 'Manager'; // current logged in user display name
+var curUserLogin = 'manager'; // current logged in username
+var curUserRole = 'manager'; // current logged in user role
 var USERS={'manager':{pass:'hrco2026',role:'manager',name:'Mohammed Al-Otaibi',init:'M'},'ahmed':{pass:'tech1234',role:'technician',name:'أحمد العتيبي',init:'أع'},'mohamad':{pass:'tech1234',role:'technician',name:'محمد الحربي',init:'مح'},'sami':{pass:'tech1234',role:'technician',name:'سامي القحطاني',init:'سق'},'khalid':{pass:'tech1234',role:'technician',name:'خالد الرشيدي',init:'خر'}};
 function lgLang(l){
   var texts={en:{app:'Maintenance Management System',mgr:'Manager',tech:'Technician',email:'Username',pass:'Password',btn:'Sign In',hint:'Demo: manager / hrco2026'},ar:{app:'نظام إدارة الصيانة',mgr:'مدير',tech:'فني',email:'اسم المستخدم',pass:'كلمة المرور',btn:'تسجيل الدخول',hint:'تجريبي: manager / hrco2026'},ur:{app:'مینٹیننس مینجمنٹ سسٹم',mgr:'مینیجر',tech:'ٹیکنیشن',email:'یوزر نیم',pass:'پاس ورڈ',btn:'سائن ان',hint:'ڈیمو: manager / hrco2026'}};
@@ -965,7 +998,9 @@ async function lgLogin(){
   err.textContent=t('err');err.style.display='block';
 }
 function lgSuccess(u){
-  curUser = u.name || u.init || 'Manager'; // Store current user
+  curUser = u.name || u.init || 'Manager';
+  curUserLogin = Object.keys(USERS).find(function(k){ return USERS[k]===u; }) || '';
+  curUserRole = u.role || 'technician';
   // Hide login screen
   var ls=document.getElementById('loginScreen');
   if(ls){
@@ -982,9 +1017,16 @@ function lgSuccess(u){
   
   // Hide nav items for technician role
   if(u.role==='technician'){
-    ['nav-technicians','nav-clients','nav-reports','nav-archive'].forEach(function(id){
+    // Technicians see: Dashboard, Visits (own), New Visit, Pending
+    ['nav-technicians','nav-clients','nav-reports','nav-archive','nav-parts'].forEach(function(id){
       var el=document.getElementById(id);
       if(el) el.style.display='none';
+    });
+  } else {
+    // Managers see everything
+    ['nav-technicians','nav-clients','nav-reports','nav-archive','nav-parts','nav-settings'].forEach(function(id){
+      var el=document.getElementById(id);
+      if(el) el.style.display='';
     });
   }
   
@@ -3040,16 +3082,58 @@ function renderUsersList() {
   var el = document.getElementById('usersList');
   if (!el) return;
   el.innerHTML = '';
-  Object.keys(systemUsers).forEach(function(u) {
+
+  // Hide user management from non-managers
+  var card = document.getElementById('users-mgmt-card');
+  if(card) card.style.display = (curUserRole==='manager') ? '' : 'none';
+
+  // Pre-fill my account
+  var myNameEl = document.getElementById('my-name');
+  var myUserEl = document.getElementById('my-username');
+  if(myNameEl) myNameEl.value = curUser || '';
+  if(myUserEl) myUserEl.value = curUserLogin || '';
+
+  if(curUserRole !== 'manager') return; // Only managers see user list
+
+  var users = Object.keys(systemUsers);
+  if(!users.length){
+    el.innerHTML = '<div style="padding:16px;text-align:center;color:#A0AEC0">No users found</div>';
+    return;
+  }
+
+  users.forEach(function(u) {
     var user = systemUsers[u];
+    var isManager = user.role==='manager';
+    var isSelf = u === curUserLogin;
+    var roleColor = isManager ? '#1D4E89' : '#2D7D3A';
+    var roleBg = isManager ? '#E6F1FB' : '#EAF3DE';
     var row = document.createElement('div');
-    row.className = 'lr';
-    row.innerHTML = '<div class="av" style="background:#E6F1FB;color:#1D4E89;font-size:13px">' + u[0].toUpperCase() + '</div>'
-      + '<div class="ri"><div class="rn">' + (user.name||u) + '</div><div class="rs">@' + u + ' · ' + (user.role||'user') + '</div></div>'
-      + '<span class="bdg ' + (user.role==='manager'?'b-i':'b-s') + '">' + (user.role||'user') + '</span>'
-      + '<button onclick="deleteUser(\'' + u + '\')" class="rbtn" style="color:#C0392B;margin-right:6px"><i class="ti ti-trash"></i></button>';
+    row.style.cssText = 'display:flex;align-items:center;gap:12px;padding:10px 16px;border-bottom:1px solid #F0F4F8';
+    row.innerHTML =
+      '<div style="width:36px;height:36px;border-radius:8px;background:'+roleBg+';color:'+roleColor+';display:flex;align-items:center;justify-content:center;font-weight:700;font-size:14px;flex-shrink:0">'+(u[0]||'?').toUpperCase()+'</div>'
+      +'<div style="flex:1;min-width:0">'
+      +'<div style="font-size:13px;font-weight:600">'+(user.name||u)+(isSelf?' <span style="font-size:10px;color:#718096">(You)</span>':'')+'</div>'
+      +'<div style="font-size:11px;color:#718096">@'+u+' · <span style="color:'+roleColor+';font-weight:600">'+user.role+'</span></div>'
+      +'</div>'
+      +'<span style="font-size:10px;font-weight:700;padding:3px 10px;border-radius:99px;background:'+roleBg+';color:'+roleColor+'">'+user.role.toUpperCase()+'</span>'
+      ;
+    if(!isSelf){
+      var btn1=document.createElement('button');
+      btn1.innerHTML='<i class="ti ti-key"></i>';
+      btn1.title='Reset Password';
+      btn1.style.cssText='padding:4px 8px;border-radius:6px;border:1px solid #D9E2EC;background:#F8FAFC;color:#718096;cursor:pointer;font-size:11px;margin-right:4px';
+      btn1.onclick=(function(un){ return function(){ resetUserPass(un); }; })(u);
+      row.appendChild(btn1);
+      var btn2=document.createElement('button');
+      btn2.innerHTML='<i class="ti ti-trash"></i>';
+      btn2.title='Delete';
+      btn2.style.cssText='padding:4px 8px;border-radius:6px;border:1px solid #FCEBEB;background:#FCEBEB;color:#C0392B;cursor:pointer;font-size:11px';
+      btn2.onclick=(function(un){ return function(){ deleteUser(un); }; })(u);
+      row.appendChild(btn2);
+    }
     el.appendChild(row);
   });
+
   var tc = document.getElementById('set-tech-count'); if(tc) tc.textContent = techsData.length;
   var cc = document.getElementById('set-client-count'); if(cc) cc.textContent = clientsData.length;
 }
@@ -3078,6 +3162,45 @@ function deleteUser(u) {
   delete systemUsers[u];
   if (typeof USERS !== 'undefined') delete USERS[u];
   renderUsersList();
+}
+
+function resetUserPass(u) {
+  var newPass = prompt('New password for @'+u+' (min 6 chars):');
+  if(!newPass || newPass.length < 6) { alert('Password too short (min 6 chars)'); return; }
+  if(systemUsers[u]) systemUsers[u].pass = newPass;
+  if(USERS[u]) USERS[u].pass = newPass;
+  alert('Password updated for @'+u);
+}
+
+function saveMyAccount(){
+  var name = (document.getElementById('my-name')||{}).value||'';
+  var pass = (document.getElementById('my-pass')||{}).value||'';
+  var pass2 = (document.getElementById('my-pass2')||{}).value||'';
+
+  if(pass && pass !== pass2){ alert('Passwords do not match'); return; }
+  if(pass && pass.length < 6){ alert('Password too short (min 6 chars)'); return; }
+
+  // Update name
+  if(name){
+    curUser = name;
+    if(systemUsers[curUserLogin]) systemUsers[curUserLogin].name = name;
+    if(USERS[curUserLogin]) USERS[curUserLogin].name = name;
+    // Update header avatar
+    var ua = document.getElementById('uAv');
+    if(ua) ua.textContent = name[0]||'M';
+  }
+
+  // Update password
+  if(pass){
+    if(systemUsers[curUserLogin]) systemUsers[curUserLogin].pass = pass;
+    if(USERS[curUserLogin]) USERS[curUserLogin].pass = pass;
+  }
+
+  // Clear password fields
+  var p1=document.getElementById('my-pass'); if(p1) p1.value='';
+  var p2=document.getElementById('my-pass2'); if(p2) p2.value='';
+
+  alert('Account updated successfully!');
 }
 
 function changePassword() {
