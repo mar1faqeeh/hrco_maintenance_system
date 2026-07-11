@@ -1851,8 +1851,13 @@ function openUsePart(id){
 
 function openAddStock(id){
   id = parseInt(id)||id;
+  console.log('openAddStock called, id=', id, 'partsData=', partsData.length);
   var p = partsData.find(function(x){ return x.id==id; });
-  if(!p) return;
+  console.log('Found part:', p ? p.name : 'NULL - not found');
+  if(!p){
+    alert('Part not found! id='+id+' partsData length='+partsData.length);
+    return;
+  }
   _addStockId = id;
   var nameEl = document.getElementById('add-stock-name');
   if(nameEl) nameEl.innerHTML = '<i class="ti ti-package" style="color:#2D7D3A"></i> '+p.name+' <span style="color:#718096;font-size:12px">(Current: '+p.qty+' '+p.unit+')</span>';
