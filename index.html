@@ -572,7 +572,7 @@ html,body{height:100%;font-family:Tajawal,sans-serif;font-size:14px;background:#
 </div>
 
 <!-- USE PART MODAL -->
-<div id="usePartModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:7000;align-items:center;justify-content:center">
+<div id="usePartModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:8500;align-items:center;justify-content:center">
   <div style="background:#fff;border-radius:16px;width:min(420px,95vw);padding:24px;box-shadow:0 20px 60px rgba(0,0,0,.2)">
     <div style="font-size:16px;font-weight:700;color:#0F2D52;margin-bottom:16px;display:flex;align-items:center;gap:8px">
       <i class="ti ti-arrow-up-circle" style="color:#C4680A"></i> Use Part from Inventory
@@ -598,7 +598,7 @@ html,body{height:100%;font-family:Tajawal,sans-serif;font-size:14px;background:#
 </div>
 
 <!-- ADD STOCK MODAL -->
-<div id="addStockModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:7000;align-items:center;justify-content:center">
+<div id="addStockModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:8500;align-items:center;justify-content:center">
   <div style="background:#fff;border-radius:16px;width:min(380px,95vw);padding:24px;box-shadow:0 20px 60px rgba(0,0,0,.2)">
     <div style="font-size:16px;font-weight:700;color:#0F2D52;margin-bottom:16px;display:flex;align-items:center;gap:8px">
       <i class="ti ti-arrow-down-circle" style="color:#2D7D3A"></i> Add Stock
@@ -1675,7 +1675,7 @@ function closeMod(id){var el=document.getElementById(id);if(el)el.style.display=
 // ══════════════════════════════════════
 // TECHNICIANS
 // ══════════════════════════════════════
-var techsData=[{id:1,name:'أحمد العتيبي',init:'أع',color:'#1D4E89',bg:'#E6F1FB',phone:'0501234567',spec:'Refrigeration & AC',status:'active',visits:142,completed:128,pending:14,rating:4.8,avgTime:1.7},{id:2,name:'محمد الحربي',init:'مح',color:'#2D7D3A',bg:'#EAF3DE',phone:'0507654321',spec:'Central Kitchens',status:'active',visits:118,completed:105,pending:13,rating:4.6,avgTime:2.0},{id:3,name:'سامي القحطاني',init:'سق',color:'#C4680A',bg:'#FDF0E0',phone:'0559876543',spec:'Industrial Electrical',status:'active',visits:97,completed:82,pending:15,rating:4.5,avgTime:2.2},{id:4,name:'خالد الرشيدي',init:'خر',color:'#64748B',bg:'#F1F5F9',phone:'0551122334',spec:'Refrigeration & AC',status:'vacation',visits:76,completed:70,pending:6,rating:4.9,avgTime:1.5}];
+var techsData=[];
 function renderTechGrid(){
   var g=document.getElementById('techGrid');if(!g)return;g.innerHTML='';
   techsData.forEach(function(tc){
@@ -1845,7 +1845,7 @@ function openUsePart(id){
     techsData.forEach(function(t){ techSel.innerHTML+='<option>'+t.name+'</option>'; });
   }
   var modal = document.getElementById('usePartModal');
-  if(modal) modal.style.display='flex';
+  if(modal){ modal.style.display='flex'; modal.style.alignItems='center'; modal.style.justifyContent='center'; }
 }
 
 function openAddStock(id){
@@ -1859,7 +1859,7 @@ function openAddStock(id){
   var notesEl = document.getElementById('add-stock-notes');
   if(notesEl) notesEl.value='';
   var modal = document.getElementById('addStockModal');
-  if(modal) modal.style.display='flex';
+  if(modal){ modal.style.display='flex'; modal.style.alignItems='center'; modal.style.justifyContent='center'; }
 }
 
 async function confirmUsePart(){
