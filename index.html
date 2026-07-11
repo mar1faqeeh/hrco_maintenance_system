@@ -1827,7 +1827,8 @@ function renderHistList(){
 }
 
 function openUsePart(id){
-  var p = partsData.find(function(x){ return x.id===id; });
+  id = parseInt(id)||id;
+  var p = partsData.find(function(x){ return x.id==id; });
   if(!p) return;
   _usePartId = id;
   var nameEl = document.getElementById('use-part-name');
@@ -1849,7 +1850,8 @@ function openUsePart(id){
 }
 
 function openAddStock(id){
-  var p = partsData.find(function(x){ return x.id===id; });
+  id = parseInt(id)||id;
+  var p = partsData.find(function(x){ return x.id==id; });
   if(!p) return;
   _addStockId = id;
   var nameEl = document.getElementById('add-stock-name');
@@ -1863,7 +1865,7 @@ function openAddStock(id){
 }
 
 async function confirmUsePart(){
-  var p = partsData.find(function(x){ return x.id===_usePartId; });
+  var p = partsData.find(function(x){ return x.id==_usePartId; });
   if(!p) return;
   var qty = parseInt(document.getElementById('use-qty').value)||1;
   if(qty>p.qty){ alert('Not enough stock! Available: '+p.qty); return; }
@@ -1905,7 +1907,7 @@ async function confirmUsePart(){
 }
 
 async function confirmAddStock(){
-  var p = partsData.find(function(x){ return x.id===_addStockId; });
+  var p = partsData.find(function(x){ return x.id==_addStockId; });
   if(!p) return;
   var qty = parseInt(document.getElementById('add-stock-qty').value)||1;
   var notes = document.getElementById('add-stock-notes').value||'';
@@ -1929,7 +1931,7 @@ async function confirmAddStock(){
     });
     _sb.from('parts_history').insert({
       part_id: p.id, part_name: p.name, qty: qty,
-      type: 'in', destination: notes||'Warehouse', tech: curUser||'Manager', date: today
+      type: 'in', destination: notes||'Warehouse', tech: curUser||'Manager', note: notes, date: today
     }).then(function(r){
       if(r.error) console.error('History sync error:', r.error.message);
     });
@@ -1937,7 +1939,8 @@ async function confirmAddStock(){
 }
 
 function editPart(id){
-  var p = partsData.find(function(x){ return x.id===id; });
+  id = parseInt(id)||id;
+  var p = partsData.find(function(x){ return x.id==id; });
   if(!p) return;
   var el = document.getElementById('ap-name'); if(el) el.value=p.name;
   var el2 = document.getElementById('ap-qty'); if(el2) el2.value=p.qty;
@@ -1949,7 +1952,8 @@ function editPart(id){
 }
 
 async function deletePart(id){
-  var p = partsData.find(function(x){ return x.id===id; });
+  id = parseInt(id)||id;
+  var p = partsData.find(function(x){ return x.id==id; });
   if(!p) return;
   if(!confirm('Delete part: '+p.name+'?')) return;
   if(_sb) await _sb.from('parts').delete().eq('id', id);
