@@ -1872,18 +1872,7 @@ async function confirmUsePart(){
   var notes = document.getElementById('use-notes').value||'';
   var today = new Date().toISOString().split('T')[0];
 
-  if(_sb){
-    // Deduct from inventory
-    await _sb.from('parts').update({qty: p.qty-qty}).eq('id', p.id);
-    // Add to history
-    await _sb.from('parts_history').insert({
-      part_id: p.id, part_name: p.name, qty: qty,
-      type: 'out', destination: dest, tech: tech,
-      note: notes, date: today
-    });
-  }
-
-  // Update local data
+  // Update local data IMMEDIATELY
   p.qty -= qty;
   histData.unshift({ id:Date.now(), partId:p.id, part:p.name, qty:qty, type:'out', dest:dest, tech:tech, date:today });
 
@@ -1891,13 +1880,28 @@ async function confirmUsePart(){
   renderInvList();
   renderHistList();
 
-  // Check low stock alert
+  // Low stock alert
   if(p.qty<=p.minQty){
     setTimeout(function(){
       alert('Low Stock: '+p.name+' now at '+p.qty+' '+(p.unit||''));
-    },300);
+    },200);
   }
-  console.log('✅ Used', qty, p.name);
+  console.log('✅ Used', qty, p.name, '— syncing to DB...');
+
+  // Sync to Supabase in background
+  if(_sb){
+    _sb.from('parts').update({qty: p.qty}).eq('id', p.id).then(function(r){
+      if(r.error) console.error('Sync error:', r.error.message);
+      else console.log('✅ Synced to DB');
+    });
+    _sb.from('parts_history').insert({
+      part_id: p.id, part_name: p.name, qty: qty,
+      type: 'out', destination: dest, tech: tech,
+      note: notes, date: today
+    }).then(function(r){
+      if(r.error) console.error('History sync error:', r.error.message);
+    });
+  }
 }
 
 async function confirmAddStock(){
@@ -1907,21 +1911,29 @@ async function confirmAddStock(){
   var notes = document.getElementById('add-stock-notes').value||'';
   var today = new Date().toISOString().split('T')[0];
 
-  if(_sb){
-    await _sb.from('parts').update({qty: p.qty+qty}).eq('id', p.id);
-    await _sb.from('parts_history').insert({
-      part_id: p.id, part_name: p.name, qty: qty,
-      type: 'in', destination: notes||'Warehouse', tech: curUser||'', date: today
-    });
-  }
-
+  // Update local data IMMEDIATELY (instant UI response)
   p.qty += qty;
-  histData.unshift({ id:Date.now(), partId:p.id, part:p.name, qty:qty, type:'in', dest:notes||'Warehouse', tech:curUser||'', date:today });
+  histData.unshift({ id:Date.now(), partId:p.id, part:p.name, qty:qty, type:'in', dest:notes||'Warehouse', tech:curUser||'Manager', date:today });
 
+  // Close modal and refresh UI instantly
   closeMod('addStockModal');
   renderInvList();
   renderHistList();
-  console.log('✅ Added', qty, p.name);
+  console.log('✅ Added', qty, p.name, '— syncing to DB...');
+
+  // Sync to Supabase in background (non-blocking)
+  if(_sb){
+    _sb.from('parts').update({qty: p.qty}).eq('id', p.id).then(function(r){
+      if(r.error) console.error('Sync error:', r.error.message);
+      else console.log('✅ Synced to DB');
+    });
+    _sb.from('parts_history').insert({
+      part_id: p.id, part_name: p.name, qty: qty,
+      type: 'in', destination: notes||'Warehouse', tech: curUser||'Manager', date: today
+    }).then(function(r){
+      if(r.error) console.error('History sync error:', r.error.message);
+    });
+  }
 }
 
 function editPart(id){
