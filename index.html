@@ -932,6 +932,7 @@ function setLang(l){
 // LOGIN
 // ══════════════════════════════════════
 var LG_ROLE='manager';
+var curUser = 'Manager'; // current logged in user name
 var USERS={'manager':{pass:'hrco2026',role:'manager',name:'Mohammed Al-Otaibi',init:'M'},'ahmed':{pass:'tech1234',role:'technician',name:'أحمد العتيبي',init:'أع'},'mohamad':{pass:'tech1234',role:'technician',name:'محمد الحربي',init:'مح'},'sami':{pass:'tech1234',role:'technician',name:'سامي القحطاني',init:'سق'},'khalid':{pass:'tech1234',role:'technician',name:'خالد الرشيدي',init:'خر'}};
 function lgLang(l){
   var texts={en:{app:'Maintenance Management System',mgr:'Manager',tech:'Technician',email:'Username',pass:'Password',btn:'Sign In',hint:'Demo: manager / hrco2026'},ar:{app:'نظام إدارة الصيانة',mgr:'مدير',tech:'فني',email:'اسم المستخدم',pass:'كلمة المرور',btn:'تسجيل الدخول',hint:'تجريبي: manager / hrco2026'},ur:{app:'مینٹیننس مینجمنٹ سسٹم',mgr:'مینیجر',tech:'ٹیکنیشن',email:'یوزر نیم',pass:'پاس ورڈ',btn:'سائن ان',hint:'ڈیمو: manager / hrco2026'}};
@@ -964,6 +965,7 @@ async function lgLogin(){
   err.textContent=t('err');err.style.display='block';
 }
 function lgSuccess(u){
+  curUser = u.name || u.init || 'Manager'; // Store current user
   // Hide login screen
   var ls=document.getElementById('loginScreen');
   if(ls){
@@ -1851,13 +1853,8 @@ function openUsePart(id){
 
 function openAddStock(id){
   id = parseInt(id)||id;
-  console.log('openAddStock called, id=', id, 'partsData=', partsData.length);
   var p = partsData.find(function(x){ return x.id==id; });
-  console.log('Found part:', p ? p.name : 'NULL - not found');
-  if(!p){
-    alert('Part not found! id='+id+' partsData length='+partsData.length);
-    return;
-  }
+  if(!p) return;
   _addStockId = id;
   var nameEl = document.getElementById('add-stock-name');
   if(nameEl) nameEl.innerHTML = '<i class="ti ti-package" style="color:#2D7D3A"></i> '+p.name+' <span style="color:#718096;font-size:12px">(Current: '+p.qty+' '+p.unit+')</span>';
