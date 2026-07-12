@@ -253,11 +253,17 @@ html,body{height:100%;font-family:Tajawal,sans-serif;font-size:14px;background:#
   <div class="g2">
     <div class="card">
       <div class="ch"><div class="ct"><i class="ti ti-users"></i><span id="t-tech-status">Technician Status</span></div><button class="ca" onclick="go('technicians')" id="t-view-all">View All</button></div>
-      <div id="dash-tech-body"></div>
+      <div class="lr"><div class="av" style="background:#E6F1FB;color:#1D4E89">أع</div><div class="ri"><div class="rn">أحمد العتيبي</div><div class="rs">Ritz Carlton — B3</div></div><span class="bdg b-w" id="t-inprog">In Progress</span></div>
+      <div class="lr"><div class="av" style="background:#EAF3DE;color:#2D7D3A">مح</div><div class="ri"><div class="rn">محمد الحربي</div><div class="rs">Al-Aseel Restaurant</div></div><span class="bdg b-s" id="t-done">Completed</span></div>
+      <div class="lr"><div class="av" style="background:#FDF0E0;color:#C4680A">سق</div><div class="ri"><div class="rn">سامي القحطاني</div><div class="rs" id="t-onway">On the way — McDonald's</div></div><span class="bdg b-i">On way</span></div>
+      <div class="lr"><div class="av" style="background:#F1F5F9;color:#64748B">خر</div><div class="ri"><div class="rn">خالد الرشيدي</div><div class="rs" id="t-no-visits">No current visits</div></div><span class="bdg b-g" id="t-avail">Available</span></div>
     </div>
     <div class="card">
       <div class="ch"><div class="ct"><i class="ti ti-clock-pause" style="color:#C4680A"></i><span id="t-pend-reports">Pending Reports</span></div><button class="ca" onclick="go('pending')" id="t-view-all2">View All</button></div>
-      <div id="dash-pending-body"></div>
+      <div class="lr"><div class="ri"><div class="rn">Ritz Carlton — B3</div><div class="rs">Danfoss T2 Expansion Valve</div></div><span style="font-size:11px;color:#C4680A;font-weight:700">Day 1</span></div>
+      <div class="lr"><div class="ri"><div class="rn">Burger King — Central Kitchen</div><div class="rs">Display Fridge Motor</div></div><span style="font-size:11px;color:#C4680A;font-weight:700">Day 3</span></div>
+      <div class="lr"><div class="ri"><div class="rn">Hilton Hotel — Cold Storage</div><div class="rs">Carel pCO5 Controller</div></div><span style="font-size:11px;color:#C0392B;font-weight:700">Day 7</span></div>
+      <div class="lr"><div class="ri"><div class="rn">Al-Kabeer Hotel</div><div class="rs">Embraco Compressor</div></div><span style="font-size:11px;color:#C0392B;font-weight:700">Day 5</span></div>
     </div>
   </div>
   <div class="g2">
@@ -512,110 +518,40 @@ html,body{height:100%;font-family:Tajawal,sans-serif;font-size:14px;background:#
 
 <!-- ═══ PARTS ═══ -->
 <div id="pg-parts" style="display:none">
-  <div class="ph">
-    <div><div class="pt" id="t-parts-pg">Spare Parts</div><div class="ps" id="t-parts-sub">Inventory management & movement history</div></div>
+  <div class="ph"><div><div class="pt" id="t-parts-pg">Spare Parts</div><div class="ps" id="t-parts-sub">Inventory & movement history</div></div>
     <div style="display:flex;gap:8px">
-      <button class="btn btn-o" onclick="openMod('partModal')"><i class="ti ti-plus"></i> <span id="t-new-part">New Part</span></button>
+      <button class="btn btn-o" onclick="openMod('partModal')"><i class="ti ti-package-import"></i><span id="t-add-inv">Add Inventory</span></button>
+      <button class="btn btn-p" onclick="openMod('partModal')"><i class="ti ti-plus"></i><span id="t-new-part">New Part</span></button>
     </div>
   </div>
-
-  <!-- Stats Row -->
-  <div class="sg sg-4" style="margin-bottom:14px">
-    <div class="sc"><div class="si" style="background:#E6F1FB"><i class="ti ti-package" style="color:#1D4E89"></i></div><div class="sv" id="ps-total">0</div><div class="sl">Total Parts</div></div>
-    <div class="sc"><div class="si" style="background:#FCEBEB"><i class="ti ti-alert-triangle" style="color:#C0392B"></i></div><div class="sv" id="ps-low">0</div><div class="sl">Low Stock</div></div>
-    <div class="sc"><div class="si" style="background:#EAF3DE"><i class="ti ti-arrow-down-circle" style="color:#2D7D3A"></i></div><div class="sv" id="ps-in">0</div><div class="sl">Total In</div></div>
-    <div class="sc"><div class="si" style="background:#FDF0E0"><i class="ti ti-arrow-up-circle" style="color:#C4680A"></i></div><div class="sv" id="ps-out">0</div><div class="sl">Total Out</div></div>
+  <div class="sg sg-4">
+    <div class="sc"><div class="si" style="background:#E6F1FB"><i class="ti ti-packages" style="color:#1D4E89"></i></div><div class="sv" id="ps-total">16</div><div class="sl" id="t-total-parts">Total SKUs</div></div>
+    <div class="sc"><div class="si" style="background:#EAF3DE"><i class="ti ti-circle-check" style="color:#2D7D3A"></i></div><div class="sv" id="ps-ok">12</div><div class="sl" id="t-avail-parts">Available</div></div>
+    <div class="sc"><div class="si" style="background:#FDF0E0"><i class="ti ti-alert-triangle" style="color:#C4680A"></i></div><div class="sv" id="ps-low">2</div><div class="sl" id="t-low-stock">Low Stock</div></div>
+    <div class="sc"><div class="si" style="background:#FCEBEB"><i class="ti ti-package-off" style="color:#C0392B"></i></div><div class="sv" id="ps-out">2</div><div class="sl" id="t-out-stock">Out of Stock</div></div>
   </div>
-
-  <!-- Search & Filter -->
-  <div style="display:flex;gap:10px;margin-bottom:12px;align-items:center">
-    <div style="position:relative;flex:1">
-      <i class="ti ti-search" style="position:absolute;right:10px;top:50%;transform:translateY(-50%);color:#A0AEC0"></i>
-      <input id="parts-search" type="text" placeholder="Search parts..." oninput="renderInvList()"
-        style="width:100%;padding:9px 34px 9px 12px;border:1.5px solid #D9E2EC;border-radius:8px;font-size:13px;font-family:inherit;outline:none">
-    </div>
-    <select id="parts-filter" onchange="renderInvList()" style="padding:9px 12px;border:1.5px solid #D9E2EC;border-radius:8px;font-size:13px;font-family:inherit;background:#fff;outline:none">
-      <option value="all">All Parts</option>
-      <option value="low">Low Stock ⚠</option>
-      <option value="ok">In Stock ✅</option>
-      <option value="out">Out of Stock 🔴</option>
-    </select>
+  <div class="ptabs">
+    <button class="ptab" id="ptab-inv" onclick="switchPTab('inv',this)" style="color:#1D4E89;border-bottom:2px solid #1D4E89;font-weight:600" id="t-tab-inv">Current Inventory</button>
+    <button class="ptab" id="ptab-hist" onclick="switchPTab('hist',this)">Movement History</button>
   </div>
-
-  <!-- Inventory Table -->
-  <div class="card" style="margin-bottom:14px">
-    <div class="ch">
-      <div class="ct"><i class="ti ti-package" style="color:#1D4E89"></i> Inventory</div>
-      <span id="inv-count" class="bdg b-i">0 items</span>
-    </div>
-    <div style="overflow-x:auto">
-      <div style="display:grid;grid-template-columns:2fr 1fr 0.8fr 0.8fr 0.8fr 1fr 1.2fr;gap:0;background:#F8FAFC;border-bottom:2px solid #D9E2EC;padding:8px 14px;font-size:11px;font-weight:700;color:#718096;min-width:600px">
-        <div>PART NAME</div><div>CATEGORY</div><div style="text-align:center">QTY</div><div style="text-align:center">MIN</div><div style="text-align:center">STATUS</div><div>UNIT</div><div style="text-align:right">ACTIONS</div>
+  <div id="tab-inv">
+    <div class="vtbar">
+      <div class="sbox" style="max-width:300px"><i class="ti ti-search"></i><input type="text" placeholder="Search parts..." oninput="filterParts(this.value)"></div>
+      <div class="ftabs">
+        <button class="ftab" onclick="setStockF('all',this)" style="background:#1D4E89;color:#fff">All</button>
+        <button class="ftab" onclick="setStockF('ok',this)">Available</button>
+        <button class="ftab" onclick="setStockF('low',this)">Low</button>
+        <button class="ftab" onclick="setStockF('out',this)">Out</button>
       </div>
-      <div id="invBody" style="min-width:600px"></div>
     </div>
+    <div class="tbl"><div class="thd" style="grid-template-columns:2fr 1fr 1fr 1fr 1fr 90px"><div>Part Name</div><div>Category</div><div>Qty</div><div>Min</div><div>Status</div><div></div></div><div id="invList"></div></div>
   </div>
-
-  <!-- Movement History -->
-  <div class="card">
-    <div class="ch">
-      <div class="ct"><i class="ti ti-history" style="color:#C4680A"></i> Movement History</div>
-      <span id="hist-count" class="bdg b-w">0</span>
-    </div>
-    <div style="overflow-x:auto">
-      <div style="display:grid;grid-template-columns:2fr 0.8fr 0.8fr 1fr 1fr 1fr;gap:0;background:#F8FAFC;border-bottom:2px solid #D9E2EC;padding:8px 14px;font-size:11px;font-weight:700;color:#718096;min-width:500px">
-        <div>PART</div><div style="text-align:center">TYPE</div><div style="text-align:center">QTY</div><div>DESTINATION</div><div>TECHNICIAN</div><div>DATE</div>
-      </div>
-      <div id="histBody" style="min-width:500px"></div>
-    </div>
+  <div id="tab-hist" style="display:none">
+    <div class="vtbar"><div class="sbox" style="max-width:300px"><i class="ti ti-search"></i><input type="text" placeholder="Search history..." oninput="filterHist(this.value)"></div></div>
+    <div class="tbl"><div class="thd" style="grid-template-columns:1.5fr 0.8fr 0.8fr 1.5fr 1fr 0.9fr"><div>Part</div><div>Type</div><div>Qty</div><div>Dispatched To</div><div>Technician</div><div>Date</div></div><div id="histList"></div></div>
   </div>
 </div>
 
-<!-- USE PART MODAL -->
-<div id="usePartModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:8500;align-items:center;justify-content:center">
-  <div style="background:#fff;border-radius:16px;width:min(420px,95vw);padding:24px;box-shadow:0 20px 60px rgba(0,0,0,.2)">
-    <div style="font-size:16px;font-weight:700;color:#0F2D52;margin-bottom:16px;display:flex;align-items:center;gap:8px">
-      <i class="ti ti-arrow-up-circle" style="color:#C4680A"></i> Use Part from Inventory
-    </div>
-    <div id="use-part-name" style="font-size:14px;font-weight:600;margin-bottom:14px;padding:10px;background:#FDF0E0;border-radius:8px"></div>
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:14px">
-      <div><label style="font-size:11px;font-weight:700;color:#718096;display:block;margin-bottom:4px">Quantity *</label>
-        <input id="use-qty" type="number" min="1" value="1" style="width:100%;padding:9px;border:1.5px solid #D9E2EC;border-radius:8px;font-size:14px;font-family:inherit;outline:none"></div>
-      <div><label style="font-size:11px;font-weight:700;color:#718096;display:block;margin-bottom:4px">Technician</label>
-        <select id="use-tech" style="width:100%;padding:9px;border:1.5px solid #D9E2EC;border-radius:8px;font-size:13px;font-family:inherit;background:#fff;outline:none"></select></div>
-    </div>
-    <div style="margin-bottom:14px"><label style="font-size:11px;font-weight:700;color:#718096;display:block;margin-bottom:4px">Destination / Client</label>
-      <input id="use-dest" type="text" placeholder="e.g. Ritz Carlton" style="width:100%;padding:9px;border:1.5px solid #D9E2EC;border-radius:8px;font-size:13px;font-family:inherit;outline:none"></div>
-    <div style="margin-bottom:16px"><label style="font-size:11px;font-weight:700;color:#718096;display:block;margin-bottom:4px">Notes</label>
-      <input id="use-notes" type="text" placeholder="Optional notes" style="width:100%;padding:9px;border:1.5px solid #D9E2EC;border-radius:8px;font-size:13px;font-family:inherit;outline:none"></div>
-    <div style="display:flex;gap:10px">
-      <button onclick="closeMod('usePartModal')" style="flex:1;padding:11px;border-radius:8px;border:1.5px solid #D9E2EC;background:#fff;color:#718096;cursor:pointer;font-size:14px;font-weight:600;font-family:inherit">Cancel</button>
-      <button onclick="confirmUsePart()" style="flex:2;padding:11px;border-radius:8px;border:none;background:#C4680A;color:#fff;cursor:pointer;font-size:14px;font-weight:700;font-family:inherit">
-        <i class="ti ti-check"></i> Confirm Use
-      </button>
-    </div>
-  </div>
-</div>
-
-<!-- ADD STOCK MODAL -->
-<div id="addStockModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:8500;align-items:center;justify-content:center">
-  <div style="background:#fff;border-radius:16px;width:min(380px,95vw);padding:24px;box-shadow:0 20px 60px rgba(0,0,0,.2)">
-    <div style="font-size:16px;font-weight:700;color:#0F2D52;margin-bottom:16px;display:flex;align-items:center;gap:8px">
-      <i class="ti ti-arrow-down-circle" style="color:#2D7D3A"></i> Add Stock
-    </div>
-    <div id="add-stock-name" style="font-size:14px;font-weight:600;margin-bottom:14px;padding:10px;background:#EAF3DE;border-radius:8px"></div>
-    <div style="margin-bottom:14px"><label style="font-size:11px;font-weight:700;color:#718096;display:block;margin-bottom:4px">Quantity to Add *</label>
-      <input id="add-stock-qty" type="number" min="1" value="1" style="width:100%;padding:9px;border:1.5px solid #D9E2EC;border-radius:8px;font-size:14px;font-family:inherit;outline:none"></div>
-    <div style="margin-bottom:16px"><label style="font-size:11px;font-weight:700;color:#718096;display:block;margin-bottom:4px">Supplier / Notes</label>
-      <input id="add-stock-notes" type="text" placeholder="Optional" style="width:100%;padding:9px;border:1.5px solid #D9E2EC;border-radius:8px;font-size:13px;font-family:inherit;outline:none"></div>
-    <div style="display:flex;gap:10px">
-      <button onclick="closeMod('addStockModal')" style="flex:1;padding:11px;border-radius:8px;border:1.5px solid #D9E2EC;background:#fff;color:#718096;cursor:pointer;font-size:14px;font-weight:600;font-family:inherit">Cancel</button>
-      <button onclick="confirmAddStock()" style="flex:2;padding:11px;border-radius:8px;border:none;background:#2D7D3A;color:#fff;cursor:pointer;font-size:14px;font-weight:700;font-family:inherit">
-        <i class="ti ti-check"></i> Add Stock
-      </button>
-    </div>
-  </div>
-</div>
 <!-- ═══ CLIENTS ═══ -->
 <div id="pg-clients" style="display:none">
   <div class="ph"><div><div class="pt" id="t-clients-pg">Clients</div><div class="ps" id="t-clients-sub">Visit analytics per client</div></div><button class="btn btn-p" onclick="openMod('clientModal')"><i class="ti ti-building-plus"></i><span id="t-add-client">Add Client</span></button></div>
@@ -769,43 +705,12 @@ html,body{height:100%;font-family:Tajawal,sans-serif;font-size:14px;background:#
 
 <!-- SETTINGS PAGE -->
 <div id="pg-settings" style="display:none">
-  <div class="ph"><div><div class="pt" id="t-settings-pg">Settings</div><div class="ps">System configuration & user management</div></div></div>
-  <div style="max-width:800px;margin:0 auto">
-  <!-- My Account -->
+  <div class="ph"><div><div class="pt" id="t-settings-pg">Settings</div><div class="ps">System configuration</div></div></div>
+  
+  <!-- User Management -->
   <div class="card" style="margin-bottom:14px">
-    <div class="ch"><div class="ct"><i class="ti ti-user-circle" style="color:#1D4E89"></i> My Account</div></div>
-    <div style="padding:16px;display:grid;grid-template-columns:1fr 1fr;gap:12px">
-      <div>
-        <label style="font-size:11px;font-weight:700;color:#718096;display:block;margin-bottom:4px">Full Name</label>
-        <input id="my-name" type="text" style="width:100%;padding:9px 12px;border:1.5px solid #D9E2EC;border-radius:8px;font-size:13px;font-family:inherit;outline:none">
-      </div>
-      <div>
-        <label style="font-size:11px;font-weight:700;color:#718096;display:block;margin-bottom:4px">Username</label>
-        <input id="my-username" type="text" style="width:100%;padding:9px 12px;border:1.5px solid #D9E2EC;border-radius:8px;font-size:13px;font-family:inherit;outline:none" disabled>
-      </div>
-      <div>
-        <label style="font-size:11px;font-weight:700;color:#718096;display:block;margin-bottom:4px">New Password</label>
-        <input id="my-pass" type="password" placeholder="Leave empty to keep current" style="width:100%;padding:9px 12px;border:1.5px solid #D9E2EC;border-radius:8px;font-size:13px;font-family:inherit;outline:none">
-      </div>
-      <div>
-        <label style="font-size:11px;font-weight:700;color:#718096;display:block;margin-bottom:4px">Confirm Password</label>
-        <input id="my-pass2" type="password" placeholder="Repeat new password" style="width:100%;padding:9px 12px;border:1.5px solid #D9E2EC;border-radius:8px;font-size:13px;font-family:inherit;outline:none">
-      </div>
-      <div style="grid-column:1/-1">
-        <button onclick="saveMyAccount()" style="padding:10px 24px;border-radius:8px;border:none;background:#1D4E89;color:#fff;cursor:pointer;font-size:13px;font-weight:700;font-family:inherit">
-          <i class="ti ti-device-floppy"></i> Save Changes
-        </button>
-      </div>
-    </div>
-  </div>
-
-  <!-- User Management (Manager only) -->
-  <div class="card" style="margin-bottom:14px" id="users-mgmt-card">
-    <div class="ch">
-      <div class="ct"><i class="ti ti-users" style="color:#2D7D3A"></i> User Management</div>
-      <button class="btn btn-p" onclick="openMod('addUserModal')" style="font-size:12px;padding:6px 12px"><i class="ti ti-user-plus"></i> Add User</button>
-    </div>
-    <div id="usersList" style="padding:4px 0"></div>
+    <div class="ch"><div class="ct"><i class="ti ti-users"></i> User Management</div><button class="btn btn-p" onclick="openMod('addUserModal')" style="font-size:12px;padding:6px 12px"><i class="ti ti-user-plus"></i> Add User</button></div>
+    <div id="usersList"></div>
   </div>
   
   <!-- System Info -->
@@ -844,6 +749,7 @@ html,body{height:100%;font-family:Tajawal,sans-serif;font-size:14px;background:#
       <div class="field" style="margin-bottom:0"><label>New Password</label><input type="password" id="cp-new" placeholder="New password"></div>
       <button class="btn btn-p" onclick="changePassword()" style="height:38px"><i class="ti ti-check"></i> Update</button>
     </div>
+  </div>
   </div>
 </div>
 
@@ -963,9 +869,6 @@ function setLang(l){
 // LOGIN
 // ══════════════════════════════════════
 var LG_ROLE='manager';
-var curUser = 'Manager'; // current logged in user display name
-var curUserLogin = 'manager'; // current logged in username
-var curUserRole = 'manager'; // current logged in user role
 var USERS={'manager':{pass:'hrco2026',role:'manager',name:'Mohammed Al-Otaibi',init:'M'},'ahmed':{pass:'tech1234',role:'technician',name:'أحمد العتيبي',init:'أع'},'mohamad':{pass:'tech1234',role:'technician',name:'محمد الحربي',init:'مح'},'sami':{pass:'tech1234',role:'technician',name:'سامي القحطاني',init:'سق'},'khalid':{pass:'tech1234',role:'technician',name:'خالد الرشيدي',init:'خر'}};
 function lgLang(l){
   var texts={en:{app:'Maintenance Management System',mgr:'Manager',tech:'Technician',email:'Username',pass:'Password',btn:'Sign In',hint:'Demo: manager / hrco2026'},ar:{app:'نظام إدارة الصيانة',mgr:'مدير',tech:'فني',email:'اسم المستخدم',pass:'كلمة المرور',btn:'تسجيل الدخول',hint:'تجريبي: manager / hrco2026'},ur:{app:'مینٹیننس مینجمنٹ سسٹم',mgr:'مینیجر',tech:'ٹیکنیشن',email:'یوزر نیم',pass:'پاس ورڈ',btn:'سائن ان',hint:'ڈیمو: manager / hrco2026'}};
@@ -998,9 +901,6 @@ async function lgLogin(){
   err.textContent=t('err');err.style.display='block';
 }
 function lgSuccess(u){
-  curUser = u.name || u.init || 'Manager';
-  curUserLogin = Object.keys(USERS).find(function(k){ return USERS[k]===u; }) || '';
-  curUserRole = u.role || 'technician';
   // Hide login screen
   var ls=document.getElementById('loginScreen');
   if(ls){
@@ -1017,16 +917,9 @@ function lgSuccess(u){
   
   // Hide nav items for technician role
   if(u.role==='technician'){
-    // Technicians see: Dashboard, Visits (own), New Visit, Pending
-    ['nav-technicians','nav-clients','nav-reports','nav-archive','nav-parts'].forEach(function(id){
+    ['nav-technicians','nav-clients','nav-reports','nav-archive'].forEach(function(id){
       var el=document.getElementById(id);
       if(el) el.style.display='none';
-    });
-  } else {
-    // Managers see everything
-    ['nav-technicians','nav-clients','nav-reports','nav-archive','nav-parts','nav-settings'].forEach(function(id){
-      var el=document.getElementById(id);
-      if(el) el.style.display='';
     });
   }
   
@@ -1046,7 +939,6 @@ function lgSuccess(u){
     updateDashStats();
     renderDashTechs();
     renderDashRecent();
-    renderDashPending();
     renderPending();
     go('dashboard');
     try { initChart(); } catch(e) {}
@@ -1055,30 +947,104 @@ function lgSuccess(u){
 
 async function loadAllFromDB(){
   if(!_sb) return;
-  console.log('Loading all data in parallel...');
+  try {
+    // Load technicians
+    var r1 = await _sb.from('technicians').select('*').order('name');
+    if(r1.data && r1.data.length){
+      techsData = r1.data.map(function(t){
+        return {
+          id: t.id, name: t.name, init: t.initials||t.name.slice(0,2),
+          color: t.color||'#1D4E89', bg: t.bg||'#E6F1FB',
+          phone: t.phone||'', spec: t.spec||'', status: t.status||'active',
+          visits: t.visits||0, completed: t.completed||0, pending: t.pending||0,
+          rating: t.rating||0, avgTime: t.avg_time||0
+        };
+      });
+      console.log('Loaded', techsData.length, 'technicians from DB');
+    }
+  } catch(e){ console.log('loadTechs error:', e); }
 
-  var results = await Promise.all([
-    _sb.from('technicians').select('*').order('name'),
-    _sb.from('clients').select('*').order('name'),
-    _sb.from('parts').select('*').order('name'),
-    _sb.from('visits').select('*').order('date',{ascending:false}).limit(200),
-    _sb.from('visit_signatures').select('visit_id,sig_tech,sig_client'),
-    _sb.from('parts_history').select('*').order('date',{ascending:false}).limit(50)
-  ]);
+  try {
+    // Load clients
+    var r2 = await _sb.from('clients').select('*').order('name');
+    if(r2.data){
+      // Always load from DB (even if empty - overrides hardcoded defaults)
+      clientsData = r2.data.map(function(cl){
+        return {
+          id: cl.id, name: cl.name, type: cl.type||'',
+          loc: cl.location||cl.loc||'', color: cl.color||'#1D4E89',
+          bg: cl.bg||'#E6F1FB', init: cl.initials||cl.name.slice(0,2),
+          contract: cl.contract==='عقد صيانة'?'contract':cl.contract==='ضمان'?'warranty':cl.contract==='مدفوع'?'paid':'paid',
+          warranty: cl.warranty||false,
+          total: cl.total_visits||0, completed: cl.completed||0,
+          pending: cl.pending||0, parts: cl.needs_parts||0,
+          wv: cl.warranty_visits||0
+        };
+      });
+      console.log('Loaded', clientsData.length, 'clients from DB');
+      // Update autocomplete with DB clients
+      acData.client = clientsData.map(function(cl){ return cl.name; });
+    }
+  } catch(e){ console.log('loadClients error:', e); }
 
-  var r1=results[0], r2=results[1], r3=results[2], r4=results[3], rSig=results[4], r5=results[5];
+  try {
+    // Load parts
+    var r3 = await _sb.from('parts').select('*').order('name');
+    if(r3.data && r3.data.length){
+      partsData = r3.data;
+      console.log('Loaded', partsData.length, 'parts from DB');
+    }
+  } catch(e){ console.log('loadParts error:', e); }
 
-  try{ if(r1.data){ techsData = r1.data.map(function(t){ return { id:t.id, name:t.name, init:t.initials||t.name.slice(0,2), initials:t.initials||t.name.slice(0,2), color:t.color||'#1D4E89', bg:t.bg||'#E6F1FB', phone:t.phone||'', email:t.email||'', nationality:t.nationality||'', spec:t.spec||'', status:t.status||'active', visits:t.visits||0, completed:t.completed||0, pending:t.pending||0, rating:t.rating||0, avgTime:t.avg_time||0, monthly:t.monthly||[0,0,0,0,0,0,0] }; }); console.log('Loaded', techsData.length, 'technicians from DB'); } }catch(e){ console.log('loadTechs error:',e); }
+  try {
+    // Load visits
+    var r4 = await _sb.from('visits').select('*').order('date', {ascending:false}).limit(100);
+    if(r4.data && r4.data.length){
+      visData = r4.data.map(function(v){
+        return {
+          id: v.id, client: v.client, tech: v.tech,
+          equip: v.equipment||v.equip||'—', equipment: v.equipment||'',
+          type: v.visit_type||v.type||'paid',
+          status: v.status==='مكتملة'?'Completed':v.status==='معلقة'?'Pending':v.status||'Pending',
+          date: v.date||'', time: v.time||'', parts: v.parts||[], notes: v.notes||'',
+          location: v.location||'', fault: v.fault||'',
+          sig_tech: v.sig_tech||'', sig_client: v.sig_client||''
+        };
+      });
+      rData = visData.map(function(v,i){ return Object.assign({id:i+1},v); });
+      console.log('Loaded', visData.length, 'visits from DB');
+    }
+  } catch(e){ console.log('loadVisits error:',e); }
 
-  try{ if(r2.data){ clientsData = r2.data.map(function(cl){ return { id:cl.id, name:cl.name, type:cl.type||'', loc:cl.location||cl.loc||'', color:cl.color||'#1D4E89', bg:cl.bg||'#E6F1FB', init:cl.initials||cl.name.slice(0,2), contract:cl.contract==='عقد صيانة'?'contract':cl.contract==='ضمان'?'warranty':cl.contract==='مدفوع'?'paid':'paid', warranty:cl.warranty||false, total:cl.total_visits||0, completed:cl.completed||0, pending:cl.pending||0, parts:cl.needs_parts||0, wv:cl.warranty_visits||0 }; }); acData.client = clientsData.map(function(cl){ return cl.name; }); console.log('Loaded', clientsData.length, 'clients from DB'); } }catch(e){ console.log('loadClients error:',e); }
+  try {
+    // Load signatures from visit_signatures table and merge into visData
+    var rSig = await _sb.from('visit_signatures').select('*');
+    if(rSig.data && rSig.data.length){
+      rSig.data.forEach(function(sig){
+        var v = visData.find(function(x){ return x.id == sig.visit_id; });
+        if(v){
+          if(sig.sig_tech) v.sig_tech = sig.sig_tech;
+          if(sig.sig_client) v.sig_client = sig.sig_client;
+        }
+      });
+      console.log('Loaded', rSig.data.length, 'signatures from DB');
+    }
+  } catch(e){ console.log('loadVisits error:', e); }
 
-  try{ if(r3.data){ partsData = r3.data.map(function(p){ return { id:p.id, name:p.name, qty:p.qty||0, unit:p.unit||'pcs', minQty:p.min_qty||0, price:p.price||0, location:p.location||'' }; }); acData.parts = partsData.map(function(p){ return p.name; }); console.log('Loaded', partsData.length, 'parts from DB'); } }catch(e){ console.log('loadParts error:',e); }
-
-  try{ if(r4.data){ visData = r4.data.map(function(v){ return { id:v.id, client:v.client, tech:v.tech, equip:v.equipment||v.equip||'—', equipment:v.equipment||'', type:v.visit_type||v.type||'paid', visit_type:v.visit_type||'', status:v.status==='مكتملة'?'Completed':v.status==='معلقة'?'Pending':v.status||'Pending', date:v.date||'', time:v.time||'', parts:v.parts||[], notes:v.notes||'', location:v.location||'', fault:v.fault||'', sig_tech:'', sig_client:'', serial_number:v.serial_number||'', model:v.model||'' }; }); rData = visData.map(function(v,i){ return Object.assign({id:i+1},v); }); console.log('Loaded', visData.length, 'visits from DB'); } }catch(e){ console.log('loadVisits error:',e); }
-
-  try{ if(rSig.data && rSig.data.length){ rSig.data.forEach(function(sig){ var v=visData.find(function(x){ return x.id==sig.visit_id; }); if(v){ if(sig.sig_tech) v.sig_tech=sig.sig_tech; if(sig.sig_client) v.sig_client=sig.sig_client; } }); console.log('Loaded', rSig.data.length, 'signatures from DB'); } }catch(e){ console.log('loadSigs error:',e); }
-
-  try{ if(r5.data){ histData = r5.data.map(function(h){ return { id:h.id, partId:h.part_id, part:h.part_name||'', qty:h.qty||0, type:h.type||'out', dest:h.destination||'', tech:h.tech||'', date:h.date||'' }; }); console.log('Loaded', histData.length, 'history records from DB'); } }catch(e){ console.log('loadHistory error:',e); }
+  try {
+    // Load parts history
+    var r5 = await _sb.from('parts_history').select('*').order('date', {ascending:false}).limit(50);
+    if(r5.data && r5.data.length){
+      histData = r5.data.map(function(h){
+        return {
+          id: h.id, partId: h.part_id, type: h.type,
+          qty: h.qty, dest: h.dest||'—', tech: h.tech||'—',
+          note: h.note||'', date: h.date||''
+        };
+      });
+      console.log('Loaded', histData.length, 'history records from DB');
+    }
+  } catch(e){ console.log('loadHistory error:', e); }
 }
 function logout(){if(confirm('Sign out?')){document.getElementById('loginScreen').style.display='flex';if(_sb)_sb.auth.signOut().catch(function(){});}}
 
@@ -1096,7 +1062,7 @@ function go(pg){
   var ma=document.getElementById('main');if(ma)ma.scrollTop=0;
   if(window.innerWidth<960){document.getElementById('sidebar').style.right='-240px';document.getElementById('ovl').style.display='none';}
   }catch(e){console.log('go() error:',e);}
-  if(pg==='dashboard'){updateDashStats();renderDashTechs();renderDashRecent();renderDashPending();renderPending();}
+  if(pg==='dashboard'){updateDashStats();renderDashTechs();renderDashRecent();renderPending();}
   if(pg==='signature') setTimeout(function(){initSig('tech');initSig('client');},80);
   if(pg==='newvisit'){
     window._visitStartTime = Date.now();
@@ -1109,7 +1075,7 @@ function go(pg){
   if(pg==='reports') runReport();
   if(pg==='visits') renderVisits('all','');
   if(pg==='archive') loadArchive();
-  if(pg==='settings'){syncSystemUsers();renderUsersList();checkDBStatus();}
+  if(pg==='settings'){renderUsersList();checkDBStatus();}
 }
 function setBn(b){document.querySelectorAll('.bn').forEach(function(x){x.style.color='#A0AEC0';});b.style.color='#1D4E89';}
 function toggleSb(){
@@ -1149,7 +1115,7 @@ function initChart(){
 // ══════════════════════════════════════
 // VISITS
 // ══════════════════════════════════════
-var visData=[];
+var visData=[{client:'Ritz Carlton — B3',tech:'أحمد العتيبي',type:'warranty',status:'Pending',date:'2026-05-10',equip:'Cold Room'},{client:'Al-Aseel Restaurant',tech:'محمد الحربي',type:'contract',status:'Completed',date:'2026-05-10',equip:'Central Kitchen'},{client:"McDonald's — Main Branch",tech:'سامي القحطاني',type:'paid',status:'Completed',date:'2026-05-09',equip:'Display Fridge'},{client:'Hilton Hotel — Storage',tech:'خالد الرشيدي',type:'warranty',status:'Pending',date:'2026-05-09',equip:'Cold Storage'},{client:'Burger King — Central Kitchen',tech:'سامي القحطاني',type:'paid',status:'Pending',date:'2026-05-08',equip:'Central Kitchen'},{client:'King Faisal Hospital',tech:'خالد الرشيدي',type:'contract',status:'Completed',date:'2026-05-08',equip:'Cold Room'},{client:'KFC Saudi Arabia',tech:'أحمد العتيبي',type:'contract',status:'Completed',date:'2026-05-07',equip:'Industrial Freezer'}];
 var visFil='all';
 function renderVisits(f,q){
   visFil=f||visFil;q=q||document.getElementById('visSearch').value||'';
@@ -1203,66 +1169,6 @@ async function deleteVisit(id){
   } catch(e){
     alert('خطأ: ' + e.message);
   }
-}
-
-function renderDashPending(){
-  var body=document.getElementById('dash-pending-body');
-  if(!body)return;
-  var pending=visData.filter(function(v){
-    return v.status==='معلقة'||v.status==='Pending'||v.status==='قيد التنفيذ';
-  }).slice(0,5);
-  if(!pending.length){
-    body.innerHTML='<div style="padding:20px;text-align:center;color:#A0AEC0;font-size:13px"><i class="ti ti-circle-check" style="color:#2D7D3A;font-size:22px;display:block;margin-bottom:4px"></i>No pending reports ✅</div>';
-    return;
-  }
-  body.innerHTML='';
-  pending.forEach(function(v){
-    var days=v.date?Math.floor((new Date()-new Date(v.date))/(1000*60*60*24)):0;
-    var col=days>=5?'#C0392B':days>=3?'#C4680A':'#2D7D3A';
-    var lbl=days===0?'Today':'Day '+days;
-    var equip=v.equipment||v.equip||'';
-    var row=document.createElement('div');
-    row.className='lr';row.style.cursor='pointer';
-    row.onclick=function(){viewVisit(v.id);};
-    row.innerHTML='<div class="ri"><div class="rn">'+(v.client||'—')+(equip?' — '+equip:'')+'</div>'
-      +'<div class="rs">'+(v.tech||'—')+'</div></div>'
-      +'<span style="font-size:11px;color:'+col+';font-weight:700;flex-shrink:0">'+lbl+'</span>';
-    body.appendChild(row);
-  });
-}
-
-function renderDashTechs(){
-  var body=document.getElementById('dash-tech-body');
-  if(!body)return;
-  var techActivity={};
-  visData.forEach(function(v){
-    if(!v.tech)return;
-    if(!techActivity[v.tech]||v.date>techActivity[v.tech].date) techActivity[v.tech]=v;
-  });
-  var recent=Object.keys(techActivity)
-    .sort(function(a,b){return techActivity[b].date>techActivity[a].date?1:-1;})
-    .slice(0,5);
-  if(!recent.length){
-    body.innerHTML='<div style="padding:20px;text-align:center;color:#A0AEC0;font-size:13px">No recent activity</div>';
-    return;
-  }
-  body.innerHTML='';
-  recent.forEach(function(techName){
-    var last=techActivity[techName];
-    var ti=techsData.find(function(t){return t.name===techName;})||{};
-    var hasPend=visData.some(function(v){return v.tech===techName&&(v.status==='Pending'||v.status==='معلقة'||v.status==='قيد التنفيذ');});
-    var isDone=last.status==='Completed'||last.status==='مكتملة';
-    var stLabel=hasPend?'Pending':isDone?'Completed':'In Progress';
-    var stClass=hasPend?'b-w':isDone?'b-s':'b-i';
-    var sub=(last.client||'—')+(last.equipment||last.equip?' — '+(last.equipment||last.equip):'');
-    var row=document.createElement('div');
-    row.className='lr';row.style.cursor='pointer';
-    row.onclick=function(){go('technicians');};
-    row.innerHTML='<div class="av" style="background:'+(ti.bg||'#E6F1FB')+';color:'+(ti.color||'#1D4E89')+'">'+(ti.init||ti.initials||techName.slice(0,2))+'</div>'
-      +'<div class="ri"><div class="rn">'+techName+'</div><div class="rs">'+sub+'</div></div>'
-      +'<span class="bdg '+stClass+'">'+stLabel+'</span>';
-    body.appendChild(row);
-  });
 }
 
 function renderPending(){
@@ -1719,7 +1625,7 @@ function closeMod(id){var el=document.getElementById(id);if(el)el.style.display=
 // ══════════════════════════════════════
 // TECHNICIANS
 // ══════════════════════════════════════
-var techsData=[];
+var techsData=[{id:1,name:'أحمد العتيبي',init:'أع',color:'#1D4E89',bg:'#E6F1FB',phone:'0501234567',spec:'Refrigeration & AC',status:'active',visits:142,completed:128,pending:14,rating:4.8,avgTime:1.7},{id:2,name:'محمد الحربي',init:'مح',color:'#2D7D3A',bg:'#EAF3DE',phone:'0507654321',spec:'Central Kitchens',status:'active',visits:118,completed:105,pending:13,rating:4.6,avgTime:2.0},{id:3,name:'سامي القحطاني',init:'سق',color:'#C4680A',bg:'#FDF0E0',phone:'0559876543',spec:'Industrial Electrical',status:'active',visits:97,completed:82,pending:15,rating:4.5,avgTime:2.2},{id:4,name:'خالد الرشيدي',init:'خر',color:'#64748B',bg:'#F1F5F9',phone:'0551122334',spec:'Refrigeration & AC',status:'vacation',visits:76,completed:70,pending:6,rating:4.9,avgTime:1.5}];
 function renderTechGrid(){
   var g=document.getElementById('techGrid');if(!g)return;g.innerHTML='';
   techsData.forEach(function(tc){
@@ -1767,277 +1673,64 @@ async function saveTech(){
 // PARTS
 // ══════════════════════════════════════
 var partsData=[{id:1,name:'R410A Gas',cat:'Refrigerant Gases',unit:'KG',qty:45,min:10,supplier:'Gas Co.'},{id:2,name:'R404A Gas',cat:'Refrigerant Gases',unit:'KG',qty:22,min:8,supplier:'Gas Co.'},{id:3,name:'R22 Gas',cat:'Refrigerant Gases',unit:'KG',qty:3,min:5,supplier:'Gas Co.'},{id:4,name:'Danfoss T2 Expansion Valve',cat:'Valves',unit:'Piece',qty:0,min:3,supplier:'Danfoss KSA'},{id:5,name:'Solenoid Valve 24V',cat:'Valves',unit:'Piece',qty:8,min:4,supplier:'Danfoss KSA'},{id:6,name:'Embraco NT2192GK Compressor',cat:'Compressors',unit:'Piece',qty:2,min:2,supplier:'Embraco'},{id:7,name:'Carel pCO5 Controller',cat:'Controllers',unit:'Piece',qty:0,min:2,supplier:'Carel'},{id:8,name:'Fan Motor 220V',cat:'Motors & Fans',unit:'Piece',qty:6,min:3,supplier:'Mitsubishi'},{id:9,name:'35μF Capacitor',cat:'Other',unit:'Piece',qty:12,min:5,supplier:'General'},{id:10,name:'3/8 Filter Dryer',cat:'Filters',unit:'Piece',qty:2,min:5,supplier:'Danfoss KSA'}];
-var histData=[];
+var histData=[{id:1,partId:4,type:'out',qty:1,dest:'Ritz Carlton — B3',tech:'أحمد العتيبي',note:'Fault repair',date:'2026-05-10'},{id:2,partId:1,type:'out',qty:2,dest:'Al-Aseel Restaurant',tech:'محمد الحربي',note:'Gas recharge',date:'2026-05-10'},{id:3,partId:7,type:'out',qty:1,dest:'Hilton Hotel',tech:'خالد الرشيدي',note:'Controller replace',date:'2026-05-09'},{id:4,partId:1,type:'in',qty:20,dest:'—',tech:'—',note:'Supplier delivery',date:'2026-05-07'},{id:5,partId:3,type:'out',qty:3,dest:"McDonald's",tech:'أحمد العتيبي',note:'Gas recharge',date:'2026-05-06'}];
 var stF='all';
 function stk(p){if(p.qty===0)return{l:t('stockOut'),c:'b-d'};if(p.qty<=p.min)return{l:t('stockLow'),c:'b-w'};return{l:t('stockOk'),c:'b-s'};}
-var _usePartId = null;
-var _addStockId = null;
-
-function renderInvList(){
-  var body = document.getElementById('invBody');
-  if(!body) return;
-
-  var q = (document.getElementById('parts-search')||{}).value||'';
-  var filt = (document.getElementById('parts-filter')||{}).value||'all';
-
-  var filtered = partsData.filter(function(p){
-    var matchQ = !q || p.name.toLowerCase().includes(q.toLowerCase()) || (p.cat||'').toLowerCase().includes(q.toLowerCase());
-    var matchF = filt==='all' || (filt==='low' && p.qty>0 && p.qty<=p.minQty) || (filt==='ok' && p.qty>p.minQty) || (filt==='out' && p.qty===0);
-    return matchQ && matchF;
-  });
-
-  var countEl = document.getElementById('inv-count');
-  if(countEl) countEl.textContent = filtered.length + ' items';
-
-  // Update stats
-  var lowCount = partsData.filter(function(p){ return p.qty<=p.minQty && p.qty>0; }).length;
-  var outCount = partsData.filter(function(p){ return p.qty===0; }).length;
-  var totalIn = histData.filter(function(h){ return h.type==='in'; }).reduce(function(s,h){ return s+h.qty; },0);
-  var totalOut = histData.filter(function(h){ return h.type==='out'; }).reduce(function(s,h){ return s+h.qty; },0);
-  var el1=document.getElementById('ps-total'); if(el1) el1.textContent=partsData.length;
-  var el2=document.getElementById('ps-low'); if(el2) el2.textContent=lowCount+outCount;
-  var el3=document.getElementById('ps-in'); if(el3) el3.textContent=totalIn;
-  var el4=document.getElementById('ps-out'); if(el4) el4.textContent=totalOut;
-
-  body.innerHTML = '';
-  if(!filtered.length){
-    body.innerHTML = '<div style="padding:30px;text-align:center;color:#A0AEC0"><i class="ti ti-package-off" style="font-size:32px;display:block;margin-bottom:8px"></i>No parts found</div>';
-    return;
-  }
-
-  filtered.forEach(function(p){
-    var pct = Math.min(100, Math.round((p.qty / Math.max(p.minQty*2||10,1))*100));
-    var isOut = p.qty===0;
-    var isLow = !isOut && p.qty<=p.minQty;
-    var statusColor = isOut?'#C0392B':isLow?'#C4680A':'#2D7D3A';
-    var statusBg = isOut?'#FCEBEB':isLow?'#FDF0E0':'#EAF3DE';
-    var statusLabel = isOut?'Out of Stock':isLow?'Low Stock':'In Stock';
-    var barColor = isOut?'#C0392B':isLow?'#C4680A':'#2D7D3A';
-
-    var row = document.createElement('div');
-    row.style.cssText='display:grid;grid-template-columns:2fr 1fr 0.8fr 0.8fr 0.8fr 1fr 1.2fr;align-items:center;padding:10px 14px;border-bottom:1px solid #F0F4F8;gap:0;min-width:600px';
-    if(isOut||isLow) row.style.background = isOut?'#FFF5F5':'#FFFBF0';
-    row.innerHTML =
-      '<div>'
-      +'<div style="font-size:13px;font-weight:600">'+(p.name||'—')+'</div>'
-      +'<div style="height:4px;background:#F0F4F8;border-radius:99px;margin-top:4px;width:80%"><div style="height:100%;width:'+pct+'%;background:'+barColor+';border-radius:99px"></div></div>'
-      +'</div>'
-      +'<div style="font-size:11px;color:#718096">'+(p.cat||'—')+'</div>'
-      +'<div style="text-align:center;font-size:16px;font-weight:700;color:'+statusColor+'">'+p.qty+'</div>'
-      +'<div style="text-align:center;font-size:12px;color:#A0AEC0">'+p.minQty+'</div>'
-      +'<div style="text-align:center"><span style="font-size:10px;font-weight:700;padding:2px 7px;border-radius:99px;background:'+statusBg+';color:'+statusColor+'">'+statusLabel+'</span></div>'
-      +'<div style="font-size:12px;color:#718096">'+(p.unit||'pcs')+'</div>'
-      +'<div style="display:flex;gap:4px;justify-content:flex-end">'
-      +'<button onclick="openAddStock('+p.id+')" style="padding:4px 8px;border-radius:6px;border:1px solid #2D7D3A;background:#EAF3DE;color:#2D7D3A;cursor:pointer;font-size:11px;font-weight:600;font-family:inherit" title="Add Stock"><i class="ti ti-plus"></i></button>'
-      +'<button onclick="openUsePart('+p.id+')" style="padding:4px 8px;border-radius:6px;border:1px solid #C4680A;background:#FDF0E0;color:#C4680A;cursor:pointer;font-size:11px;font-weight:600;font-family:inherit" title="Use Part"><i class="ti ti-arrow-up"></i></button>'
-      +'<button onclick="editPart('+p.id+')" style="padding:4px 8px;border-radius:6px;border:1px solid #D9E2EC;background:#F8FAFC;color:#718096;cursor:pointer;font-size:11px;font-weight:600;font-family:inherit" title="Edit"><i class="ti ti-pencil"></i></button>'
-      +'<button onclick="deletePart('+p.id+')" style="padding:4px 8px;border-radius:6px;border:1px solid #FCEBEB;background:#FCEBEB;color:#C0392B;cursor:pointer;font-size:11px;font-weight:600;font-family:inherit" title="Delete"><i class="ti ti-trash"></i></button>'
-      +'</div>';
-    body.appendChild(row);
+function renderInvList(q,sf){
+  sf=sf||stF;q=q||'';
+  var el=document.getElementById('invList');if(!el)return;el.innerHTML='';
+  var fl=partsData.filter(function(p){return(!q||p.name.toLowerCase().includes(q.toLowerCase()))&&(sf==='all'||(sf==='ok'&&stk(p).c==='b-s')||(sf==='low'&&stk(p).c==='b-w')||(sf==='out'&&stk(p).c==='b-d'));});
+  fl.forEach(function(p){var s=stk(p);var r=document.createElement('div');r.className='trow';r.style.gridTemplateColumns='2fr 1fr 1fr 1fr 1fr 90px';r.innerHTML='<div class="tc"><div style="font-weight:500">'+p.name+'</div><div class="tc2">'+p.supplier+'</div></div><div class="tc2">'+p.cat+'</div><div class="tc" style="font-weight:700">'+p.qty+' <span class="tc2">'+p.unit+'</span></div><div class="tc2">'+p.min+' '+p.unit+'</div><div><span class="bdg '+s.c+'">'+s.l+'</span></div><div style="display:flex;gap:4px"><button class="rbtn" onclick="quickAdd('+p.id+')" title="Add stock"><i class="ti ti-package-import"></i></button><button class="rbtn" onclick="showPH('+p.id+')" title="History"><i class="ti ti-history"></i></button></div>';el.appendChild(r);});
+  var ok=partsData.filter(function(p){return stk(p).c==='b-s';}).length;
+  var low=partsData.filter(function(p){return stk(p).c==='b-w';}).length;
+  var out=partsData.filter(function(p){return stk(p).c==='b-d';}).length;
+  var e1=document.getElementById('ps-total'),e2=document.getElementById('ps-ok'),e3=document.getElementById('ps-low'),e4=document.getElementById('ps-out');
+  if(e1)e1.textContent=partsData.length;if(e2)e2.textContent=ok;if(e3)e3.textContent=low;if(e4)e4.textContent=out;
+}
+function renderHistList(q,hf){
+  q=q||'';hf=hf||'all';
+  var el=document.getElementById('histList');if(!el)return;el.innerHTML='';
+  histData.filter(function(h){var p=partsData.find(function(x){return x.id===h.partId;})||{name:''};return(!q||p.name.toLowerCase().includes(q.toLowerCase())||h.dest.includes(q))&&(hf==='all'||h.type===hf);}).forEach(function(h){
+    var p=partsData.find(function(x){return x.id===h.partId;})||{name:'Unknown',unit:''};
+    var r=document.createElement('div');r.className='trow';r.style.gridTemplateColumns='1.5fr 0.8fr 0.8fr 1.5fr 1fr 0.9fr';
+    r.innerHTML='<div class="tc"><div style="font-weight:500">'+p.name+'</div><div class="tc2">'+h.note+'</div></div><div>'+(h.type==='in'?'<span style="color:#2D7D3A;font-weight:700;font-size:12px">▼ '+t('movIn')+'</span>':'<span style="color:#C0392B;font-weight:700;font-size:12px">▲ '+t('movOut')+'</span>')+'</div><div style="font-weight:700">'+(h.type==='in'?'+':'-')+h.qty+' '+p.unit+'</div><div class="tc2">'+h.dest+'</div><div class="tc2">'+h.tech+'</div><div class="tc2">'+h.date+'</div>';
+    el.appendChild(r);
   });
 }
-
-function renderHistList(){
-  var body = document.getElementById('histBody');
-  if(!body) return;
-
-  var countEl = document.getElementById('hist-count');
-  if(countEl) countEl.textContent = histData.length;
-
-  body.innerHTML = '';
-  if(!histData.length){
-    body.innerHTML = '<div style="padding:24px;text-align:center;color:#A0AEC0">No movement history</div>';
-    return;
-  }
-
-  histData.slice().sort(function(a,b){ return b.date>a.date?1:-1; }).forEach(function(h){
-    var isIn = h.type==='in';
-    var typeColor = isIn?'#2D7D3A':'#C4680A';
-    var typeBg = isIn?'#EAF3DE':'#FDF0E0';
-    var typeLabel = isIn?'IN':'OUT';
-    var partName = (partsData.find(function(p){ return p.id===h.partId; })||{}).name || h.part || '—';
-
-    var row = document.createElement('div');
-    row.style.cssText='display:grid;grid-template-columns:2fr 0.8fr 0.8fr 1fr 1fr 1fr;align-items:center;padding:9px 14px;border-bottom:1px solid #F0F4F8;gap:0;min-width:500px;font-size:12px';
-    row.innerHTML =
-      '<div style="font-weight:600;color:#1a202c">'+partName+'</div>'
-      +'<div style="text-align:center"><span style="font-size:10px;font-weight:700;padding:2px 8px;border-radius:99px;background:'+typeBg+';color:'+typeColor+'">'+typeLabel+'</span></div>'
-      +'<div style="text-align:center;font-weight:700;color:'+typeColor+'">'+h.qty+'</div>'
-      +'<div style="color:#718096">'+(h.dest||'—')+'</div>'
-      +'<div style="color:#718096">'+(h.tech||'—')+'</div>'
-      +'<div style="color:#A0AEC0">'+(h.date||'—')+'</div>';
-    body.appendChild(row);
-  });
-}
-
-function openUsePart(id){
-  id = parseInt(id)||id;
-  var p = partsData.find(function(x){ return x.id==id; });
-  if(!p) return;
-  _usePartId = id;
-  var nameEl = document.getElementById('use-part-name');
-  if(nameEl) nameEl.innerHTML = '<i class="ti ti-package" style="color:#C4680A"></i> '+p.name+' <span style="color:#718096;font-size:12px">(Available: '+p.qty+' '+p.unit+')</span>';
-  var qtyEl = document.getElementById('use-qty');
-  if(qtyEl){ qtyEl.value=1; qtyEl.max=p.qty; }
-  var destEl = document.getElementById('use-dest');
-  if(destEl) destEl.value='';
-  var notesEl = document.getElementById('use-notes');
-  if(notesEl) notesEl.value='';
-  // Fill tech select
-  var techSel = document.getElementById('use-tech');
-  if(techSel){
-    techSel.innerHTML = '<option value="">— Select Technician —</option>';
-    techsData.forEach(function(t){ techSel.innerHTML+='<option>'+t.name+'</option>'; });
-  }
-  var modal = document.getElementById('usePartModal');
-  if(modal){ modal.style.display='flex'; modal.style.alignItems='center'; modal.style.justifyContent='center'; }
-}
-
-function openAddStock(id){
-  id = parseInt(id)||id;
-  var p = partsData.find(function(x){ return x.id==id; });
-  if(!p) return;
-  _addStockId = id;
-  var nameEl = document.getElementById('add-stock-name');
-  if(nameEl) nameEl.innerHTML = '<i class="ti ti-package" style="color:#2D7D3A"></i> '+p.name+' <span style="color:#718096;font-size:12px">(Current: '+p.qty+' '+p.unit+')</span>';
-  var qtyEl = document.getElementById('add-stock-qty');
-  if(qtyEl) qtyEl.value=1;
-  var notesEl = document.getElementById('add-stock-notes');
-  if(notesEl) notesEl.value='';
-  var modal = document.getElementById('addStockModal');
-  if(modal){ modal.style.display='flex'; modal.style.alignItems='center'; modal.style.justifyContent='center'; }
-}
-
-async function confirmUsePart(){
-  var p = partsData.find(function(x){ return x.id==_usePartId; });
-  if(!p) return;
-  var qty = parseInt(document.getElementById('use-qty').value)||1;
-  if(qty>p.qty){ alert('Not enough stock! Available: '+p.qty); return; }
-  var tech = document.getElementById('use-tech').value||'';
-  var dest = document.getElementById('use-dest').value||'';
-  var notes = document.getElementById('use-notes').value||'';
-  var today = new Date().toISOString().split('T')[0];
-
-  // Update local data IMMEDIATELY
-  p.qty -= qty;
-  histData.unshift({ id:Date.now(), partId:p.id, part:p.name, qty:qty, type:'out', dest:dest, tech:tech, date:today });
-
-  closeMod('usePartModal');
-  renderInvList();
-  renderHistList();
-
-  // Low stock alert
-  if(p.qty<=p.minQty){
-    setTimeout(function(){
-      alert('Low Stock: '+p.name+' now at '+p.qty+' '+(p.unit||''));
-    },200);
-  }
-  console.log('✅ Used', qty, p.name, '— syncing to DB...');
-
-  // Sync to Supabase in background
-  if(_sb){
-    _sb.from('parts').update({qty: p.qty}).eq('id', p.id).then(function(r){
-      if(r.error) console.error('Sync error:', r.error.message);
-      else console.log('✅ Synced to DB');
-    });
-    _sb.from('parts_history').insert({
-      part_id: p.id, part_name: p.name, qty: qty,
-      type: 'out', destination: dest, tech: tech,
-      note: notes, date: today
-    }).then(function(r){
-      if(r.error) console.error('History sync error:', r.error.message);
-    });
-  }
-}
-
-async function confirmAddStock(){
-  var p = partsData.find(function(x){ return x.id==_addStockId; });
-  if(!p) return;
-  var qty = parseInt(document.getElementById('add-stock-qty').value)||1;
-  var notes = document.getElementById('add-stock-notes').value||'';
-  var today = new Date().toISOString().split('T')[0];
-
-  // Update local data IMMEDIATELY (instant UI response)
-  p.qty += qty;
-  histData.unshift({ id:Date.now(), partId:p.id, part:p.name, qty:qty, type:'in', dest:notes||'Warehouse', tech:curUser||'Manager', date:today });
-
-  // Close modal and refresh UI instantly
-  closeMod('addStockModal');
-  renderInvList();
-  renderHistList();
-  console.log('✅ Added', qty, p.name, '— syncing to DB...');
-
-  // Sync to Supabase in background (non-blocking)
-  if(_sb){
-    _sb.from('parts').update({qty: p.qty}).eq('id', p.id).then(function(r){
-      if(r.error) console.error('Sync error:', r.error.message);
-      else console.log('✅ Synced to DB');
-    });
-    _sb.from('parts_history').insert({
-      part_id: p.id, part_name: p.name, qty: qty,
-      type: 'in', destination: notes||'Warehouse', tech: curUser||'Manager', note: notes, date: today
-    }).then(function(r){
-      if(r.error) console.error('History sync error:', r.error.message);
-    });
-  }
-}
-
-function editPart(id){
-  id = parseInt(id)||id;
-  var p = partsData.find(function(x){ return x.id==id; });
-  if(!p) return;
-  var el = document.getElementById('ap-name'); if(el) el.value=p.name;
-  var el2 = document.getElementById('ap-qty'); if(el2) el2.value=p.qty;
-  var el3 = document.getElementById('ap-min'); if(el3) el3.value=p.minQty||2;
-  var el4 = document.getElementById('ap-unit'); if(el4) el4.value=p.unit||'pcs';
-  var el5 = document.getElementById('ap-cat'); if(el5) el5.value=p.cat||'';
-  document.getElementById('ap-name').dataset.editId = id;
-  openMod('partModal');
-}
-
-async function deletePart(id){
-  id = parseInt(id)||id;
-  var p = partsData.find(function(x){ return x.id==id; });
-  if(!p) return;
-  if(!confirm('Delete part: '+p.name+'?')) return;
-  if(_sb) await _sb.from('parts').delete().eq('id', id);
-  partsData = partsData.filter(function(x){ return x.id!==id; });
-  renderInvList();
-  console.log('✅ Deleted part:', p.name);
-}
-
+function filterParts(q){renderInvList(q,stF);}
+function filterHist(q){renderHistList(q,'all');}
+function setStockF(f,b){stF=f;document.querySelectorAll('#tab-inv .ftab').forEach(function(x){x.style.background='';x.style.color='#718096';});b.style.background='#1D4E89';b.style.color='#fff';renderInvList('',f);}
+function switchPTab(tab,el){document.querySelectorAll('.ptab').forEach(function(t){t.style.color='#718096';t.style.borderBottomColor='transparent';t.style.fontWeight='';});el.style.color='#1D4E89';el.style.borderBottomColor='#1D4E89';el.style.fontWeight='600';document.getElementById('tab-inv').style.display=tab==='inv'?'block':'none';document.getElementById('tab-hist').style.display=tab==='hist'?'block':'none';}
+function quickAdd(id){var p=partsData.find(function(x){return x.id===id;});if(!p)return;var qty=parseInt(prompt('Add stock for: '+p.name+'\nCurrent: '+p.qty+' '+p.unit));if(isNaN(qty)||qty<=0)return;p.qty+=qty;histData.unshift({id:Date.now(),partId:p.id,type:'in',qty:qty,dest:'—',tech:'Manager',note:'Stock added',date:new Date().toISOString().split('T')[0]});renderInvList();}
+function showPH(id){switchPTab('hist',document.getElementById('ptab-hist'));renderHistList(partsData.find(function(x){return x.id===id;})||{name:''}.name,'all');}
 async function savePart(){
-  var nameEl = document.getElementById('ap-name');
-  var name = nameEl ? nameEl.value.trim() : '';
-  if(!name){ alert('Enter part name'); return; }
-  var editId = nameEl ? nameEl.dataset.editId : '';
-  var qty = parseInt(document.getElementById('ap-qty').value)||0;
-  var min2 = parseInt(document.getElementById('ap-min').value)||2;
-  var unit = (document.getElementById('ap-unit')||{}).value||'pcs';
-  var cat = (document.getElementById('ap-cat')||{}).value||'';
-
-  var dbData = { name:name, qty:qty, min_qty:min2, unit:unit, cat:cat };
-
-  if(editId){
-    // Update existing
-    var existing = partsData.find(function(p){ return p.id==editId; });
-    if(existing){
-      if(_sb) await _sb.from('parts').update(dbData).eq('id', editId);
-      existing.name=name; existing.qty=qty; existing.minQty=min2; existing.unit=unit; existing.cat=cat;
-      if(nameEl) nameEl.dataset.editId='';
-    }
+  var name=document.getElementById('ap-name').value.trim();
+  if(!name){alert('Enter part name');return;}
+  var qty=parseInt(document.getElementById('ap-qty').value)||0;
+  var min2=parseInt(document.getElementById('ap-min').value)||2;
+  var np={
+    name: name,
+    cat: document.getElementById('ap-cat').value,
+    unit: document.getElementById('ap-unit').value,
+    qty: qty,
+    min: min2,
+    supplier: document.getElementById('ap-sup').value||'—'
+  };
+  var ex=partsData.find(function(p){return p.name.toLowerCase()===name.toLowerCase();});
+  if(ex){
+    ex.qty+=qty;
+    await dbSave('parts',{id:ex.id,qty:ex.qty});
   } else {
-    // New part
-    var saved = null;
-    if(_sb){
-      var r = await _sb.from('parts').insert(dbData).select();
-      saved = r.data;
-    }
-    var newPart = { id:(saved&&saved[0])?saved[0].id:Date.now(), name:name, qty:qty, minQty:min2, unit:unit, cat:cat };
-    partsData.push(newPart);
-    if(!acData.parts.includes(name)) acData.parts.push(name);
+    var saved=await dbSave('parts',np);
+    if(saved&&saved[0]) np.id=saved[0].id;
+    else np.id=Date.now();
+    partsData.push(np);
   }
-
+  if(qty>0){
+    var nh={part_id:(ex?ex.id:np.id),type:'in',qty:qty,dest:'—',tech:'Manager',note:'Stock added',date:new Date().toISOString().split('T')[0]};
+    await dbSave('parts_history',nh);
+    histData.unshift(Object.assign({id:Date.now(),partId:(ex?ex.id:np.id)},nh));
+  }
   closeMod('partModal');
   renderInvList();
   alert('✅ Part saved!');
@@ -3078,81 +2771,20 @@ function _doPrintVisit(id, v, techSigImg, clientSigImg, visitDateTime, vtype, pa
 // ══════════════════════════════════════
 var systemUsers = Object.assign({}, typeof USERS !== 'undefined' ? USERS : {});
 
-function syncSystemUsers(){
-  // Add technicians from techsData if not already in systemUsers
-  techsData.forEach(function(t){
-    var uname = t.name.toLowerCase().replace(/\s+/g,'').replace(/[^a-z0-9]/g,'') || 'tech'+t.id;
-    if(!systemUsers[uname]){
-      systemUsers[uname] = {
-        pass: 'tech1234',
-        role: 'technician',
-        name: t.name,
-        init: t.init || t.initials || t.name.slice(0,2)
-      };
-      USERS[uname] = systemUsers[uname];
-    } else {
-      // Update name to match techsData
-      systemUsers[uname].name = t.name;
-    }
-  });
-}
-
 function renderUsersList() {
   var el = document.getElementById('usersList');
   if (!el) return;
   el.innerHTML = '';
-
-  // Hide user management from non-managers
-  var card = document.getElementById('users-mgmt-card');
-  if(card) card.style.display = (curUserRole==='manager') ? '' : 'none';
-
-  // Pre-fill my account
-  var myNameEl = document.getElementById('my-name');
-  var myUserEl = document.getElementById('my-username');
-  if(myNameEl) myNameEl.value = curUser || '';
-  if(myUserEl) myUserEl.value = curUserLogin || '';
-
-  if(curUserRole !== 'manager') return; // Only managers see user list
-
-  var users = Object.keys(systemUsers);
-  if(!users.length){
-    el.innerHTML = '<div style="padding:16px;text-align:center;color:#A0AEC0">No users found</div>';
-    return;
-  }
-
-  users.forEach(function(u) {
+  Object.keys(systemUsers).forEach(function(u) {
     var user = systemUsers[u];
-    var isManager = user.role==='manager';
-    var isSelf = u === curUserLogin;
-    var roleColor = isManager ? '#1D4E89' : '#2D7D3A';
-    var roleBg = isManager ? '#E6F1FB' : '#EAF3DE';
     var row = document.createElement('div');
-    row.style.cssText = 'display:flex;align-items:center;gap:12px;padding:10px 16px;border-bottom:1px solid #F0F4F8';
-    row.innerHTML =
-      '<div style="width:36px;height:36px;border-radius:8px;background:'+roleBg+';color:'+roleColor+';display:flex;align-items:center;justify-content:center;font-weight:700;font-size:14px;flex-shrink:0">'+(u[0]||'?').toUpperCase()+'</div>'
-      +'<div style="flex:1;min-width:0">'
-      +'<div style="font-size:13px;font-weight:600">'+(user.name||u)+(isSelf?' <span style="font-size:10px;color:#718096">(You)</span>':'')+'</div>'
-      +'<div style="font-size:11px;color:#718096">@'+u+' · <span style="color:'+roleColor+';font-weight:600">'+user.role+'</span></div>'
-      +'</div>'
-      +'<span style="font-size:10px;font-weight:700;padding:3px 10px;border-radius:99px;background:'+roleBg+';color:'+roleColor+'">'+user.role.toUpperCase()+'</span>'
-      ;
-    if(!isSelf){
-      var btn1=document.createElement('button');
-      btn1.innerHTML='<i class="ti ti-key"></i>';
-      btn1.title='Reset Password';
-      btn1.style.cssText='padding:4px 8px;border-radius:6px;border:1px solid #D9E2EC;background:#F8FAFC;color:#718096;cursor:pointer;font-size:11px;margin-right:4px';
-      btn1.onclick=(function(un){ return function(){ resetUserPass(un); }; })(u);
-      row.appendChild(btn1);
-      var btn2=document.createElement('button');
-      btn2.innerHTML='<i class="ti ti-trash"></i>';
-      btn2.title='Delete';
-      btn2.style.cssText='padding:4px 8px;border-radius:6px;border:1px solid #FCEBEB;background:#FCEBEB;color:#C0392B;cursor:pointer;font-size:11px';
-      btn2.onclick=(function(un){ return function(){ deleteUser(un); }; })(u);
-      row.appendChild(btn2);
-    }
+    row.className = 'lr';
+    row.innerHTML = '<div class="av" style="background:#E6F1FB;color:#1D4E89;font-size:13px">' + u[0].toUpperCase() + '</div>'
+      + '<div class="ri"><div class="rn">' + (user.name||u) + '</div><div class="rs">@' + u + ' · ' + (user.role||'user') + '</div></div>'
+      + '<span class="bdg ' + (user.role==='manager'?'b-i':'b-s') + '">' + (user.role||'user') + '</span>'
+      + '<button onclick="deleteUser(\'' + u + '\')" class="rbtn" style="color:#C0392B;margin-right:6px"><i class="ti ti-trash"></i></button>';
     el.appendChild(row);
   });
-
   var tc = document.getElementById('set-tech-count'); if(tc) tc.textContent = techsData.length;
   var cc = document.getElementById('set-client-count'); if(cc) cc.textContent = clientsData.length;
 }
@@ -3181,47 +2813,6 @@ function deleteUser(u) {
   delete systemUsers[u];
   if (typeof USERS !== 'undefined') delete USERS[u];
   renderUsersList();
-}
-
-function resetUserPass(u) {
-  var newPass = prompt('New password for @'+u+' (min 6 chars):');
-  if(!newPass || newPass.length < 6) { alert('Password too short (min 6 chars)'); return; }
-  if(systemUsers[u]) systemUsers[u].pass = newPass;
-  if(USERS[u]) USERS[u].pass = newPass;
-  alert('Password updated for @'+u);
-}
-
-function saveMyAccount(){
-  var name = (document.getElementById('my-name')||{}).value.trim()||'';
-  var pass = (document.getElementById('my-pass')||{}).value||'';
-  var pass2 = (document.getElementById('my-pass2')||{}).value||'';
-
-  if(!name){ alert('Name cannot be empty'); return; }
-  if(pass && pass !== pass2){ alert('Passwords do not match'); return; }
-  if(pass && pass.length < 6){ alert('Password too short (min 6 chars)'); return; }
-
-  // Update name in ALL sources
-  curUser = name;
-  if(systemUsers[curUserLogin]){ systemUsers[curUserLogin].name = name; }
-  if(USERS[curUserLogin]){ USERS[curUserLogin].name = name; }
-
-  // Update password in ALL sources
-  if(pass){
-    if(systemUsers[curUserLogin]){ systemUsers[curUserLogin].pass = pass; }
-    if(USERS[curUserLogin]){ USERS[curUserLogin].pass = pass; }
-    console.log('Password updated for:', curUserLogin);
-  }
-
-  // Update header display
-  var ua = document.getElementById('uAv'); if(ua) ua.textContent = name[0]||'M';
-  var un = document.getElementById('uName'); if(un) un.textContent = name;
-  var ur = document.getElementById('uRole'); if(ur) ur.textContent = curUserRole==='manager'?'Maintenance Manager':'Technician';
-
-  // Clear password fields
-  var p1=document.getElementById('my-pass'); if(p1) p1.value='';
-  var p2=document.getElementById('my-pass2'); if(p2) p2.value='';
-
-  alert('✅ Account updated successfully!');
 }
 
 function changePassword() {
@@ -3483,8 +3074,7 @@ async function showPublicReport(token){
   </div>
 </div>
 
-<!-- LOGIN SCREEN - completely separate from #app -->  </div>
-
+<!-- LOGIN SCREEN - completely separate from #app -->
 <!-- ═══ EMAIL MODAL ═══ -->
 <div id="emailModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:8000;align-items:center;justify-content:center">
   <div style="background:#fff;border-radius:16px;width:min(500px,95vw);max-height:90vh;overflow-y:auto;box-shadow:0 20px 60px rgba(0,0,0,.3)">
