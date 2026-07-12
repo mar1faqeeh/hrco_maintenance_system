@@ -770,7 +770,7 @@ html,body{height:100%;font-family:Tajawal,sans-serif;font-size:14px;background:#
 <!-- SETTINGS PAGE -->
 <div id="pg-settings" style="display:none">
   <div class="ph"><div><div class="pt" id="t-settings-pg">Settings</div><div class="ps">System configuration & user management</div></div></div>
-
+  <div style="max-width:800px;margin:0 auto">
   <!-- My Account -->
   <div class="card" style="margin-bottom:14px">
     <div class="ch"><div class="ct"><i class="ti ti-user-circle" style="color:#1D4E89"></i> My Account</div></div>
@@ -1109,7 +1109,7 @@ function go(pg){
   if(pg==='reports') runReport();
   if(pg==='visits') renderVisits('all','');
   if(pg==='archive') loadArchive();
-  if(pg==='settings'){renderUsersList();checkDBStatus();}
+  if(pg==='settings'){syncSystemUsers();renderUsersList();checkDBStatus();}
 }
 function setBn(b){document.querySelectorAll('.bn').forEach(function(x){x.style.color='#A0AEC0';});b.style.color='#1D4E89';}
 function toggleSb(){
@@ -3078,6 +3078,25 @@ function _doPrintVisit(id, v, techSigImg, clientSigImg, visitDateTime, vtype, pa
 // ══════════════════════════════════════
 var systemUsers = Object.assign({}, typeof USERS !== 'undefined' ? USERS : {});
 
+function syncSystemUsers(){
+  // Add technicians from techsData if not already in systemUsers
+  techsData.forEach(function(t){
+    var uname = t.name.toLowerCase().replace(/\s+/g,'').replace(/[^a-z0-9]/g,'') || 'tech'+t.id;
+    if(!systemUsers[uname]){
+      systemUsers[uname] = {
+        pass: 'tech1234',
+        role: 'technician',
+        name: t.name,
+        init: t.init || t.initials || t.name.slice(0,2)
+      };
+      USERS[uname] = systemUsers[uname];
+    } else {
+      // Update name to match techsData
+      systemUsers[uname].name = t.name;
+    }
+  });
+}
+
 function renderUsersList() {
   var el = document.getElementById('usersList');
   if (!el) return;
@@ -3173,34 +3192,36 @@ function resetUserPass(u) {
 }
 
 function saveMyAccount(){
-  var name = (document.getElementById('my-name')||{}).value||'';
+  var name = (document.getElementById('my-name')||{}).value.trim()||'';
   var pass = (document.getElementById('my-pass')||{}).value||'';
   var pass2 = (document.getElementById('my-pass2')||{}).value||'';
 
+  if(!name){ alert('Name cannot be empty'); return; }
   if(pass && pass !== pass2){ alert('Passwords do not match'); return; }
   if(pass && pass.length < 6){ alert('Password too short (min 6 chars)'); return; }
 
-  // Update name
-  if(name){
-    curUser = name;
-    if(systemUsers[curUserLogin]) systemUsers[curUserLogin].name = name;
-    if(USERS[curUserLogin]) USERS[curUserLogin].name = name;
-    // Update header avatar
-    var ua = document.getElementById('uAv');
-    if(ua) ua.textContent = name[0]||'M';
+  // Update name in ALL sources
+  curUser = name;
+  if(systemUsers[curUserLogin]){ systemUsers[curUserLogin].name = name; }
+  if(USERS[curUserLogin]){ USERS[curUserLogin].name = name; }
+
+  // Update password in ALL sources
+  if(pass){
+    if(systemUsers[curUserLogin]){ systemUsers[curUserLogin].pass = pass; }
+    if(USERS[curUserLogin]){ USERS[curUserLogin].pass = pass; }
+    console.log('Password updated for:', curUserLogin);
   }
 
-  // Update password
-  if(pass){
-    if(systemUsers[curUserLogin]) systemUsers[curUserLogin].pass = pass;
-    if(USERS[curUserLogin]) USERS[curUserLogin].pass = pass;
-  }
+  // Update header display
+  var ua = document.getElementById('uAv'); if(ua) ua.textContent = name[0]||'M';
+  var un = document.getElementById('uName'); if(un) un.textContent = name;
+  var ur = document.getElementById('uRole'); if(ur) ur.textContent = curUserRole==='manager'?'Maintenance Manager':'Technician';
 
   // Clear password fields
   var p1=document.getElementById('my-pass'); if(p1) p1.value='';
   var p2=document.getElementById('my-pass2'); if(p2) p2.value='';
 
-  alert('Account updated successfully!');
+  alert('✅ Account updated successfully!');
 }
 
 function changePassword() {
@@ -3462,7 +3483,8 @@ async function showPublicReport(token){
   </div>
 </div>
 
-<!-- LOGIN SCREEN - completely separate from #app -->
+<!-- LOGIN SCREEN - completely separate from #app -->  </div>
+
 <!-- ═══ EMAIL MODAL ═══ -->
 <div id="emailModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:8000;align-items:center;justify-content:center">
   <div style="background:#fff;border-radius:16px;width:min(500px,95vw);max-height:90vh;overflow-y:auto;box-shadow:0 20px 60px rgba(0,0,0,.3)">
