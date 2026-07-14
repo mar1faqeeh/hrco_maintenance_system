@@ -861,12 +861,28 @@ async function loadSystemUsers(){
   try{
     var r = await _sb.from('system_users').select('*');
     if(r.data && r.data.length){
-      // Clear old non-manager entries first, keep only DB data
-      Object.keys(USERS).forEach(function(k){ if(USERS[k].role!=='manager'||k==='manager') delete USERS[k]; });
+      // Replace USERS completely with DB data (DB is the source of truth)
+      // Clear all first
+      Object.keys(USERS).forEach(function(k){ delete USERS[k]; });
+      // Add all from DB
       r.data.forEach(function(u){
-        USERS[u.username]={pass:u.password, role:u.role, name:u.full_name||u.username, init:(u.full_name||u.username)[0].toUpperCase()};
+        USERS[u.username] = {
+          pass: u.password,
+          role: u.role,
+          name: u.full_name || u.username,
+          init: (u.full_name||u.username)[0].toUpperCase()
+        };
       });
-      console.log('Loaded', r.data.length, 'users from DB');
+      console.log('Loaded', r.data.length, 'users from DB:', Object.keys(USERS));
+    } else {
+      // No users in DB yet - insert default manager
+      await _sb.from('system_users').upsert({
+        username: 'manager',
+        password: USERS['manager'] ? USERS['manager'].pass : 'hrco2026',
+        role: 'manager',
+        full_name: USERS['manager'] ? USERS['manager'].name : 'Mohammed Al-Otaibi'
+      },{onConflict:'username'});
+      console.log('Inserted default manager to DB');
     }
   }catch(e){console.log('loadSystemUsers error:',e);}
 }
@@ -3057,7 +3073,8 @@ function setupRealtime() {
 // ══════════════════════════════════════
 var _origDOMReady = document.addEventListener;
 window.addEventListener('load', async function() {
-  // Pre-populate login dropdown with default USERS
+  // Load DB users first, then populate dropdown
+  await loadSystemUsers();
   populateLoginDropdown();
   // Check if this is a public report link (?report=TOKEN)
   var urlParams = new URLSearchParams(window.location.search);
