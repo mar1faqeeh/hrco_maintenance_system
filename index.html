@@ -909,10 +909,15 @@ async function lgLogin(){
   var pass=document.getElementById('lg-pass').value;
   var err=document.getElementById('lg-err');
   err.style.display='none';
+  
+  // First load users from DB to get latest passwords
+  await loadSystemUsers();
+  
+  // Then check credentials
   var u=USERS[email];
-  if(u&&u.pass===pass){lgSuccess(u);return;}
-  if(_sb){try{var r=await _sb.auth.signInWithPassword({email:email+'@hrco.com',password:pass});if(r.data&&r.data.user){lgSuccess({role:LG_ROLE,name:email,init:email[0].toUpperCase()});return;}}catch(e){}}
-  err.textContent=t('err');err.style.display='block';
+  if(u && u.pass===pass){ lgSuccess(u); return; }
+  
+  err.textContent=t('err'); err.style.display='block';
 }
 function lgSuccess(u){
   // Hide login screen
@@ -950,8 +955,14 @@ function lgSuccess(u){
   curUser = u.name||u.init||'User';
   curUserRole = u.role||'technician';
   curUserLogin = Object.keys(USERS).find(function(k){return USERS[k]===u;})||'manager';
-  var un=document.getElementById('uName'); if(un) un.textContent=curUser;
-  var ur=document.getElementById('uRole'); if(ur) ur.textContent=curUserRole==='manager'?'Maintenance Manager':'Technician';
+  // Also check by email field value
+  if(!curUserLogin){
+    var emailVal = (document.getElementById('lg-email')||{}).value||'';
+    if(emailVal && USERS[emailVal]) curUserLogin = emailVal;
+  }
+  var ua=document.getElementById('uAv'); if(ua) ua.textContent=(curUser[0]||'M').toUpperCase();
+  var un=document.getElementById('t-uname'); if(un) un.textContent=curUser;
+  var ur=document.getElementById('t-urole'); if(ur) ur.textContent=curUserRole==='manager'?'Maintenance Manager':'Technician';
 
   // Load users from DB then all data
   loadSystemUsers().then(function(){ return loadAllFromDB(); }).then(function(){
@@ -2837,8 +2848,10 @@ function saveMyAccount(){
   USERS[curUserLogin].name=name;
   if(pass) USERS[curUserLogin].pass=pass;
   curUser=name;
+  // Update ALL sidebar elements
   var ua=document.getElementById('uAv'); if(ua) ua.textContent=(name[0]||'M').toUpperCase();
-  var un=document.getElementById('uName'); if(un) un.textContent=name;
+  var un=document.getElementById('t-uname'); if(un) un.textContent=name;
+  var ur=document.getElementById('t-urole'); if(ur) ur.textContent=curUserRole==='manager'?'Maintenance Manager':'Technician';
   saveUserToDB(curUserLogin,USERS[curUserLogin]).then(function(){
     var p1=document.getElementById('my-pass'); if(p1) p1.value='';
     var p2=document.getElementById('my-pass2'); if(p2) p2.value='';
