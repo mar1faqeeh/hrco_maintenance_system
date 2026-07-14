@@ -904,6 +904,27 @@ function lgRole(r){
   if(r==='manager'){mb.style.background='#1D4E89';mb.style.color='#fff';mb.style.border='none';tb.style.background='#fff';tb.style.color='#4A5568';tb.style.border='1px solid #D9E2EC';document.getElementById('lg-email').value='manager';document.getElementById('lg-pass').value='hrco2026';}
   else{tb.style.background='#1D4E89';tb.style.color='#fff';tb.style.border='none';mb.style.background='#fff';mb.style.color='#4A5568';mb.style.border='1px solid #D9E2EC';document.getElementById('lg-email').value='ahmed';document.getElementById('lg-pass').value='tech1234';}
 }
+function populateLoginDropdown(){
+  var sel = document.getElementById('lg-email');
+  if(!sel) return;
+  var current = sel.value;
+  sel.innerHTML = '';
+  Object.keys(USERS).forEach(function(ukey){
+    var u = USERS[ukey];
+    var opt = document.createElement('option');
+    opt.value = ukey;
+    opt.textContent = ukey + ' — ' + (u.name||ukey) + (u.role==='manager'?' (Manager)':' (Tech)');
+    sel.appendChild(opt);
+  });
+  // Restore selection
+  if(current && sel.querySelector('option[value="'+current+'"]')) sel.value = current;
+  else if(sel.options.length) sel.value = sel.options[0].value;
+}
+
+function lgUpdateUserLabel(sel){
+  // nothing needed - value is already set
+}
+
 async function lgLogin(){
   var email=document.getElementById('lg-email').value.trim();
   var pass=document.getElementById('lg-pass').value;
@@ -912,6 +933,10 @@ async function lgLogin(){
   
   // First load users from DB to get latest passwords
   await loadSystemUsers();
+  populateLoginDropdown();
+  
+  // Re-read email after dropdown update
+  email = document.getElementById('lg-email').value;
   
   // Then check credentials
   var u=USERS[email];
@@ -965,7 +990,10 @@ function lgSuccess(u){
   var ur=document.getElementById('t-urole'); if(ur) ur.textContent=curUserRole==='manager'?'Maintenance Manager':'Technician';
 
   // Load users from DB then all data
-  loadSystemUsers().then(function(){ return loadAllFromDB(); }).then(function(){
+  loadSystemUsers().then(function(){
+    populateLoginDropdown(); // Update dropdown with DB users
+    return loadAllFromDB();
+  }).then(function(){
     try{setLang(LNG);}catch(e){}
     populateTechSelect();
     updateDashStats();
@@ -3029,6 +3057,8 @@ function setupRealtime() {
 // ══════════════════════════════════════
 var _origDOMReady = document.addEventListener;
 window.addEventListener('load', async function() {
+  // Pre-populate login dropdown with default USERS
+  populateLoginDropdown();
   // Check if this is a public report link (?report=TOKEN)
   var urlParams = new URLSearchParams(window.location.search);
   var reportToken = urlParams.get('report');
@@ -3220,7 +3250,9 @@ async function showPublicReport(token){
       </div>
       <div style="margin-bottom:12px">
         <label id="lg-email-lbl" style="display:block;font-size:12px;font-weight:700;color:#4A5568;margin-bottom:5px">Username</label>
-        <input type="text" id="lg-email" value="manager" onkeydown="if(event.key==='Enter')lgLogin()" style="width:100%;padding:10px 12px;border:1px solid #D9E2EC;border-radius:8px;font-size:14px;font-family:Tajawal,sans-serif;outline:none;color:#1a202c;box-sizing:border-box">
+        <select id="lg-email" onchange="lgUpdateUserLabel(this)" style="width:100%;padding:10px 12px;border:1px solid #D9E2EC;border-radius:8px;font-size:14px;font-family:Tajawal,sans-serif;outline:none;color:#1a202c;box-sizing:border-box;background:#fff;cursor:pointer">
+          <option value="manager">manager — Manager</option>
+        </select>
       </div>
       <div style="margin-bottom:16px">
         <label id="lg-pass-lbl" style="display:block;font-size:12px;font-weight:700;color:#4A5568;margin-bottom:5px">Password</label>
