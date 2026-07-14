@@ -705,51 +705,33 @@ html,body{height:100%;font-family:Tajawal,sans-serif;font-size:14px;background:#
 
 <!-- SETTINGS PAGE -->
 <div id="pg-settings" style="display:none">
-  <div class="ph"><div><div class="pt" id="t-settings-pg">Settings</div><div class="ps">System configuration & user management</div></div></div>
-  <div style="max-width:860px">
+  <div class="ph"><div><div class="pt">Settings</div><div class="ps">System configuration & user management</div></div></div>
+  <div style="max-width:860px;padding-bottom:30px">
 
-  <!-- My Account -->
-  <div class="card" style="margin-bottom:14px">
-    <div class="ch"><div class="ct"><i class="ti ti-user-circle" style="color:#1D4E89"></i> My Account</div></div>
-    <div style="padding:16px;display:grid;grid-template-columns:1fr 1fr;gap:12px">
-      <div>
-        <label style="font-size:11px;font-weight:700;color:#718096;display:block;margin-bottom:4px">Full Name</label>
-        <input id="my-name" type="text" style="width:100%;padding:9px 12px;border:1.5px solid #D9E2EC;border-radius:8px;font-size:13px;font-family:inherit;outline:none">
-      </div>
-      <div>
-        <label style="font-size:11px;font-weight:700;color:#718096;display:block;margin-bottom:4px">Username</label>
-        <input id="my-username" type="text" disabled style="width:100%;padding:9px 12px;border:1.5px solid #D9E2EC;border-radius:8px;font-size:13px;font-family:inherit;outline:none;background:#F8FAFC">
-      </div>
-      <div>
-        <label style="font-size:11px;font-weight:700;color:#718096;display:block;margin-bottom:4px">New Password</label>
-        <input id="my-pass" type="password" placeholder="Leave empty to keep current" style="width:100%;padding:9px 12px;border:1.5px solid #D9E2EC;border-radius:8px;font-size:13px;font-family:inherit;outline:none">
-      </div>
-      <div>
-        <label style="font-size:11px;font-weight:700;color:#718096;display:block;margin-bottom:4px">Confirm Password</label>
-        <input id="my-pass2" type="password" placeholder="Repeat new password" style="width:100%;padding:9px 12px;border:1.5px solid #D9E2EC;border-radius:8px;font-size:13px;font-family:inherit;outline:none">
-      </div>
-      <div style="grid-column:1/-1">
-        <button onclick="saveMyAccount()" style="padding:10px 24px;border-radius:8px;border:none;background:#1D4E89;color:#fff;cursor:pointer;font-size:13px;font-weight:700;font-family:inherit">
-          <i class="ti ti-device-floppy"></i> Save Changes
-        </button>
+    <div class="card" style="margin-bottom:14px">
+      <div class="ch"><div class="ct"><i class="ti ti-user-circle" style="color:#1D4E89"></i> My Account</div></div>
+      <div style="padding:16px;display:grid;grid-template-columns:1fr 1fr;gap:12px">
+        <div><label style="font-size:11px;font-weight:700;color:#718096;display:block;margin-bottom:4px">Full Name</label>
+          <input id="my-name" type="text" style="width:100%;padding:9px 12px;border:1.5px solid #D9E2EC;border-radius:8px;font-size:13px;font-family:inherit;outline:none"></div>
+        <div><label style="font-size:11px;font-weight:700;color:#718096;display:block;margin-bottom:4px">Username</label>
+          <input id="my-username" type="text" disabled style="width:100%;padding:9px 12px;border:1.5px solid #D9E2EC;border-radius:8px;font-size:13px;font-family:inherit;outline:none;background:#F8FAFC;color:#A0AEC0"></div>
+        <div><label style="font-size:11px;font-weight:700;color:#718096;display:block;margin-bottom:4px">New Password</label>
+          <input id="my-pass" type="password" placeholder="Leave empty to keep current" style="width:100%;padding:9px 12px;border:1.5px solid #D9E2EC;border-radius:8px;font-size:13px;font-family:inherit;outline:none"></div>
+        <div><label style="font-size:11px;font-weight:700;color:#718096;display:block;margin-bottom:4px">Confirm Password</label>
+          <input id="my-pass2" type="password" placeholder="Repeat new password" style="width:100%;padding:9px 12px;border:1.5px solid #D9E2EC;border-radius:8px;font-size:13px;font-family:inherit;outline:none"></div>
+        <div style="grid-column:1/-1">
+          <button onclick="saveMyAccount()" style="padding:10px 24px;border-radius:8px;border:none;background:#1D4E89;color:#fff;cursor:pointer;font-size:13px;font-weight:700;font-family:inherit"><i class="ti ti-device-floppy"></i> Save Changes</button>
+        </div>
       </div>
     </div>
-  </div>
 
-  <!-- User Management (Manager only) -->
-  <div class="card" style="margin-bottom:14px" id="users-mgmt-card">
-    <div class="ch">
-      <div class="ct"><i class="ti ti-users" style="color:#2D7D3A"></i> User Management</div>
-      <button class="btn btn-p" onclick="openMod('addUserModal')" style="font-size:12px;padding:6px 12px"><i class="ti ti-user-plus"></i> Add User</button>
+    <div class="card" id="users-mgmt-card" style="margin-bottom:14px">
+      <div class="ch">
+        <div class="ct"><i class="ti ti-users" style="color:#2D7D3A"></i> User Management</div>
+        <button class="btn btn-p" onclick="openMod('addUserModal')" style="font-size:12px;padding:6px 12px"><i class="ti ti-user-plus"></i> Add User</button>
+      </div>
+      <div id="usersList"></div>
     </div>
-    <div id="usersList" style="padding:4px 0"></div>
-  </div>
-
-  <!-- DB Status -->
-  <div class="card" id="dbStatusCard">
-    <div class="ch"><div class="ct"><i class="ti ti-database" style="color:#C4680A"></i> Database Status</div></div>
-    <div id="dbStatus" style="padding:14px;font-size:13px;color:#718096">Checking...</div>
-  </div>
 
   </div>
 </div>
@@ -871,37 +853,36 @@ function setLang(l){
 // LOGIN
 // ══════════════════════════════════════
 var LG_ROLE='manager';
-var USERS={'manager':{pass:'hrco2026',role:'manager',name:'Mohammed Al-Otaibi',init:'M'},'ahmed':{pass:'tech1234',role:'technician',name:'أحمد العتيبي',init:'أع'},'mohamad':{pass:'tech1234',role:'technician',name:'محمد الحربي',init:'مح'},'sami':{pass:'tech1234',role:'technician',name:'سامي القحطاني',init:'سق'},'khalid':{pass:'tech1234',role:'technician',name:'خالد الرشيدي',init:'خر'}};
-var curUser = ''; // display name
-var curUserLogin = ''; // username key
-var curUserRole = ''; // manager / technician
+var USERS={'manager':{pass:'hrco2026',role:'manager',name:'Mohammed Al-Otaibi',init:'M'}};
+var curUser='', curUserLogin='', curUserRole='';
 
-// Load users from Supabase (system_users table)
 async function loadSystemUsers(){
   if(!_sb) return;
   try{
     var r = await _sb.from('system_users').select('*');
     if(r.data && r.data.length){
+      // Clear old non-manager entries first, keep only DB data
+      Object.keys(USERS).forEach(function(k){ if(USERS[k].role!=='manager'||k==='manager') delete USERS[k]; });
       r.data.forEach(function(u){
-        USERS[u.username] = {pass:u.password, role:u.role, name:u.full_name, init:(u.full_name||u.username)[0].toUpperCase()};
+        USERS[u.username]={pass:u.password, role:u.role, name:u.full_name||u.username, init:(u.full_name||u.username)[0].toUpperCase()};
       });
       console.log('Loaded', r.data.length, 'users from DB');
     }
-  }catch(e){ console.log('loadSystemUsers error:',e); }
+  }catch(e){console.log('loadSystemUsers error:',e);}
 }
 
-async function saveUserToDB(username, data){
+async function saveUserToDB(username, userData){
   if(!_sb) return;
   try{
-    // Upsert user in system_users table
-    await _sb.from('system_users').upsert({
+    var r = await _sb.from('system_users').upsert({
       username: username,
-      password: data.pass,
-      role: data.role,
-      full_name: data.name
-    }, {onConflict:'username'});
-    console.log('✅ User saved to DB:', username);
-  }catch(e){ console.log('saveUserToDB error:',e); }
+      password: userData.pass,
+      role: userData.role,
+      full_name: userData.name
+    },{onConflict:'username'});
+    if(r.error) console.error('saveUser error:',r.error.message);
+    else console.log('✅ Saved user to DB:', username);
+  }catch(e){console.log('saveUserToDB error:',e);}
 }
 function lgLang(l){
   var texts={en:{app:'Maintenance Management System',mgr:'Manager',tech:'Technician',email:'Username',pass:'Password',btn:'Sign In',hint:'Demo: manager / hrco2026'},ar:{app:'نظام إدارة الصيانة',mgr:'مدير',tech:'فني',email:'اسم المستخدم',pass:'كلمة المرور',btn:'تسجيل الدخول',hint:'تجريبي: manager / hrco2026'},ur:{app:'مینٹیننس مینجمنٹ سسٹم',mgr:'مینیجر',tech:'ٹیکنیشن',email:'یوزر نیم',pass:'پاس ورڈ',btn:'سائن ان',hint:'ڈیمو: manager / hrco2026'}};
@@ -966,19 +947,15 @@ function lgSuccess(u){
   }
 
   // Set current user globals
-  curUser = u.name || u.init || 'User';
-  curUserRole = u.role || 'technician';
-  curUserLogin = Object.keys(USERS).find(function(k){ return USERS[k]===u; }) || '';
-
-  // Update sidebar name
+  curUser = u.name||u.init||'User';
+  curUserRole = u.role||'technician';
+  curUserLogin = Object.keys(USERS).find(function(k){return USERS[k]===u;})||'manager';
   var un=document.getElementById('uName'); if(un) un.textContent=curUser;
   var ur=document.getElementById('uRole'); if(ur) ur.textContent=curUserRole==='manager'?'Maintenance Manager':'Technician';
 
-  // Load ALL data from Supabase then show dashboard
-  loadSystemUsers().then(function(){
-    return loadAllFromDB();
-  }).then(function(){
-    try { setLang(LNG); } catch(e) {}
+  // Load users from DB then all data
+  loadSystemUsers().then(function(){ return loadAllFromDB(); }).then(function(){
+    try{setLang(LNG);}catch(e){}
     populateTechSelect();
     updateDashStats();
     renderDashTechs();
@@ -986,7 +963,7 @@ function lgSuccess(u){
     renderDashPending();
     renderPending();
     go('dashboard');
-    try { initChart(); } catch(e) {}
+    try{initChart();}catch(e){}
   });
 }
 
@@ -2817,46 +2794,33 @@ function _doPrintVisit(id, v, techSigImg, clientSigImg, visitDateTime, vtype, pa
 var systemUsers = Object.assign({}, typeof USERS !== 'undefined' ? USERS : {});
 
 function renderUsersList(){
-  var el=document.getElementById('usersList');
-  if(!el) return;
-
-  // Show/hide user management for managers only
+  var el=document.getElementById('usersList'); if(!el) return;
   var card=document.getElementById('users-mgmt-card');
-  if(card) card.style.display=(curUserRole==='manager')?'':'none';
-
-  // Pre-fill My Account
+  if(card) card.style.display=curUserRole==='manager'?'':'none';
   var mn=document.getElementById('my-name'); if(mn) mn.value=curUser||'';
   var mu=document.getElementById('my-username'); if(mu) mu.value=curUserLogin||'';
-
-  if(curUserRole!=='manager'){ el.innerHTML=''; return; }
-
   el.innerHTML='';
+  if(curUserRole!=='manager') return;
   Object.keys(USERS).forEach(function(ukey){
     var u=USERS[ukey];
-    var isManager=u.role==='manager';
-    var isSelf=ukey===curUserLogin;
-    var roleColor=isManager?'#1D4E89':'#2D7D3A';
-    var roleBg=isManager?'#E6F1FB':'#EAF3DE';
+    var isM=u.role==='manager'; var isSelf=ukey===curUserLogin;
+    var rc=isM?'#1D4E89':'#2D7D3A'; var rb=isM?'#E6F1FB':'#EAF3DE';
     var row=document.createElement('div');
-    row.style.cssText='display:flex;align-items:center;gap:12px;padding:10px 16px;border-bottom:1px solid #F0F4F8';
-    row.innerHTML='<div style="width:36px;height:36px;border-radius:8px;background:'+roleBg+';color:'+roleColor+';display:flex;align-items:center;justify-content:center;font-weight:700;font-size:15px;flex-shrink:0">'+(u.name||ukey)[0].toUpperCase()+'</div>'
-      +'<div style="flex:1"><div style="font-size:13px;font-weight:600">'+(u.name||ukey)+(isSelf?' <span style="font-size:10px;color:#A0AEC0">(You)</span>':'')+'</div>'
-      +'<div style="font-size:11px;color:#718096">@'+ukey+' · <strong style="color:'+roleColor+'">'+u.role+'</strong></div></div>'
-      +'<span style="font-size:10px;font-weight:700;padding:3px 10px;border-radius:99px;background:'+roleBg+';color:'+roleColor+'">'+u.role.toUpperCase()+'</span>';
-
+    row.style.cssText='display:flex;align-items:center;gap:12px;padding:12px 16px;border-bottom:1px solid #F0F4F8';
+    row.innerHTML='<div style="width:38px;height:38px;border-radius:8px;background:'+rb+';color:'+rc+';display:flex;align-items:center;justify-content:center;font-weight:700;font-size:16px;flex-shrink:0">'+(u.name||ukey)[0].toUpperCase()+'</div>'
+      +'<div style="flex:1;min-width:0"><div style="font-size:13px;font-weight:600">'+(u.name||ukey)+(isSelf?' <span style="font-size:10px;color:#A0AEC0;font-weight:400">(You)</span>':'')+'</div>'
+      +'<div style="font-size:11px;color:#718096">@'+ukey+' &middot; <span style="color:'+rc+';font-weight:600">'+u.role+'</span></div></div>'
+      +'<span style="font-size:10px;font-weight:700;padding:3px 10px;border-radius:99px;background:'+rb+';color:'+rc+'">'+u.role.toUpperCase()+'</span>';
     if(!isSelf){
       var b1=document.createElement('button');
-      b1.title='Reset Password';
-      b1.innerHTML='<i class="ti ti-key"></i>';
+      b1.innerHTML='<i class="ti ti-key"></i>'; b1.title='Reset Password';
       b1.style.cssText='padding:5px 8px;border-radius:6px;border:1px solid #D9E2EC;background:#F8FAFC;color:#718096;cursor:pointer;font-size:12px';
-      b1.onclick=(function(k){ return function(){ resetUserPass(k); }; })(ukey);
-      row.appendChild(b1);
+      b1.onclick=(function(k){return function(){resetUserPass(k);};})(ukey);
       var b2=document.createElement('button');
-      b2.title='Delete User';
-      b2.innerHTML='<i class="ti ti-trash"></i>';
-      b2.style.cssText='padding:5px 8px;border-radius:6px;border:1px solid #FCEBEB;background:#FCEBEB;color:#C0392B;cursor:pointer;font-size:12px';
-      b2.onclick=(function(k){ return function(){ deleteUser(k); }; })(ukey);
-      row.appendChild(b2);
+      b2.innerHTML='<i class="ti ti-trash"></i>'; b2.title='Delete';
+      b2.style.cssText='padding:5px 8px;border-radius:6px;border:1px solid #FCEBEB;background:#FCEBEB;color:#C0392B;cursor:pointer;font-size:12px;margin-left:4px';
+      b2.onclick=(function(k){return function(){deleteUser(k);};})(ukey);
+      row.appendChild(b1); row.appendChild(b2);
     }
     el.appendChild(row);
   });
@@ -2866,43 +2830,34 @@ function saveMyAccount(){
   var name=(document.getElementById('my-name')||{}).value.trim()||'';
   var pass=(document.getElementById('my-pass')||{}).value||'';
   var pass2=(document.getElementById('my-pass2')||{}).value||'';
-
-  if(!name){ alert('Name cannot be empty'); return; }
-  if(pass && pass!==pass2){ alert('Passwords do not match'); return; }
-  if(pass && pass.length<6){ alert('Min 6 characters for password'); return; }
-
-  // Update in USERS dict
-  if(!USERS[curUserLogin]) USERS[curUserLogin]={};
+  if(!name){alert('Name cannot be empty');return;}
+  if(pass && pass!==pass2){alert('Passwords do not match');return;}
+  if(pass && pass.length<6){alert('Min 6 characters for password');return;}
+  if(!USERS[curUserLogin]) USERS[curUserLogin]={role:curUserRole};
   USERS[curUserLogin].name=name;
   if(pass) USERS[curUserLogin].pass=pass;
-
-  // Update globals
   curUser=name;
-
-  // Update sidebar
   var ua=document.getElementById('uAv'); if(ua) ua.textContent=(name[0]||'M').toUpperCase();
   var un=document.getElementById('uName'); if(un) un.textContent=name;
-
-  // Save to Supabase (persistent!)
-  saveUserToDB(curUserLogin, USERS[curUserLogin]).then(function(){
+  saveUserToDB(curUserLogin,USERS[curUserLogin]).then(function(){
     var p1=document.getElementById('my-pass'); if(p1) p1.value='';
     var p2=document.getElementById('my-pass2'); if(p2) p2.value='';
-    alert('✅ Account saved successfully!');
+    alert('Account saved successfully!');
   });
 }
 
 function resetUserPass(ukey){
   var np=prompt('New password for @'+ukey+' (min 6 chars):');
-  if(!np||np.length<6){ alert('Min 6 characters'); return; }
+  if(!np||np.length<6){alert('Min 6 characters');return;}
   if(USERS[ukey]) USERS[ukey].pass=np;
-  saveUserToDB(ukey, USERS[ukey]).then(function(){ alert('✅ Password updated for @'+ukey); });
+  saveUserToDB(ukey,USERS[ukey]).then(function(){alert('Password updated!');});
 }
 
 function deleteUser(ukey){
   if(!confirm('Delete user @'+ukey+'?')) return;
   delete USERS[ukey];
-  if(_sb) _sb.from('system_users').delete().eq('username',ukey).then(function(){ renderUsersList(); });
-  else renderUsersList();
+  if(_sb) _sb.from('system_users').delete().eq('username',ukey);
+  renderUsersList();
 }
 
 function addNewUser() {
