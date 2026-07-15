@@ -2917,31 +2917,47 @@ function deleteUser(ukey){
   renderUsersList();
 }
 
-function addNewUser() {
+async function addNewUser() {
   var u = document.getElementById('au-user').value.trim();
   var n = document.getElementById('au-name').value.trim();
   var p = document.getElementById('au-pass').value;
   var r = document.getElementById('au-role').value;
   if (!u || !p) { alert('Please enter username and password'); return; }
-  if (systemUsers[u]) { alert('Username already exists'); return; }
-  systemUsers[u] = { pass: p, role: r, name: n||u, init: u[0].toUpperCase() };
-  // Also add to USERS for login
-  if (typeof USERS !== 'undefined') USERS[u] = systemUsers[u];
-  // If technician, add to techsData
-  if (r === 'technician') {
-    techsData.push({ id: Date.now(), name: n||u, init: u.slice(0,2), color:'#1D4E89', bg:'#E6F1FB', phone:'', spec:'Refrigeration & AC', status:'active', visits:0, completed:0, pending:0, rating:0, avgTime:0 });
+  if (p.length < 6) { alert('Password must be at least 6 characters'); return; }
+  if (USERS[u]) { alert('Username already exists'); return; }
+
+  var userData = { pass: p, role: r, name: n||u, init: u[0].toUpperCase() };
+
+  // Save to Supabase FIRST (persistent)
+  await saveUserToDB(u, userData);
+
+  // Update local memory
+  USERS[u] = userData;
+  systemUsers[u] = userData;
+
+  // If technician, also add to technicians table
+  if (r === 'technician' && _sb) {
+    var saved = await _sb.from('technicians').insert({
+      name: n||u, initials: u.slice(0,2).toUpperCase(),
+      color: '#1D4E89', bg: '#E6F1FB', phone: '',
+      spec: 'Refrigeration & AC', status: 'active',
+      visits: 0, completed: 0, pending: 0, rating: 0, avg_time: 0
+    }).select();
+    if(saved.data && saved.data[0]){
+      techsData.push(Object.assign({init:u.slice(0,2),avgTime:0}, saved.data[0]));
+    }
   }
+
+  populateLoginDropdown();
   closeMod('addUserModal');
   renderUsersList();
-  alert('✅ User "' + u + '" added successfully!');
+  ['au-user','au-name','au-pass'].forEach(function(id){
+    var el=document.getElementById(id); if(el) el.value='';
+  });
+  alert('User @' + u + ' added and saved!');
 }
 
-function deleteUser(u) {
-  if (!confirm('Delete user "' + u + '"?')) return;
-  delete systemUsers[u];
-  if (typeof USERS !== 'undefined') delete USERS[u];
-  renderUsersList();
-}
+// deleteUser defined above
 
 function changePassword() {
   var u = document.getElementById('cp-user').value.trim();
