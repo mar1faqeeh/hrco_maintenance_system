@@ -221,6 +221,7 @@ html,body{height:100%;font-family:Tajawal,sans-serif;font-size:14px;background:#
         <div class="nav-item" onclick="go('newvisit')" id="nav-newvisit"><i class="ti ti-plus"></i><span id="t-newvisit">New Visit</span></div>
         <div class="nav-item" onclick="go('technicians')" id="nav-technicians"><i class="ti ti-users"></i><span id="t-techs">Technicians</span></div>
         <div class="nav-item" onclick="go('parts')" id="nav-parts"><i class="ti ti-tool"></i><span id="t-parts">Spare Parts</span></div>
+        <div class="nav-item" onclick="go('parts-request')" id="nav-parts-request"><i class="ti ti-zoom-question"></i><span>Parts Request</span></div>
         <div class="nav-item" onclick="go('clients')" id="nav-clients"><i class="ti ti-building"></i><span id="t-clients">Clients</span></div>
         <div class="sb-sec" id="sb-rep">Reports</div>
         <div class="nav-item" onclick="go('reports')" id="nav-reports"><i class="ti ti-chart-bar"></i><span id="t-reports">Reports</span></div>
@@ -1128,7 +1129,7 @@ function logout(){if(confirm('Sign out?')){document.getElementById('loginScreen'
 // ══════════════════════════════════════
 // NAVIGATION
 // ══════════════════════════════════════
-var PAGES=['dashboard','visits','pending','newvisit','signature','technicians','parts','clients','reports','archive','settings'];
+var PAGES=['dashboard','visits','pending','newvisit','signature','technicians','parts','parts-request','clients','reports','archive','settings'];
 function go(pg){
   try{
   PAGES.forEach(function(p){var el=document.getElementById('pg-'+p);if(el){el.style.cssText='display:none';}});
@@ -1148,6 +1149,7 @@ function go(pg){
   }
   if(pg==='technicians'){renderTechGrid();renderTechCharts();}
   if(pg==='parts'){renderInvList();renderHistList();}
+  if(pg==='parts-request'){loadEquipmentData().then(function(){renderEquipGrid();});}
   if(pg==='clients'){renderClientGrid();renderDonut();renderTopClients();}
   if(pg==='reports') runReport();
   if(pg==='visits') renderVisits('all','');
@@ -1840,6 +1842,225 @@ function saveAsPDF(id){
 
 
 // ══════════════════════════════════════
+// PARTS REQUEST SYSTEM
+// ══════════════════════════════════════
+var equipmentData = []; // {id, name, diagramBase64, parts:[{num,name,desc}]}
+var prCurrentEquip = null;
+var prSelected = {}; // {partNum: {num,name,desc,qty}}
+
+function renderEquipGrid(){
+  var el = document.getElementById('pr-equip-list');
+  if(!el) return;
+  if(!equipmentData.length){
+    el.innerHTML = '<div style="grid-column:1/-1;padding:40px;text-align:center;color:#A0AEC0"><i class="ti ti-tools" style="font-size:36px;display:block;margin-bottom:8px"></i>No equipment added yet<br><small>Click "Upload Equipment" to add</small></div>';
+    return;
+  }
+  el.innerHTML = '';
+  equipmentData.forEach(function(eq){
+    var card = document.createElement('div');
+    card.style.cssText = 'border:1.5px solid #D9E2EC;border-radius:12px;overflow:hidden;cursor:pointer;background:#fff;transition:box-shadow .2s';
+    card.onmouseover = function(){ this.style.boxShadow='0 4px 20px rgba(0,0,0,.1)'; };
+    card.onmouseout = function(){ this.style.boxShadow='none'; };
+    card.onclick = function(){ openDiagram(eq.id); };
+    card.innerHTML = '<div style="height:130px;overflow:hidden;background:#F8FAFC">'
+      +(eq.diagramBase64 ? '<img src="'+eq.diagramBase64+'" style="width:100%;height:100%;object-fit:cover">' : '<div style="display:flex;align-items:center;justify-content:center;height:100%;color:#A0AEC0"><i class="ti ti-photo" style="font-size:36px"></i></div>')
+      +'</div>'
+      +'<div style="padding:12px">'
+      +'<div style="font-size:13px;font-weight:700;color:#1a202c;margin-bottom:4px">'+eq.name+'</div>'
+      +'<div style="font-size:11px;color:#718096">'+eq.parts.length+' parts</div>'
+      +'</div>'
+      +'<div style="padding:0 12px 12px;display:flex;gap:6px">'
+      +'<button onclick="event.stopPropagation();openDiagram('+eq.id+')" style="flex:1;padding:6px;border-radius:6px;border:none;background:#1D4E89;color:#fff;cursor:pointer;font-size:11px;font-weight:700;font-family:inherit"><i class="ti ti-eye"></i> View</button>'
+      +'<button onclick="event.stopPropagation();deleteEquipment('+eq.id+')" style="padding:6px 8px;border-radius:6px;border:1px solid #FCEBEB;background:#FCEBEB;color:#C0392B;cursor:pointer;font-size:11px;font-family:inherit"><i class="ti ti-trash"></i></button>'
+      +'</div>';
+    el.appendChild(card);
+  });
+}
+
+function openDiagram(id){
+  var eq = equipmentData.find(function(e){ return e.id===id; });
+  if(!eq) return;
+  prCurrentEquip = eq;
+  prSelected = {};
+  document.getElementById('pr-equip-list').style.display='none';
+  document.getElementById('pr-diagram-view').style.display='block';
+  document.getElementById('pr-equip-title').textContent = eq.name;
+
+  // Set diagram image
+  var img = document.getElementById('pr-diagram-img');
+  if(img) img.src = eq.diagramBase64 || '';
+
+  // Render parts list
+  renderDiagramParts(eq);
+  updateSelectedList();
+}
+
+function closeDiagram(){
+  document.getElementById('pr-equip-list').style.display='grid';
+  document.getElementById('pr-diagram-view').style.display='none';
+  prCurrentEquip = null;
+  prSelected = {};
+}
+
+function renderDiagramParts(eq){
+  var el = document.getElementById('pr-parts-list');
+  if(!el) return;
+  el.innerHTML = '';
+  eq.parts.forEach(function(p){
+    var row = document.createElement('div');
+    var isSelected = !!prSelected[p.num];
+    row.id = 'pr-part-'+p.num;
+    row.style.cssText = 'display:flex;align-items:center;gap:8px;padding:7px 10px;border-radius:8px;margin-bottom:4px;cursor:pointer;border:1.5px solid '+(isSelected?'#1D4E89':'#D9E2EC')+';background:'+(isSelected?'#E6F1FB':'#fff');
+    row.onclick = function(){ togglePart(p); };
+    row.innerHTML = '<div style="width:28px;height:28px;border-radius:6px;background:'+(isSelected?'#1D4E89':'#F0F4F8')+';color:'+(isSelected?'#fff':'#718096')+';display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;flex-shrink:0">'+p.num+'</div>'
+      +'<div style="flex:1;min-width:0"><div style="font-size:12px;font-weight:600;color:#1a202c">'+p.name+'</div>'
+      +(p.desc?'<div style="font-size:10px;color:#A0AEC0">'+p.desc+'</div>':'')+'</div>'
+      +(isSelected?'<i class="ti ti-check" style="color:#1D4E89;flex-shrink:0"></i>':'');
+    el.appendChild(row);
+  });
+}
+
+function togglePart(p){
+  if(prSelected[p.num]){
+    delete prSelected[p.num];
+  } else {
+    prSelected[p.num] = {num:p.num, name:p.name, desc:p.desc||'', qty:1};
+  }
+  renderDiagramParts(prCurrentEquip);
+  updateSelectedList();
+}
+
+function updateSelectedList(){
+  var keys = Object.keys(prSelected);
+  var countEl = document.getElementById('pr-selected-count');
+  if(countEl) countEl.textContent = keys.length;
+  var el = document.getElementById('pr-selected-list');
+  if(!el) return;
+  if(!keys.length){
+    el.innerHTML = '<div style="color:#A0AEC0;font-size:11px;padding:8px 0">No parts selected</div>';
+    return;
+  }
+  el.innerHTML = '';
+  keys.forEach(function(k){
+    var p = prSelected[k];
+    var row = document.createElement('div');
+    row.style.cssText = 'display:flex;align-items:center;gap:6px;padding:4px 8px;background:#E6F1FB;border-radius:6px;margin-bottom:4px';
+    row.innerHTML = '<span style="background:#1D4E89;color:#fff;border-radius:4px;padding:1px 6px;font-size:10px;font-weight:700">'+p.num+'</span>'
+      +'<span style="flex:1;font-size:11px;color:#1a202c">'+p.name+'</span>'
+      +'<input type="number" min="1" value="'+p.qty+'" data-key="'+k+'" onchange="if(prSelected[this.dataset.key])prSelected[this.dataset.key].qty=parseInt(this.value)||1" style="width:40px;padding:2px 4px;border:1px solid #D9E2EC;border-radius:4px;font-size:11px;text-align:center">'
+      +'<button data-key="'+k+'" onclick="delete prSelected[this.dataset.key];renderDiagramParts(prCurrentEquip);updateSelectedList();" style="background:none;border:none;color:#C0392B;cursor:pointer;font-size:12px;padding:0"><i class="ti ti-x"></i></button>';
+    el.appendChild(row);
+  });
+}
+
+function submitPartsRequest(){
+  if(!Object.keys(prSelected).length){ alert('Please select at least one part'); return; }
+  // Pre-fill tech name
+  var techEl = document.getElementById('pr-req-tech');
+  if(techEl) techEl.value = curUser||'';
+  // Build summary
+  var summary = '<strong>'+prCurrentEquip.name+'</strong><br><br><b>Selected Parts:</b><br>';
+  Object.values(prSelected).forEach(function(p){
+    summary += '• ['+p.num+'] '+p.name+' × '+p.qty+'<br>';
+  });
+  var el = document.getElementById('pr-request-summary');
+  if(el) el.innerHTML = summary;
+  openMod('prRequestModal');
+}
+
+async function confirmPartsRequest(){
+  var tech = (document.getElementById('pr-req-tech')||{}).value||curUser||'';
+  var client = (document.getElementById('pr-req-client')||{}).value||'';
+  var notes = (document.getElementById('pr-req-notes')||{}).value||'';
+  var parts = Object.values(prSelected);
+  var today = new Date().toISOString().split('T')[0];
+
+  // Save request to Supabase parts_requests table (create if needed)
+  if(_sb){
+    await _sb.from('parts_requests').insert({
+      equipment: prCurrentEquip.name,
+      tech: tech,
+      client: client,
+      notes: notes,
+      parts: JSON.stringify(parts),
+      date: today,
+      status: 'pending'
+    });
+  }
+
+  closeMod('prRequestModal');
+  closeDiagram();
+  alert('Parts request submitted successfully!\nThe manager will review and prepare the parts.');
+}
+
+async function saveEquipment(){
+  var name = (document.getElementById('ue-name')||{}).value.trim();
+  if(!name){ alert('Enter equipment name'); return; }
+  var fileInput = document.getElementById('ue-diagram');
+  var partsText = (document.getElementById('ue-parts')||{}).value||'';
+
+  // Parse parts list
+  var parts = [];
+  partsText.split('\n').forEach(function(line){
+    line = line.trim();
+    if(!line) return;
+    var cols = line.split('|').map(function(s){ return s.trim(); });
+    if(cols.length >= 2){
+      parts.push({ num: cols[0], name: cols[1], desc: cols[2]||'' });
+    }
+  });
+
+  // Read image as base64
+  var base64 = '';
+  if(fileInput && fileInput.files && fileInput.files[0]){
+    base64 = await new Promise(function(res){
+      var reader = new FileReader();
+      reader.onload = function(e){ res(e.target.result); };
+      reader.readAsDataURL(fileInput.files[0]);
+    });
+  }
+
+  var equip = { id: Date.now(), name: name, diagramBase64: base64, parts: parts };
+  equipmentData.push(equip);
+
+  // Save to Supabase
+  if(_sb){
+    await _sb.from('equipment_diagrams').insert({
+      name: name,
+      diagram_data: base64,
+      parts_list: JSON.stringify(parts)
+    });
+  }
+
+  closeMod('uploadEquipModal');
+  renderEquipGrid();
+  document.getElementById('ue-name').value='';
+  document.getElementById('ue-parts').value='';
+  if(fileInput) fileInput.value='';
+  alert('Equipment saved!');
+}
+
+async function loadEquipmentData(){
+  if(!_sb) return;
+  try{
+    var r = await _sb.from('equipment_diagrams').select('*').order('created_at',{ascending:false});
+    if(r.data){
+      equipmentData = r.data.map(function(e){
+        return { id:e.id, name:e.name, diagramBase64:e.diagram_data||'', parts:JSON.parse(e.parts_list||'[]') };
+      });
+      console.log('Loaded', equipmentData.length, 'equipment diagrams');
+    }
+  }catch(e){ console.log('loadEquipment error:',e); }
+}
+
+function deleteEquipment(id){
+  if(!confirm('Delete this equipment?')) return;
+  equipmentData = equipmentData.filter(function(e){ return e.id!==id; });
+  if(_sb) _sb.from('equipment_diagrams').delete().eq('id',id);
+  renderEquipGrid();
+}
+
+// ══════════════════════════════════════
 // SECURE REPORT TOKENS
 // ══════════════════════════════════════
 function generateToken(){
@@ -2476,6 +2697,7 @@ function resetNewVisitForm(){
   micOn=false;_updateMicUI(false);
   currentVisitId=null;
   window._visitStartTime = Date.now();
+  clearVisitPhotos();
   var ca = document.getElementById('closeActions');
   if(ca) ca.style.display='none';
   var cab = document.getElementById('closeAB');
@@ -2603,6 +2825,13 @@ async function saveAndSign() {
       tag.textContent=p;
       tag.style.cssText='background:#FCEBEB;color:#C0392B;border-radius:99px;padding:2px 8px;font-size:11px;font-weight:500;display:inline-block;margin:1px';
       _spl.appendChild(tag);
+    });
+  }
+
+  // Upload photos in background after visit created
+  if(visitPhotos.length && currentVisitId){
+    uploadVisitPhotos(currentVisitId).then(function(urls){
+      if(urls.length) console.log('✅ Photos uploaded:', urls.length);
     });
   }
 
@@ -3260,6 +3489,124 @@ async function showPublicReport(token){
           <i class="ti ti-send"></i> إرسال الكشف
         </button>
       </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ PARTS REQUEST ═══ -->
+<div id="pg-parts-request" style="display:none">
+  <div class="ph">
+    <div><div class="pt">Parts Request</div><div class="ps">AI-powered equipment diagram search & parts selection</div></div>
+    <div style="display:flex;gap:8px">
+      <button class="btn btn-o" onclick="openMod('uploadEquipModal')"><i class="ti ti-upload"></i> Upload Manually</button>
+    </div>
+  </div>
+
+  <!-- AI Search Section -->
+  <div class="card" style="margin-bottom:16px">
+    <div class="ch"><div class="ct"><i class="ti ti-robot" style="color:#7C3AED"></i> AI Diagram Search</div></div>
+    <div style="padding:16px">
+      <div style="display:grid;grid-template-columns:1fr 1fr auto;gap:10px;align-items:end;margin-bottom:12px">
+        <div>
+          <label style="font-size:11px;font-weight:700;color:#718096;display:block;margin-bottom:4px">Brand / Manufacturer *</label>
+          <input id="ai-brand" type="text" placeholder="e.g. Manitowoc, Hoshizaki, Rational" style="width:100%;padding:9px 12px;border:1.5px solid #D9E2EC;border-radius:8px;font-size:13px;font-family:inherit;outline:none">
+        </div>
+        <div>
+          <label style="font-size:11px;font-weight:700;color:#718096;display:block;margin-bottom:4px">Model Number *</label>
+          <input id="ai-model" type="text" placeholder="e.g. IM-200, F-801MRJ3-C" style="width:100%;padding:9px 12px;border:1.5px solid #D9E2EC;border-radius:8px;font-size:13px;font-family:inherit;outline:none" onkeydown="if(event.key==='Enter') aiSearchDiagram()">
+        </div>
+        <button onclick="aiSearchDiagram()" id="ai-search-btn" style="padding:9px 20px;border-radius:8px;border:none;background:#7C3AED;color:#fff;cursor:pointer;font-size:13px;font-weight:700;font-family:inherit;white-space:nowrap;display:flex;align-items:center;gap:6px">
+          <i class="ti ti-search"></i> Search
+        </button>
+      </div>
+      <!-- AI Results -->
+      <div id="ai-search-results" style="display:none">
+        <div id="ai-thinking" style="display:none;padding:16px;text-align:center;color:#7C3AED">
+          <i class="ti ti-loader" style="animation:spin 1s linear infinite;font-size:24px;display:block;margin-bottom:8px"></i>
+          <div style="font-size:13px;font-weight:600">AI is searching for diagrams...</div>
+          <div style="font-size:11px;color:#A0AEC0;margin-top:4px">Searching manufacturer databases, parts portals & documentation sites</div>
+        </div>
+        <div id="ai-results-content"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Saved Equipment List -->
+  <div style="font-size:13px;font-weight:700;color:#0F2D52;margin-bottom:10px;display:flex;align-items:center;gap:6px">
+    <i class="ti ti-archive"></i> Saved Equipment Archive
+  </div>
+  <div id="pr-equip-list" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:14px;margin-bottom:16px"></div>
+
+  <!-- Diagram Viewer -->
+  <div id="pr-diagram-view" style="display:none">
+    <div class="card">
+      <div class="ch">
+        <div style="display:flex;align-items:center;gap:10px">
+          <button onclick="closeDiagram()" style="padding:6px 12px;border-radius:8px;border:1.5px solid #D9E2EC;background:#F8FAFC;color:#718096;cursor:pointer;font-family:inherit;font-size:12px"><i class="ti ti-arrow-left"></i> Back</button>
+          <div class="ct" id="pr-equip-title">Equipment</div>
+        </div>
+        <button onclick="submitPartsRequest()" style="padding:8px 18px;border-radius:8px;border:none;background:#1D4E89;color:#fff;cursor:pointer;font-size:13px;font-weight:700;font-family:inherit"><i class="ti ti-send"></i> Submit Request</button>
+      </div>
+
+      <div style="display:grid;grid-template-columns:1fr 320px;gap:16px;padding:16px">
+        <!-- Diagram Image -->
+        <div style="position:relative;border:1.5px solid #D9E2EC;border-radius:10px;overflow:hidden;background:#F8FAFC">
+          <img id="pr-diagram-img" src="" style="width:100%;display:block" alt="Equipment Diagram">
+          <div id="pr-diagram-pins"></div>
+        </div>
+
+        <!-- Parts List -->
+        <div>
+          <div style="font-size:13px;font-weight:700;color:#0F2D52;margin-bottom:10px;display:flex;align-items:center;gap:6px">
+            <i class="ti ti-list-check"></i> Parts List
+          </div>
+          <div id="pr-parts-list" style="height:500px;overflow-y:auto"></div>
+          
+          <!-- Selected Parts -->
+          <div style="margin-top:12px;border-top:1.5px solid #D9E2EC;padding-top:12px">
+            <div style="font-size:12px;font-weight:700;color:#C4680A;margin-bottom:8px"><i class="ti ti-shopping-cart"></i> Selected (<span id="pr-selected-count">0</span>)</div>
+            <div id="pr-selected-list" style="font-size:12px;color:#718096;min-height:40px"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- UPLOAD EQUIPMENT MODAL -->
+<div id="uploadEquipModal" class="modal" style="display:none">
+  <div class="mbox" style="max-width:480px">
+    <div class="mh"><div class="mhtitle"><i class="ti ti-upload"></i> Upload Equipment</div><button class="mclose" onclick="closeMod('uploadEquipModal')"><i class="ti ti-x"></i></button></div>
+    <div class="mb">
+      <div class="field"><label>Equipment Name *</label><input type="text" id="ue-name" placeholder="e.g. Manitowoc Ice Maker IM-200"></div>
+      <div class="field"><label>Exploded Diagram (Image) *</label>
+        <input type="file" id="ue-diagram" accept="image/*" style="width:100%;padding:8px;border:1.5px solid #D9E2EC;border-radius:8px;font-family:inherit;font-size:13px">
+      </div>
+      <div class="field"><label>Parts List</label>
+        <div style="font-size:11px;color:#718096;margin-bottom:6px">Enter each part on a new line: <strong>Number | Part Name | Description</strong><br>Example: <code>1 | Compressor | 115V R-404A</code></div>
+        <textarea id="ue-parts" rows="8" placeholder="1 | Compressor | 115V R-404A&#10;2 | Fan Motor | 240V&#10;3 | Water Pump | 12L/min" style="width:100%;padding:8px 12px;border:1.5px solid #D9E2EC;border-radius:8px;font-size:12px;font-family:inherit;outline:none;resize:vertical"></textarea>
+      </div>
+    </div>
+    <div class="mf">
+      <button onclick="closeMod('uploadEquipModal')" class="btn btn-o" style="flex:1">Cancel</button>
+      <button onclick="saveEquipment()" class="btn btn-p" style="flex:2"><i class="ti ti-device-floppy"></i> Save Equipment</button>
+    </div>
+  </div>
+</div>
+
+<!-- PARTS REQUEST MODAL -->
+<div id="prRequestModal" class="modal" style="display:none">
+  <div class="mbox" style="max-width:460px">
+    <div class="mh"><div class="mhtitle"><i class="ti ti-send"></i> Submit Parts Request</div><button class="mclose" onclick="closeMod('prRequestModal')"><i class="ti ti-x"></i></button></div>
+    <div class="mb">
+      <div id="pr-request-summary" style="background:#F0F4F8;border-radius:8px;padding:12px;margin-bottom:12px;font-size:13px"></div>
+      <div class="field"><label>Technician Name</label><input type="text" id="pr-req-tech" placeholder="Your name"></div>
+      <div class="field"><label>Client / Equipment Location</label><input type="text" id="pr-req-client" placeholder="e.g. Ritz Carlton - Cold Room"></div>
+      <div class="field"><label>Notes</label><textarea id="pr-req-notes" rows="3" placeholder="Fault description or additional notes" style="width:100%;padding:8px 12px;border:1.5px solid #D9E2EC;border-radius:8px;font-size:13px;font-family:inherit;outline:none;resize:vertical"></textarea></div>
+    </div>
+    <div class="mf">
+      <button onclick="closeMod('prRequestModal')" class="btn btn-o" style="flex:1">Cancel</button>
+      <button onclick="confirmPartsRequest()" class="btn btn-p" style="flex:2"><i class="ti ti-check"></i> Confirm Request</button>
     </div>
   </div>
 </div>
