@@ -428,6 +428,24 @@ html,body{height:100%;font-family:Tajawal,sans-serif;font-size:14px;background:#
       </div>
     </div>
   </div>
+  <!-- Photo Upload Section -->
+  <div class="card" style="margin-bottom:14px">
+    <div class="ch">
+      <div class="ct"><i class="ti ti-camera" style="color:#1D4E89"></i> Visit Photos</div>
+      <span style="font-size:11px;color:#A0AEC0">Optional — Max 20 photos, auto-compressed</span>
+    </div>
+    <div style="padding:14px">
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px">
+        <label for="visit-photos-input" style="display:inline-flex;align-items:center;gap:6px;padding:8px 16px;border-radius:8px;border:1.5px dashed #1D4E89;background:#E6F1FB;color:#1D4E89;cursor:pointer;font-size:13px;font-weight:600;font-family:inherit">
+          <i class="ti ti-upload"></i> Choose Photos
+        </label>
+        <input type="file" id="visit-photos-input" accept="image/*" multiple style="display:none" onchange="handlePhotoSelect(this)">
+        <span style="font-size:12px;color:#A0AEC0" id="photo-count-label">No photos selected</span>
+      </div>
+      <div id="visit-photos-preview" style="display:flex;flex-wrap:wrap;gap:8px"></div>
+    </div>
+  </div>
+
   <div style="display:flex;gap:10px;justify-content:flex-end;margin-bottom:20px">
     <button class="btn btn-o" onclick="go('dashboard')"><i class="ti ti-arrow-right"></i><span id="t-back">Back</span></button>
     <button class="btn btn-o" onclick="saveVisitDraft()"><i class="ti ti-device-floppy"></i><span id="t-save-draft">Save Draft</span></button>
@@ -2058,6 +2076,231 @@ function deleteEquipment(id){
   equipmentData = equipmentData.filter(function(e){ return e.id!==id; });
   if(_sb) _sb.from('equipment_diagrams').delete().eq('id',id);
   renderEquipGrid();
+}
+
+// ══════════════════════════════════════
+// VISIT PHOTOS SYSTEM
+// ══════════════════════════════════════
+var visitPhotos = [];
+
+function compressImage(file, maxW, maxH, quality){
+  return new Promise(function(resolve){
+    var reader = new FileReader();
+    reader.onload = function(e){
+      var img = new Image();
+      img.onload = function(){
+        var w=img.width, h=img.height;
+        if(w>maxW){ h=Math.round(h*maxW/w); w=maxW; }
+        if(h>maxH){ w=Math.round(w*maxH/h); h=maxH; }
+        var canvas=document.createElement('canvas');
+        canvas.width=w; canvas.height=h;
+        canvas.getContext('2d').drawImage(img,0,0,w,h);
+        canvas.toBlob(function(blob){
+          resolve(new File([blob], file.name.replace(/[^.]+$/,'jpg'), {type:'image/jpeg'}));
+        },'image/jpeg',quality);
+      };
+      img.src=e.target.result;
+    };
+    reader.readAsDataURL(file);
+  });
+}
+
+async function handlePhotoSelect(input){
+  var files=Array.from(input.files);
+  if(visitPhotos.length+files.length>20){
+    alert('Max 20 photos (currently have '+visitPhotos.length+')');
+    input.value=''; return;
+  }
+  var label=document.getElementById('photo-count-label');
+  if(label) label.textContent='Compressing...';
+  for(var i=0;i<files.length;i++){
+    var file=files[i];
+    if(!file.type.startsWith('image/')){ alert(file.name+' is not an image'); continue; }
+    try{
+      var compressed=await compressImage(file,1200,1200,0.70);
+      var url=URL.createObjectURL(compressed);
+      visitPhotos.push({file:compressed, previewUrl:url, uploaded:false, storageUrl:'', originalName:file.name});
+    }catch(e){
+      var url=URL.createObjectURL(file);
+      visitPhotos.push({file:file, previewUrl:url, uploaded:false, storageUrl:'', originalName:file.name});
+    }
+  }
+  input.value='';
+  renderPhotoPreviews();
+}
+
+function renderPhotoPreviews(){
+  var el=document.getElementById('visit-photos-preview');
+  var countEl=document.getElementById('photo-count-label');
+  if(!el) return;
+  var cnt=visitPhotos.length;
+  if(countEl){ countEl.textContent=cnt?cnt+' / 20 photo(s)':'No photos selected'; countEl.style.color=cnt>=20?'#C0392B':'#718096'; }
+  el.innerHTML='';
+  visitPhotos.forEach(function(p,i){
+    var div=document.createElement('div');
+    div.style.cssText='position:relative;width:80px;height:80px;border-radius:8px;overflow:hidden;border:1.5px solid #D9E2EC;background:#F8FAFC;flex-shrink:0';
+    var img=document.createElement('img');
+    img.src=p.previewUrl; img.style.cssText='width:100%;height:100%;object-fit:cover;display:block;cursor:zoom-in';
+    img.onclick=(function(url){ return function(){ window.open(url,'_blank'); }; })(p.previewUrl);
+    var badge=document.createElement('div');
+    badge.textContent=i+1;
+    badge.style.cssText='position:absolute;bottom:2px;left:3px;background:rgba(0,0,0,.55);color:#fff;border-radius:4px;font-size:9px;font-weight:700;padding:1px 4px;pointer-events:none';
+    var btn=document.createElement('button');
+    btn.innerHTML='<i class="ti ti-x"></i>';
+    btn.style.cssText='position:absolute;top:2px;right:2px;background:rgba(0,0,0,.6);color:#fff;border:none;border-radius:50%;width:18px;height:18px;cursor:pointer;font-size:9px;display:flex;align-items:center;justify-content:center;padding:0';
+    btn.onclick=(function(idx){ return function(e){ e.stopPropagation(); visitPhotos.splice(idx,1); renderPhotoPreviews(); }; })(i);
+    div.appendChild(img); div.appendChild(badge); div.appendChild(btn);
+    el.appendChild(div);
+  });
+}
+
+async function uploadVisitPhotos(visitId){
+  if(!visitPhotos.length||!_sb) return [];
+  var urls=[];
+  for(var i=0;i<visitPhotos.length;i++){
+    var p=visitPhotos[i];
+    if(p.storageUrl){ urls.push(p.storageUrl); continue; }
+    try{
+      var ext='jpg';
+      var path='visit-'+visitId+'/photo-'+Date.now()+'-'+i+'.'+ext;
+      var r=await _sb.storage.from('visit-photos').upload(path,p.file,{upsert:true});
+      if(!r.error){
+        var pub=_sb.storage.from('visit-photos').getPublicUrl(path);
+        p.storageUrl=pub.data.publicUrl; p.uploaded=true; urls.push(p.storageUrl);
+      }
+    }catch(e){ console.error('Photo upload error:',e); }
+  }
+  if(urls.length) await _sb.from('visits').update({photos:urls}).eq('id',visitId);
+  return urls;
+}
+
+function clearVisitPhotos(){
+  visitPhotos=[];
+  renderPhotoPreviews();
+}
+
+// ══════════════════════════════════════
+// AI DIAGRAM SEARCH
+// ══════════════════════════════════════
+async function aiSearchDiagram(){
+  var brand=(document.getElementById('ai-brand')||{}).value.trim();
+  var model=(document.getElementById('ai-model')||{}).value.trim();
+  if(!brand||!model){ alert('Please enter both brand and model number'); return; }
+  var results=document.getElementById('ai-search-results');
+  var thinking=document.getElementById('ai-thinking');
+  var content=document.getElementById('ai-results-content');
+  var btn=document.getElementById('ai-search-btn');
+  if(results) results.style.display='block';
+  if(thinking) thinking.style.display='block';
+  if(content) content.innerHTML='';
+  if(btn){ btn.disabled=true; btn.innerHTML='<i class="ti ti-loader" style="animation:spin 1s linear infinite"></i> Searching...'; }
+  try{
+    var response=await fetch('https://api.anthropic.com/v1/messages',{
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({
+        model:'claude-sonnet-4-6', max_tokens:2000,
+        tools:[{type:'web_search_20250305',name:'web_search'}],
+        system:'You are a commercial kitchen equipment parts expert. Search for exploded view parts diagrams for the given equipment. Return ONLY valid JSON with this structure: {"found":true/false,"equipment_name":"string","manufacturer_parts_url":"url or null","direct_image_urls":["url1","url2"],"results":[{"title":"","url":"","type":"pdf/image/page","description":"","relevance":"high/medium/low"}],"tips":"string"}. Search official manufacturer sites, parts portals, service manuals. Be thorough.',
+        messages:[{role:'user',content:'Find exploded view parts diagram for: Brand: '+brand+', Model: '+model+'. Search manufacturer parts portal, service manual PDFs, and diagram images. Return JSON only.'}]
+      })
+    });
+    var data=await response.json();
+    var text='';
+    if(data.content) data.content.forEach(function(b){ if(b.type==='text') text+=b.text; });
+    var parsed=null;
+    try{ var m=text.match(/\{[\s\S]*\}/); if(m) parsed=JSON.parse(m[0]); }catch(e){}
+    if(thinking) thinking.style.display='none';
+    if(parsed) renderAIResults(brand,model,parsed);
+    else if(content) content.innerHTML='<div style="padding:12px;background:#FDF0E0;border-radius:8px;font-size:13px;color:#C4680A">Could not parse response.<br><pre style="font-size:10px;color:#718096;white-space:pre-wrap">'+text.slice(0,500)+'</pre></div>';
+  }catch(e){
+    if(thinking) thinking.style.display='none';
+    if(content) content.innerHTML='<div style="padding:12px;background:#FCEBEB;border-radius:8px;color:#C0392B;font-size:13px">Search failed: '+e.message+'</div>';
+  }
+  if(btn){ btn.disabled=false; btn.innerHTML='<i class="ti ti-search"></i> Search'; }
+}
+
+function renderAIResults(brand,model,data){
+  var content=document.getElementById('ai-results-content'); if(!content) return;
+  var html='<div style="border-top:1.5px solid #D9E2EC;padding-top:14px">';
+  if(!data.found){
+    html+='<div style="padding:20px;text-align:center;color:#C4680A;background:#FDF0E0;border-radius:10px"><i class="ti ti-search-off" style="font-size:28px;display:block;margin-bottom:8px"></i><div style="font-weight:700">No diagrams found for '+brand+' '+model+'</div>'+(data.tips?'<div style="font-size:12px;margin-top:6px;color:#718096">'+data.tips+'</div>':'')+'</div>';
+    content.innerHTML=html+'</div>'; return;
+  }
+  html+='<div style="font-size:14px;font-weight:700;color:#0F2D52;margin-bottom:12px"><i class="ti ti-check" style="color:#2D7D3A"></i> Found: '+(data.equipment_name||brand+' '+model)+'</div>';
+  if(data.manufacturer_parts_url){
+    html+='<div style="background:#EAF3DE;border-radius:8px;padding:10px 14px;margin-bottom:12px;display:flex;align-items:center;gap:10px"><i class="ti ti-building-factory-2" style="color:#2D7D3A;font-size:18px;flex-shrink:0"></i><div><div style="font-size:12px;font-weight:700;color:#2D7D3A">Official Manufacturer Portal</div><a href="'+data.manufacturer_parts_url+'" target="_blank" style="font-size:11px;color:#1D4E89;word-break:break-all">'+data.manufacturer_parts_url+'</a></div></div>';
+  }
+  if(data.direct_image_urls&&data.direct_image_urls.length){
+    html+='<div style="font-size:12px;font-weight:700;color:#718096;margin-bottom:8px">DIAGRAM IMAGES ('+data.direct_image_urls.length+')</div><div style="display:flex;flex-wrap:wrap;gap:10px;margin-bottom:14px">';
+    // Build image cards using DOM to avoid quote issues
+    var tempDiv = document.createElement('div');
+    tempDiv.style.cssText='display:flex;flex-wrap:wrap;gap:10px;margin-bottom:14px';
+    data.direct_image_urls.slice(0,6).forEach(function(url,i){
+      var card=document.createElement('div');
+      card.style.cssText='position:relative;border:1.5px solid #D9E2EC;border-radius:8px;overflow:hidden;background:#F8FAFC';
+      var img2=document.createElement('img');
+      img2.src=url; img2.style.cssText='width:160px;height:120px;object-fit:contain;display:block;cursor:pointer';
+      img2.title='Click to view full size';
+      img2.onerror=function(){ this.parentElement.style.display='none'; };
+      img2.onclick=(function(u){ return function(){ window.open(u,'_blank'); }; })(url);
+      var lbl=document.createElement('div');
+      lbl.style.cssText='padding:4px 6px;font-size:9px;color:#718096';
+      lbl.textContent='Image '+(i+1);
+      var savebtn=document.createElement('button');
+      savebtn.textContent='+ Save';
+      savebtn.style.cssText='position:absolute;top:4px;right:4px;padding:3px 7px;border-radius:5px;border:none;background:#1D4E89;color:#fff;cursor:pointer;font-size:10px;font-weight:700';
+      savebtn.onclick=(function(u){ return function(){ saveFoundDiagram(brand+' '+model,u); }; })(url);
+      card.appendChild(img2); card.appendChild(lbl); card.appendChild(savebtn);
+      tempDiv.appendChild(card);
+    });
+    // Append the DOM element and add placeholder for it in html
+    html+='<span id="ai-img-container-'+Date.now()+'"></span>';
+    setTimeout(function(){ var el=content.querySelector('[id^="ai-img-container"]'); if(el) el.parentNode.insertBefore(tempDiv,el); },50);
+    html+='</div>';
+  }
+  if(data.results&&data.results.length){
+    html+='<div style="font-size:12px;font-weight:700;color:#718096;margin-bottom:8px">RESOURCES ('+data.results.length+')</div>';
+    data.results.forEach(function(r){
+      var tc=r.type==='pdf'?'#C0392B':r.type==='image'?'#2D7D3A':'#1D4E89';
+      var tb=r.type==='pdf'?'#FCEBEB':r.type==='image'?'#EAF3DE':'#E6F1FB';
+      html+='<div style="border:1.5px solid #D9E2EC;border-radius:8px;padding:10px 12px;margin-bottom:8px"><div style="display:flex;align-items:start;gap:8px"><span style="background:'+tb+';color:'+tc+';font-size:9px;font-weight:700;padding:2px 6px;border-radius:4px;flex-shrink:0;margin-top:2px">'+r.type.toUpperCase()+'</span><div style="flex:1"><div style="font-size:12px;font-weight:600;color:#1a202c">'+r.title+'</div>'+(r.description?'<div style="font-size:11px;color:#718096">'+r.description+'</div>':'')+'<a href="'+r.url+'" target="_blank" style="font-size:10px;color:#1D4E89;word-break:break-all">'+r.url+'</a></div></div></div>';
+    });
+  }
+  if(data.tips) html+='<div style="background:#F0F4F8;border-radius:8px;padding:10px 12px;font-size:12px;color:#718096;margin-top:8px"><i class="ti ti-bulb" style="color:#C4680A"></i> <strong>Tip:</strong> '+data.tips+'</div>';
+  // Archive button via DOM
+  var archiveDiv=document.createElement('div');
+  archiveDiv.style.cssText='margin-top:14px;padding-top:12px;border-top:1.5px solid #D9E2EC;display:flex;align-items:center;gap:10px';
+  var archBtn=document.createElement('button');
+  archBtn.innerHTML='<i class="ti ti-archive"></i> Save to Archive';
+  archBtn.style.cssText='padding:8px 16px;border-radius:8px;border:none;background:#2D7D3A;color:#fff;cursor:pointer;font-size:12px;font-weight:700;font-family:inherit';
+  archBtn.onclick=(function(b,m){ return function(){ openSaveEquipModal(b,m); }; })(brand,model);
+  var archSpan=document.createElement('span');
+  archSpan.textContent='Save diagram to Equipment Archive for future use';
+  archSpan.style.cssText='font-size:11px;color:#A0AEC0';
+  archiveDiv.appendChild(archBtn); archiveDiv.appendChild(archSpan);
+  html+='<span id="ai-archive-btn"></span>';
+  setTimeout(function(){ var el=content.querySelector('#ai-archive-btn'); if(el) el.parentNode.insertBefore(archiveDiv,el); },60);
+  html+='</div>';
+  content.innerHTML=html;
+}
+
+async function saveFoundDiagram(equipName,imgUrl){
+  try{
+    var res=await fetch(imgUrl);
+    var blob=await res.blob();
+    var base64=await new Promise(function(resolve){ var r=new FileReader(); r.onload=function(e){ resolve(e.target.result); }; r.readAsDataURL(blob); });
+    var equip={id:Date.now(),name:equipName,diagramBase64:base64,parts:[]};
+    equipmentData.push(equip);
+    if(_sb) await _sb.from('equipment_diagrams').insert({name:equipName,diagram_data:base64,parts_list:'[]'});
+    renderEquipGrid();
+    alert('Diagram saved to archive!');
+  }catch(err){ alert('Could not save automatically. Please download and upload manually.'); }
+}
+
+function openSaveEquipModal(brand,model){
+  var nameEl=document.getElementById('ue-name'); if(nameEl) nameEl.value=brand+' '+model;
+  openMod('uploadEquipModal');
 }
 
 // ══════════════════════════════════════
