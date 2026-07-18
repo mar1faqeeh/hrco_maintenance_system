@@ -3331,8 +3331,9 @@ function closePrintModal(){
 function confirmPrint(){
   var includePhotos = document.getElementById('print-include-photos');
   var withPhotos = includePhotos ? includePhotos.checked : true;
+  var idToPrint = _printVisitId;
   closePrintModal();
-  printVisit(_printVisitId, withPhotos);
+  printVisit(idToPrint, withPhotos);
 }
 
 async function printVisit(id, withPhotos) {
