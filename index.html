@@ -814,7 +814,23 @@ async function dbSave(t,o){
     var r;
     if(o.id){ r=await _sb.from(t).update(o).eq('id',o.id); }
     else{ r=await _sb.from(t).insert(o).select(); }
-    if(r.error){ console.error('DB Error:',r.error); alert('Save error: '+r.error.message); return null; }
+    if(r.error){
+      // If the DB schema is missing a column we're trying to write (e.g. not migrated yet),
+      // drop that one field and retry once instead of failing the whole save.
+      var missing = r.error.message && r.error.message.match(/Could not find the '([^']+)' column/);
+      if(missing){
+        var col = missing[1];
+        console.warn('DB schema missing column "'+col+'" on table "'+t+'" — retrying save without it. Add this column in Supabase to stop losing this field.');
+        var o2 = Object.assign({}, o);
+        delete o2[col];
+        var r2;
+        if(o2.id){ r2=await _sb.from(t).update(o2).eq('id',o2.id); }
+        else{ r2=await _sb.from(t).insert(o2).select(); }
+        if(!r2.error) return r2.data;
+        console.error('DB Error (retry):', r2.error);
+      }
+      console.error('DB Error:',r.error); alert('Save error: '+r.error.message); return null;
+    }
     return r.data;
   }catch(e){ console.error('dbSave exception:',e); alert('Save error: '+e.message); return null; }
 }
