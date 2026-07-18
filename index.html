@@ -1428,6 +1428,26 @@ function _showVisitModal(v){
     partsWrap.style.display = 'none';
   }
 
+  // Photos
+  var photosWrap = document.getElementById('vm-photos-wrap');
+  var photosEl = document.getElementById('vm-photos');
+  var photos = v.photos || [];
+  if(photos.length > 0){
+    photosWrap.style.display = 'block';
+    photosEl.innerHTML = photos.map(function(p){
+      return '<img src="'+p+'" onclick="event.stopPropagation();openPhotoLightbox(\''+p+'\')" style="width:72px;height:72px;object-fit:cover;border-radius:8px;border:1px solid #D9E2EC;cursor:zoom-in">';
+    }).join('');
+  } else {
+    photosWrap.style.display = 'none';
+  }
+
+  // Reset notes translation tabs back to Arabic/original each time the card opens
+  _vmNotesText = v.notes || '';
+  document.querySelectorAll('.vmtr-btn').forEach(function(b){ b.style.background='#fff'; b.style.color='#718096'; });
+  var arBtn = document.querySelector('.vmtr-btn[data-vmtr="ar"]');
+  if(arBtn){ arBtn.style.background='#1D4E89'; arBtn.style.color='#fff'; }
+  document.getElementById('vm-notes').textContent = _vmNotesText || '—';
+
   // Signatures — render what we have locally, then fetch from DB if missing
   _renderVmSig('vm-tech-sig', v.sig_tech);
   _renderVmSig('vm-client-sig', v.sig_client);
@@ -1441,6 +1461,31 @@ function _showVisitModal(v){
   }
 
   openMod('visitModal');
+}
+var _vmNotesText = '';
+function showVmTr(l, el){
+  document.querySelectorAll('.vmtr-btn').forEach(function(b){ b.style.background='#fff'; b.style.color='#718096'; });
+  el.style.background='#1D4E89'; el.style.color='#fff';
+  var notesEl = document.getElementById('vm-notes');
+  if(!_vmNotesText.trim()){ notesEl.textContent='—'; return; }
+  if(l==='ar'){
+    notesEl.textContent = _vmNotesText;
+    notesEl.style.direction = 'rtl';
+    return;
+  }
+  notesEl.innerHTML = '<span style="color:#A0AEC0;font-size:12px"><i class="ti ti-loader" style="animation:spin 1s linear infinite;display:inline-block"></i> Translating...</span>';
+  translateText(_vmNotesText, l).then(function(result){
+    notesEl.textContent = result;
+    notesEl.style.direction = (l==='ar'||l==='ur') ? 'rtl' : 'ltr';
+  });
+}
+function openPhotoLightbox(url){
+  document.getElementById('photoLightboxImg').src = url;
+  document.getElementById('photoLightbox').style.display = 'flex';
+}
+function closePhotoLightbox(){
+  document.getElementById('photoLightbox').style.display = 'none';
+  document.getElementById('photoLightboxImg').src = '';
 }
 function _renderVmSig(elId, dataUrl){
   var el = document.getElementById(elId);
@@ -3986,12 +4031,24 @@ async function showPublicReport(token){
         </div>
       </div>
       <div style="background:#F8FAFC;border:1px solid #D9E2EC;border-radius:8px;padding:10px;margin-bottom:10px">
-        <div style="font-size:11px;color:#718096;margin-bottom:5px">Technician Notes</div>
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:5px">
+          <div style="font-size:11px;color:#718096">Technician Notes</div>
+          <div style="display:flex;gap:4px">
+            <button onclick="showVmTr('ar',this)" data-vmtr="ar" class="vmtr-btn" style="padding:3px 8px;border-radius:99px;border:1px solid #D9E2EC;background:#fff;color:#718096;cursor:pointer;font-size:10px;font-weight:700;font-family:inherit">ع</button>
+            <button onclick="showVmTr('en',this)" data-vmtr="en" class="vmtr-btn" style="padding:3px 8px;border-radius:99px;border:1px solid #D9E2EC;background:#fff;color:#718096;cursor:pointer;font-size:10px;font-weight:700;font-family:inherit">EN</button>
+            <button onclick="showVmTr('ur',this)" data-vmtr="ur" class="vmtr-btn" style="padding:3px 8px;border-radius:99px;border:1px solid #D9E2EC;background:#fff;color:#718096;cursor:pointer;font-size:10px;font-weight:700;font-family:inherit">اردو</button>
+            <button onclick="showVmTr('tl',this)" data-vmtr="tl" class="vmtr-btn" style="padding:3px 8px;border-radius:99px;border:1px solid #D9E2EC;background:#fff;color:#718096;cursor:pointer;font-size:10px;font-weight:700;font-family:inherit">FIL</button>
+          </div>
+        </div>
         <div style="font-size:13px;line-height:1.6;white-space:pre-wrap" id="vm-notes">—</div>
       </div>
       <div id="vm-parts-wrap" style="background:#F8FAFC;border:1px solid #D9E2EC;border-radius:8px;padding:10px;margin-bottom:14px;display:none">
         <div style="font-size:11px;color:#718096;margin-bottom:5px">Spare Parts Used</div>
         <div id="vm-parts" style="display:flex;flex-wrap:wrap;gap:5px"></div>
+      </div>
+      <div id="vm-photos-wrap" style="background:#F8FAFC;border:1px solid #D9E2EC;border-radius:8px;padding:10px;margin-bottom:14px;display:none">
+        <div style="font-size:11px;color:#718096;margin-bottom:5px">Visit Photos</div>
+        <div id="vm-photos" style="display:flex;flex-wrap:wrap;gap:8px"></div>
       </div>
       <div id="vm-sigs-wrap" style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px">
         <div style="background:#F8FAFC;border:1px solid #D9E2EC;border-radius:8px;padding:10px;text-align:center">
@@ -4213,6 +4270,13 @@ async function showPublicReport(token){
       </button>
     </div>
   </div>
+</div>
+
+<div id="photoLightbox" onclick="closePhotoLightbox()" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.85);z-index:9200;align-items:center;justify-content:center;cursor:zoom-out">
+  <img id="photoLightboxImg" src="" style="max-width:92vw;max-height:92vh;border-radius:8px;box-shadow:0 20px 60px rgba(0,0,0,.5)">
+  <button onclick="closePhotoLightbox()" style="position:absolute;top:18px;right:22px;width:38px;height:38px;border-radius:99px;border:none;background:rgba(255,255,255,.15);color:#fff;font-size:20px;cursor:pointer;display:flex;align-items:center;justify-content:center">
+    <i class="ti ti-x"></i>
+  </button>
 </div>
 
 <div id="loginScreen" style="position:fixed;inset:0;background:#0F2D52;z-index:9999;display:flex;align-items:center;justify-content:center;padding:16px;font-family:Tajawal,sans-serif">
