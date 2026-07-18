@@ -1153,7 +1153,7 @@ async function loadAllFromDB(){
 
   try {
     // Load visits
-    var r4 = await _sb.from('visits').select('*').order('date', {ascending:false}).limit(100);
+    var r4 = await _sb.from('visits').select('*').order('date', {ascending:false}).order('id', {ascending:false}).limit(100);
     if(r4.data){
       // Always sync from DB (even an empty result) so the demo/placeholder
       // rows never linger and get mistaken for real saved visits.
@@ -1190,7 +1190,7 @@ async function loadAllFromDB(){
 
   try {
     // Load parts history
-    var r5 = await _sb.from('parts_history').select('*').order('date', {ascending:false}).limit(50);
+    var r5 = await _sb.from('parts_history').select('*').order('date', {ascending:false}).order('id', {ascending:false}).limit(50);
     if(r5.data && r5.data.length){
       histData = r5.data.map(function(h){
         return {
@@ -3264,7 +3264,7 @@ async function loadArchive() {
   var data = [];
   if (_sb) {
     try {
-      var r = await _sb.from('visits').select('*').eq('status','مكتملة').order('date', {ascending:false});
+      var r = await _sb.from('visits').select('*').eq('status','مكتملة').order('date', {ascending:false}).order('id', {ascending:false});
       if (r.data && r.data.length) data = r.data;
     } catch(e) {}
   }
@@ -3685,7 +3685,7 @@ async function checkDBStatus() {
 async function loadVisitsFromDB() {
   if (!_sb) return;
   try {
-    var r = await _sb.from('visits').select('*').order('date', {ascending:false}).limit(50);
+    var r = await _sb.from('visits').select('*').order('date', {ascending:false}).order('id', {ascending:false}).limit(50);
     if (r.data && r.data.length) {
       // Merge with local data
       r.data.forEach(function(v) {
