@@ -3148,6 +3148,7 @@ function collectVisitData() {
   var vt = document.getElementById('sel-vtype').value;
   return {
     client:        document.getElementById('inp-client').value || 'Unknown',
+    location:      document.getElementById('inp-location').value || '',
     equipment:     document.getElementById('inp-equipment').value,
     serial_number: document.getElementById('inp-serial').value,
     model:         document.getElementById('inp-model').value,
@@ -3210,6 +3211,10 @@ function filterArchive(q) { renderArchiveBody(archiveData.length ? archiveData :
 var _printVisitId = null;
 
 function showPrintOptions(id){
+  if(!id){
+    alert('⚠️ لم يتم العثور على رقم الكشف. الرجاء إعادة تحميل الصفحة والمحاولة مجدداً.\n⚠️ Report ID missing. Please reload the page and try again.');
+    return;
+  }
   _printVisitId = id;
   var v = visData.find(function(x){ return x.id==id; }) || {};
   var photos = v.photos || [];
@@ -3244,8 +3249,22 @@ function confirmPrint(){
   printVisit(_printVisitId, withPhotos);
 }
 
-function printVisit(id, withPhotos) {
-  var v = visData.find(function(x){ return x.id == id; }) || {};
+async function printVisit(id, withPhotos) {
+  if(!id){
+    alert('⚠️ لم يتم العثور على رقم الكشف. الرجاء إعادة تحميل الصفحة والمحاولة مجدداً.\n⚠️ Report ID missing. Please reload the page and try again.');
+    return;
+  }
+  var v = visData.find(function(x){ return x.id == id; });
+  if(!v && _sb){
+    try{
+      var r = await _sb.from('visits').select('*').eq('id', id).single();
+      if(r.data) v = Object.assign({}, r.data, {equip:r.data.equipment, type:r.data.visit_type});
+    }catch(e){ console.error('printVisit DB fallback failed:', e); }
+  }
+  if(!v){
+    alert('⚠️ تعذر العثور على بيانات هذا الكشف. الرجاء إعادة تحميل الصفحة والمحاولة مجدداً.\n⚠️ Could not find this report\'s data. Please reload the page and try again.');
+    return;
+  }
 
   // Compute all display values UP FRONT (before any async branching)
   var visitTime = v.time || window._visitEndTime || '';
