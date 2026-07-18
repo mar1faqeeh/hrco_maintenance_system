@@ -1803,10 +1803,18 @@ function closeMod(id){var el=document.getElementById(id);if(el)el.style.display=
 // TECHNICIANS
 // ══════════════════════════════════════
 var techsData=[{id:1,name:'أحمد العتيبي',init:'أع',color:'#1D4E89',bg:'#E6F1FB',phone:'0501234567',spec:'Refrigeration & AC',status:'active',visits:142,completed:128,pending:14,rating:4.8,avgTime:1.7},{id:2,name:'محمد الحربي',init:'مح',color:'#2D7D3A',bg:'#EAF3DE',phone:'0507654321',spec:'Central Kitchens',status:'active',visits:118,completed:105,pending:13,rating:4.6,avgTime:2.0},{id:3,name:'سامي القحطاني',init:'سق',color:'#C4680A',bg:'#FDF0E0',phone:'0559876543',spec:'Industrial Electrical',status:'active',visits:97,completed:82,pending:15,rating:4.5,avgTime:2.2},{id:4,name:'خالد الرشيدي',init:'خر',color:'#64748B',bg:'#F1F5F9',phone:'0551122334',spec:'Refrigeration & AC',status:'vacation',visits:76,completed:70,pending:6,rating:4.9,avgTime:1.5}];
+function computeTechStats(tc){
+  var mine = visData.filter(function(v){ return v.tech === tc.name; });
+  var completed = mine.filter(function(v){ return v.status==='Completed'; }).length;
+  var pending = mine.filter(function(v){ return v.status==='Pending'; }).length;
+  return { visits: mine.length, completed: completed, pending: pending };
+}
 function renderTechGrid(){
   var g=document.getElementById('techGrid');if(!g)return;g.innerHTML='';
   techsData.forEach(function(tc){
-    var pct=Math.round((tc.completed/tc.visits)*100);
+    var stats = computeTechStats(tc);
+    tc.visits = stats.visits; tc.completed = stats.completed; tc.pending = stats.pending;
+    var pct=tc.visits ? Math.round((tc.completed/tc.visits)*100) : 0;
     var sdot={active:'#22C55E',vacation:'#F59E0B',suspended:'#EF4444'}[tc.status];
     var slbl={active:t('done'),vacation:'On Leave',suspended:'Suspended'}[tc.status];
     var stars='';for(var i=1;i<=5;i++)stars+=(i<=Math.floor(tc.rating)?'★':'☆');
@@ -1855,7 +1863,7 @@ function deleteTech(id){
   }
 }
 function renderTechCharts(){
-  var el=document.getElementById('techCompare');if(el){el.innerHTML='';var cols=['#1D4E89','#2D7D3A','#C4680A','#64748B'];techsData.forEach(function(tc,i){var pct=Math.round((tc.completed/tc.visits)*100);el.innerHTML+='<div style="display:flex;align-items:center;gap:10px;margin-bottom:10px"><div style="font-size:12px;min-width:80px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+tc.name.split(' ')[0]+'</div><div style="flex:1;height:20px;background:#F0F4F8;border-radius:4px;overflow:hidden"><div style="height:100%;width:'+pct+'%;background:'+cols[i]+';border-radius:4px;display:flex;align-items:center;padding-left:6px;font-size:10px;color:#fff;font-weight:700">'+pct+'%</div></div><div style="font-size:11px;color:#718096;min-width:40px">'+tc.visits+'</div></div>';});}
+  var el=document.getElementById('techCompare');if(el){el.innerHTML='';var cols=['#1D4E89','#2D7D3A','#C4680A','#64748B'];techsData.forEach(function(tc,i){var pct=tc.visits?Math.round((tc.completed/tc.visits)*100):0;el.innerHTML+='<div style="display:flex;align-items:center;gap:10px;margin-bottom:10px"><div style="font-size:12px;min-width:80px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+tc.name.split(' ')[0]+'</div><div style="flex:1;height:20px;background:#F0F4F8;border-radius:4px;overflow:hidden"><div style="height:100%;width:'+pct+'%;background:'+cols[i]+';border-radius:4px;display:flex;align-items:center;padding-left:6px;font-size:10px;color:#fff;font-weight:700">'+pct+'%</div></div><div style="font-size:11px;color:#718096;min-width:40px">'+tc.visits+'</div></div>';});}
   var vt=document.getElementById('vtypeChart');if(vt){vt.innerHTML='';var types=[{l:'Warranty',c:87,col:'#1D4E89'},{l:'Paid',c:134,col:'#2D7D3A'},{l:'Contract',c:212,col:'#C4680A'}];var tot=433;types.forEach(function(tp){var pct=Math.round(tp.c/tot*100);vt.innerHTML+='<div style="display:flex;align-items:center;gap:10px;margin-bottom:10px"><div style="width:12px;height:12px;border-radius:3px;background:'+tp.col+';flex-shrink:0"></div><div style="font-size:12px;flex:1">'+tp.l+'</div><div style="flex:1.5;height:8px;background:#F0F4F8;border-radius:99px;overflow:hidden"><div style="height:100%;width:'+pct+'%;background:'+tp.col+';border-radius:99px"></div></div><div style="font-size:11px;color:#718096;min-width:30px">'+tp.c+'</div><div style="font-size:10px;color:#A0AEC0;min-width:28px">'+pct+'%</div></div>';});}}
 async function saveTech(){
   var name=document.getElementById('m-name').value.trim();
@@ -2949,7 +2957,7 @@ document.addEventListener('DOMContentLoaded', function() {
 function showTechStats(id) {
   var tc = techsData.find(function(x){ return x.id===id; });
   if (!tc) return;
-  var pct = Math.round((tc.completed/tc.visits)*100);
+  var pct = tc.visits ? Math.round((tc.completed/tc.visits)*100) : 0;
   alert(tc.name + '\nCompletion: ' + pct + '%\nTotal: ' + tc.visits + '\nRating: ' + tc.rating + '/5');
 }
 
