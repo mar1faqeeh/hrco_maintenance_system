@@ -1427,8 +1427,29 @@ function _showVisitModal(v){
   } else {
     partsWrap.style.display = 'none';
   }
-  
+
+  // Signatures — render what we have locally, then fetch from DB if missing
+  _renderVmSig('vm-tech-sig', v.sig_tech);
+  _renderVmSig('vm-client-sig', v.sig_client);
+  if((!v.sig_tech || !v.sig_client) && _sb){
+    _sb.from('visit_signatures').select('*').eq('visit_id', v.id).then(function(r){
+      var row = r.data && r.data[0];
+      if(!row) return;
+      if(row.sig_tech && currentViewId===v.id){ v.sig_tech = row.sig_tech; _renderVmSig('vm-tech-sig', row.sig_tech); }
+      if(row.sig_client && currentViewId===v.id){ v.sig_client = row.sig_client; _renderVmSig('vm-client-sig', row.sig_client); }
+    });
+  }
+
   openMod('visitModal');
+}
+function _renderVmSig(elId, dataUrl){
+  var el = document.getElementById(elId);
+  if(!el) return;
+  if(dataUrl && dataUrl.length > 500){
+    el.innerHTML = '<img src="'+dataUrl+'" style="max-width:100%;max-height:80px">';
+  } else {
+    el.innerHTML = '<span style="color:#A0AEC0;font-size:12px">Not signed</span>';
+  }
 }
 
 function editVisit(id){
@@ -3463,11 +3484,12 @@ async function printVisit(id, withPhotos) {
 
   // If no signatures in memory, try loading from visit_signatures table first
   if(!hasTechSig && !hasClientSig && _sb){
-    _sb.from('visit_signatures').select('*').eq('visit_id', id).single().then(function(sr){
+    _sb.from('visit_signatures').select('*').eq('visit_id', id).then(function(sr){
       var ts = '', cs3 = '';
-      if(sr.data){
-        ts = sr.data.sig_tech || '';
-        cs3 = sr.data.sig_client || '';
+      var row = sr.data && sr.data[0];
+      if(row){
+        ts = row.sig_tech || '';
+        cs3 = row.sig_client || '';
         v.sig_tech = ts; v.sig_client = cs3;
         console.log('Loaded signatures from DB for visit #'+id);
       }
@@ -3893,9 +3915,10 @@ async function showPublicReport(token){
   var v = vr.data;
 
   // Load signatures
-  var sigr = await sb.from('visit_signatures').select('*').eq('visit_id', visitId).single();
-  var techSig = sigr.data ? sigr.data.sig_tech||'' : '';
-  var clientSig = sigr.data ? sigr.data.sig_client||'' : '';
+  var sigr = await sb.from('visit_signatures').select('*').eq('visit_id', visitId);
+  var sigRow = sigr.data && sigr.data[0];
+  var techSig = sigRow ? sigRow.sig_tech||'' : '';
+  var clientSig = sigRow ? sigRow.sig_client||'' : '';
 
   // Load header/footer images (embedded in this file)
   var HEADER = HEADER_IMG;
@@ -3969,6 +3992,16 @@ async function showPublicReport(token){
       <div id="vm-parts-wrap" style="background:#F8FAFC;border:1px solid #D9E2EC;border-radius:8px;padding:10px;margin-bottom:14px;display:none">
         <div style="font-size:11px;color:#718096;margin-bottom:5px">Spare Parts Used</div>
         <div id="vm-parts" style="display:flex;flex-wrap:wrap;gap:5px"></div>
+      </div>
+      <div id="vm-sigs-wrap" style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px">
+        <div style="background:#F8FAFC;border:1px solid #D9E2EC;border-radius:8px;padding:10px;text-align:center">
+          <div style="font-size:11px;color:#718096;margin-bottom:5px">Technician Signature</div>
+          <div id="vm-tech-sig">—</div>
+        </div>
+        <div style="background:#F8FAFC;border:1px solid #D9E2EC;border-radius:8px;padding:10px;text-align:center">
+          <div style="font-size:11px;color:#718096;margin-bottom:5px">Client Signature</div>
+          <div id="vm-client-sig">—</div>
+        </div>
       </div>
       <div style="display:flex;gap:8px">
         <button class="btn btn-o" onclick="printVisit(currentViewId)" style="flex:1">
