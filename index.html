@@ -812,7 +812,7 @@ async function dbSave(t,o){
   _hideDbBanner();
   try{
     var r;
-    if(o.id){ r=await _sb.from(t).update(o).eq('id',o.id); }
+    if(o.id){ r=await _sb.from(t).update(o).eq('id',o.id).select(); }
     else{ r=await _sb.from(t).insert(o).select(); }
     if(r.error){
       // If the DB schema is missing a column we're trying to write (e.g. not migrated yet),
@@ -824,7 +824,7 @@ async function dbSave(t,o){
         var o2 = Object.assign({}, o);
         delete o2[col];
         var r2;
-        if(o2.id){ r2=await _sb.from(t).update(o2).eq('id',o2.id); }
+        if(o2.id){ r2=await _sb.from(t).update(o2).eq('id',o2.id).select(); }
         else{ r2=await _sb.from(t).insert(o2).select(); }
         if(!r2.error) return r2.data;
         console.error('DB Error (retry):', r2.error);
@@ -3182,11 +3182,15 @@ var currentVisitId = null;
 async function saveVisitDraft() {
   var visit = collectVisitData();
   visit.status = 'معلقة';
+  if(currentVisitId) visit.id = currentVisitId;
   var result = await dbSave('visits', visit);
   if(result && result[0]){
-    currentVisitId = result[0].id;
-    var localVisit = Object.assign({}, visit, {id:result[0].id, equip:visit.equipment, type:visit.visit_type});
-    visData.unshift(localVisit);
+    var savedId = result[0].id;
+    currentVisitId = savedId;
+    var existing = visData.find(function(x){ return x.id==savedId; });
+    var merged = Object.assign({}, visit, {id:savedId, equip:visit.equipment, type:visit.visit_type});
+    if(existing) Object.assign(existing, merged);
+    else visData.unshift(merged);
     alert('✅ Draft saved successfully!');
   }
 }
@@ -3230,16 +3234,20 @@ async function saveAndSign() {
     }
   }
 
+  if(currentVisitId) visit.id = currentVisitId;
   var result = await dbSave('visits', visit);
   if(result && result[0]){
-    currentVisitId = result[0].id;
-    var localVisit = Object.assign({}, visit, {
-      id: result[0].id,
+    var savedId = result[0].id;
+    currentVisitId = savedId;
+    var existing = visData.find(function(x){ return x.id==savedId; });
+    var merged = Object.assign({}, visit, {
+      id: savedId,
       equip: visit.equipment,
       type: visit.visit_type,
       status: 'Pending'
     });
-    visData.unshift(localVisit);
+    if(existing) Object.assign(existing, merged);
+    else visData.unshift(merged);
     rData = visData.map(function(v,i){ return Object.assign({id:i+1}, v, {parts:v.parts||[]}); });
   }
   // Write values DIRECTLY to summary elements before navigating
