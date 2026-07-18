@@ -841,6 +841,19 @@ async function dbSave(t,o){
     return r.data;
   }catch(e){ console.error('dbSave exception:',e); alert('Save error: '+e.message); return null; }
 }
+// Wrap dbSave to specifically catch the "insert succeeded but nothing was returned"
+// case — this happens when Supabase Row Level Security allows INSERT for the anon
+// role but blocks SELECT, so .insert(o).select() comes back with an empty array and
+// no error. Without this, the report silently has no usable ID from that point on.
+var _dbSaveInner = dbSave;
+dbSave = async function(t, o){
+  var data = await _dbSaveInner(t, o);
+  if(data !== null && !o.id && (!data || !data.length)){
+    console.error('Insert to "'+t+'" reported success but returned no row — likely a Supabase Row Level Security SELECT policy blocking read-back for the anon role.');
+    alert('⚠️ تم الحفظ لكن لم يرجع رقم السجل — على الأغلب صلاحيات القراءة (Row Level Security) في Supabase تمنع قراءة الصف بعد الإضافة لجدول "'+t+'". فعّل صلاحية SELECT للمستخدم anon على هذا الجدول.\n⚠️ Saved, but no row ID was returned — likely a Supabase Row Level Security SELECT policy is blocking read-back on table "'+t+'". Enable SELECT for the anon role on this table.');
+  }
+  return data;
+};
 
 // ══════════════════════════════════════
 // i18n
