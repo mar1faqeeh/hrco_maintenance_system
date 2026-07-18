@@ -515,7 +515,7 @@ html,body{height:100%;font-family:Tajawal,sans-serif;font-size:14px;background:#
 
 <!-- ═══ TECHNICIANS ═══ -->
 <div id="pg-technicians" style="display:none">
-  <div class="ph"><div><div class="pt" id="t-tech-pg">Technicians</div><div class="ps" id="t-tech-sub">Accounts & performance analytics</div></div><button class="btn btn-p" onclick="openMod('techModal')"><i class="ti ti-user-plus"></i><span id="t-add-tech">Add Technician</span></button></div>
+  <div class="ph"><div><div class="pt" id="t-tech-pg">Technicians</div><div class="ps" id="t-tech-sub">Accounts & performance analytics</div></div><button class="btn btn-p" onclick="openAddTechModal()"><i class="ti ti-user-plus"></i><span id="t-add-tech">Add Technician</span></button></div>
   <div class="sg sg-4">
     <div class="sc"><div class="si" style="background:#E6F1FB"><i class="ti ti-users" style="color:#1D4E89"></i></div><div class="sv">4</div><div class="sl" id="t-total-techs">Total Technicians</div></div>
     <div class="sc"><div class="si" style="background:#EAF3DE"><i class="ti ti-trophy" style="color:#2D7D3A"></i></div><div class="sv">89%</div><div class="sl" id="t-avg-comp">Avg Completion</div></div>
@@ -1811,11 +1811,49 @@ function renderTechGrid(){
     var slbl={active:t('done'),vacation:'On Leave',suspended:'Suspended'}[tc.status];
     var stars='';for(var i=1;i<=5;i++)stars+=(i<=Math.floor(tc.rating)?'★':'☆');
     var c=document.createElement('div');c.className='tccard';
-    c.innerHTML='<div class="tchd"><div class="tsdot" style="background:'+sdot+'"></div><div class="tcav" style="background:'+tc.bg+';color:'+tc.color+'">'+tc.init+'</div><div style="font-size:14px;font-weight:700">'+tc.name+'</div><div style="font-size:11px;color:#718096;margin-top:2px">'+tc.spec+'</div><div style="margin-top:5px"><span class="bdg" style="background:'+tc.bg+';color:'+tc.color+'">'+slbl+'</span></div></div><div style="padding:12px 14px"><div style="display:flex;justify-content:space-between;margin-bottom:10px"><div style="text-align:center;flex:1"><div style="font-size:16px;font-weight:700">'+tc.visits+'</div><div style="font-size:10px;color:#718096">'+t('total')+'</div></div><div style="text-align:center;flex:1;border-left:1px solid #D9E2EC;border-right:1px solid #D9E2EC"><div style="font-size:16px;font-weight:700;color:#2D7D3A">'+tc.completed+'</div><div style="font-size:10px;color:#718096">'+t('done')+'</div></div><div style="text-align:center;flex:1"><div style="font-size:16px;font-weight:700;color:#C4680A">'+tc.pending+'</div><div style="font-size:10px;color:#718096">'+t('pend')+'</div></div></div><div style="margin-bottom:8px"><div style="display:flex;justify-content:space-between;font-size:11px;color:#718096;margin-bottom:4px"><span>'+t('completion')+'</span><span style="font-weight:700">'+pct+'%</span></div><div style="height:6px;background:#D9E2EC;border-radius:99px;overflow:hidden"><div style="height:100%;width:'+pct+'%;background:'+(pct>=85?'#2D7D3A':pct>=70?'#C4680A':'#C0392B')+';border-radius:99px"></div></div></div><div style="display:flex;align-items:center;justify-content:space-between;margin-top:4px"><div style="color:#F59E0B;font-size:12px;letter-spacing:1px">'+stars+'</div><span style="font-size:12px;font-weight:700">'+tc.rating+'/5</span></div></div><div style="display:flex;gap:6px;padding:10px 14px;border-top:1px solid #D9E2EC"><button onclick="editTech('+tc.id+')" style="flex:1;padding:6px;border-radius:6px;font-size:11px;font-weight:600;cursor:pointer;border:1px solid #D9E2EC;background:#F8FAFC;color:#718096;font-family:Tajawal,sans-serif">'+t('editTech')+'</button><button onclick="showTechStats('+tc.id+')" style="flex:1;padding:6px;border-radius:6px;font-size:11px;font-weight:600;cursor:pointer;border:1px solid #D9E2EC;background:#F8FAFC;color:#718096;font-family:Tajawal,sans-serif">'+t('analytics')+'</button><button onclick="techsData.find(function(x){return x.id==='+tc.id+'}).status=techsData.find(function(x){return x.id==='+tc.id+'}).status===\'active\'?\'vacation\':\'active\';renderTechGrid();" style="padding:6px 8px;border-radius:6px;font-size:11px;cursor:pointer;border:1px solid #D9E2EC;background:#F8FAFC;color:#718096;font-family:Tajawal,sans-serif"><i class="ti ti-'+(tc.status==='active'?'player-pause':'player-play')+'"></i></button></div>';
+    c.innerHTML='<div class="tchd"><div class="tsdot" style="background:'+sdot+'"></div><div class="tcav" style="background:'+tc.bg+';color:'+tc.color+'">'+tc.init+'</div><div style="font-size:14px;font-weight:700">'+tc.name+'</div><div style="font-size:11px;color:#718096;margin-top:2px">'+tc.spec+'</div><div style="margin-top:5px"><span class="bdg" style="background:'+tc.bg+';color:'+tc.color+'">'+slbl+'</span></div></div><div style="padding:12px 14px"><div style="display:flex;justify-content:space-between;margin-bottom:10px"><div style="text-align:center;flex:1"><div style="font-size:16px;font-weight:700">'+tc.visits+'</div><div style="font-size:10px;color:#718096">'+t('total')+'</div></div><div style="text-align:center;flex:1;border-left:1px solid #D9E2EC;border-right:1px solid #D9E2EC"><div style="font-size:16px;font-weight:700;color:#2D7D3A">'+tc.completed+'</div><div style="font-size:10px;color:#718096">'+t('done')+'</div></div><div style="text-align:center;flex:1"><div style="font-size:16px;font-weight:700;color:#C4680A">'+tc.pending+'</div><div style="font-size:10px;color:#718096">'+t('pend')+'</div></div></div><div style="margin-bottom:8px"><div style="display:flex;justify-content:space-between;font-size:11px;color:#718096;margin-bottom:4px"><span>'+t('completion')+'</span><span style="font-weight:700">'+pct+'%</span></div><div style="height:6px;background:#D9E2EC;border-radius:99px;overflow:hidden"><div style="height:100%;width:'+pct+'%;background:'+(pct>=85?'#2D7D3A':pct>=70?'#C4680A':'#C0392B')+';border-radius:99px"></div></div></div><div style="display:flex;align-items:center;justify-content:space-between;margin-top:4px"><div style="color:#F59E0B;font-size:12px;letter-spacing:1px">'+stars+'</div><span style="font-size:12px;font-weight:700">'+tc.rating+'/5</span></div></div><div style="display:flex;gap:6px;padding:10px 14px;border-top:1px solid #D9E2EC"><button onclick="editTech('+tc.id+')" style="flex:1;padding:6px;border-radius:6px;font-size:11px;font-weight:600;cursor:pointer;border:1px solid #D9E2EC;background:#F8FAFC;color:#718096;font-family:Tajawal,sans-serif">'+t('editTech')+'</button><button onclick="showTechStats('+tc.id+')" style="flex:1;padding:6px;border-radius:6px;font-size:11px;font-weight:600;cursor:pointer;border:1px solid #D9E2EC;background:#F8FAFC;color:#718096;font-family:Tajawal,sans-serif">'+t('analytics')+'</button><button onclick="deleteTech('+tc.id+')" title="Delete" style="padding:6px 8px;border-radius:6px;font-size:11px;cursor:pointer;border:1px solid #F5C6C6;background:#FCEBEB;color:#C0392B;font-family:Tajawal,sans-serif"><i class="ti ti-trash"></i></button><button onclick="techsData.find(function(x){return x.id==='+tc.id+'}).status=techsData.find(function(x){return x.id==='+tc.id+'}).status===\'active\'?\'vacation\':\'active\';renderTechGrid();" style="padding:6px 8px;border-radius:6px;font-size:11px;cursor:pointer;border:1px solid #D9E2EC;background:#F8FAFC;color:#718096;font-family:Tajawal,sans-serif"><i class="ti ti-'+(tc.status==='active'?'player-pause':'player-play')+'"></i></button></div>';
     g.appendChild(c);
   });
 }
-function editTech(id){var tc=techsData.find(function(x){return x.id===id;});if(!tc)return;document.getElementById('t-tech-modal-title').textContent=t('editTechModal');document.getElementById('m-name').value=tc.name;document.getElementById('m-phone').value=tc.phone;openMod('techModal');}
+var _editingTechId = null;
+function openAddTechModal(){
+  _editingTechId = null;
+  document.getElementById('t-tech-modal-title').textContent = t('addTechModal');
+  ['m-name','m-phone','m-email','m-pass'].forEach(function(id){ var e=document.getElementById(id); if(e) e.value=''; });
+  var nat=document.getElementById('m-nat'); if(nat) nat.selectedIndex=0;
+  var spec=document.getElementById('m-spec'); if(spec) spec.selectedIndex=0;
+  var st=document.getElementById('m-status'); if(st) st.value='active';
+  openMod('techModal');
+}
+function editTech(id){
+  var tc=techsData.find(function(x){return x.id===id;});
+  if(!tc)return;
+  _editingTechId = id;
+  document.getElementById('t-tech-modal-title').textContent=t('editTechModal');
+  document.getElementById('m-name').value=tc.name;
+  document.getElementById('m-phone').value=tc.phone||'';
+  var em=document.getElementById('m-email'); if(em) em.value=tc.email||'';
+  var nat=document.getElementById('m-nat'); if(nat && tc.nationality) nat.value=tc.nationality;
+  var spec=document.getElementById('m-spec'); if(spec) spec.value=tc.spec||spec.options[0].value;
+  var st=document.getElementById('m-status'); if(st) st.value=tc.status||'active';
+  var pw=document.getElementById('m-pass'); if(pw) pw.value='';
+  openMod('techModal');
+}
+function deleteTech(id){
+  var tc=techsData.find(function(x){return x.id===id;});
+  if(!tc)return;
+  if(!confirm('هل أنت متأكد من حذف الفني "'+tc.name+'"؟ لا يمكن التراجع عن هذا الإجراء.\nAre you sure you want to delete "'+tc.name+'"? This cannot be undone.')) return;
+  if(_sb){
+    _sb.from('technicians').delete().eq('id',id).then(function(r){
+      if(r.error){ alert('⚠️ فشل الحذف: '+r.error.message+'\n⚠️ Delete failed: '+r.error.message); return; }
+      techsData = techsData.filter(function(x){return x.id!==id;});
+      renderTechGrid();
+    });
+  } else {
+    techsData = techsData.filter(function(x){return x.id!==id;});
+    renderTechGrid();
+  }
+}
 function renderTechCharts(){
   var el=document.getElementById('techCompare');if(el){el.innerHTML='';var cols=['#1D4E89','#2D7D3A','#C4680A','#64748B'];techsData.forEach(function(tc,i){var pct=Math.round((tc.completed/tc.visits)*100);el.innerHTML+='<div style="display:flex;align-items:center;gap:10px;margin-bottom:10px"><div style="font-size:12px;min-width:80px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+tc.name.split(' ')[0]+'</div><div style="flex:1;height:20px;background:#F0F4F8;border-radius:4px;overflow:hidden"><div style="height:100%;width:'+pct+'%;background:'+cols[i]+';border-radius:4px;display:flex;align-items:center;padding-left:6px;font-size:10px;color:#fff;font-weight:700">'+pct+'%</div></div><div style="font-size:11px;color:#718096;min-width:40px">'+tc.visits+'</div></div>';});}
   var vt=document.getElementById('vtypeChart');if(vt){vt.innerHTML='';var types=[{l:'Warranty',c:87,col:'#1D4E89'},{l:'Paid',c:134,col:'#2D7D3A'},{l:'Contract',c:212,col:'#C4680A'}];var tot=433;types.forEach(function(tp){var pct=Math.round(tp.c/tot*100);vt.innerHTML+='<div style="display:flex;align-items:center;gap:10px;margin-bottom:10px"><div style="width:12px;height:12px;border-radius:3px;background:'+tp.col+';flex-shrink:0"></div><div style="font-size:12px;flex:1">'+tp.l+'</div><div style="flex:1.5;height:8px;background:#F0F4F8;border-radius:99px;overflow:hidden"><div style="height:100%;width:'+pct+'%;background:'+tp.col+';border-radius:99px"></div></div><div style="font-size:11px;color:#718096;min-width:30px">'+tp.c+'</div><div style="font-size:10px;color:#A0AEC0;min-width:28px">'+pct+'%</div></div>';});}}
@@ -1829,12 +1867,30 @@ async function saveTech(){
     nationality: document.getElementById('m-nat').value,
     spec: document.getElementById('m-spec').value,
     status: document.getElementById('m-status').value,
-    visits: 0, completed: 0, pending: 0,
-    rating: 0.0, avg_time: 0.0,
-    initials: name.split(' ').map(function(w){return w[0]||'';}).join('').slice(0,2),
-    color: '#1D4E89', bg: '#E6F1FB',
-    monthly: [0,0,0,0,0,0,0]
+    initials: name.split(' ').map(function(w){return w[0]||'';}).join('').slice(0,2)
   };
+
+  if(_editingTechId){
+    // Editing an existing technician: UPDATE in place, never insert a new row
+    tc.id = _editingTechId;
+    var saved = await dbSave('technicians', tc);
+    var existing = techsData.find(function(x){ return x.id===_editingTechId; });
+    if(existing){
+      Object.assign(existing, tc);
+      existing.init = tc.initials;
+    }
+    closeMod('techModal');
+    renderTechGrid();
+    if(saved!==null) alert('✅ Technician updated successfully!');
+    _editingTechId = null;
+    return;
+  }
+
+  // Adding a brand new technician
+  tc.visits = 0; tc.completed = 0; tc.pending = 0;
+  tc.rating = 0.0; tc.avg_time = 0.0;
+  tc.color = '#1D4E89'; tc.bg = '#E6F1FB';
+  tc.monthly = [0,0,0,0,0,0,0];
   var saved = await dbSave('technicians', tc);
   if(saved && saved[0]) tc.id = saved[0].id;
   else tc.id = Date.now();
