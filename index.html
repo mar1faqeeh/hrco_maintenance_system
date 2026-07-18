@@ -777,10 +777,39 @@ html,body{height:100%;font-family:Tajawal,sans-serif;font-size:14px;background:#
 var SURL = 'https://luuvvbevhdtpzywlrtux.supabase.co';
 var SKEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imx1dXZ2YmV2aGR0cHp5d2xydHV4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzg2NjQyMjUsImV4cCI6MjA5NDI0MDIyNX0.AuIn2FChEWEeAeKG_SLJf8H_AptwXBibNWKoQFgNb18';
 var _sb = null;
-try { if (window.supabase) _sb = window.supabase.createClient(SURL, SKEY); } catch(e) { console.log('Supabase init failed:', e); }
-async function dbGet(t){if(!_sb)return[];try{var r=await _sb.from(t).select('*');return r.data||[];}catch(e){return[];}}
+function _initSb(){
+  if(_sb) return _sb;
+  try { if (window.supabase) _sb = window.supabase.createClient(SURL, SKEY); } catch(e) { console.log('Supabase init failed:', e); }
+  return _sb;
+}
+_initSb();
+// The CDN script can occasionally still be loading (slow network) when this runs,
+// so retry a few times before giving up and warning the user.
+var _sbRetries = 0;
+var _sbRetryTimer = setInterval(function(){
+  _sbRetries++;
+  if(_initSb() || _sbRetries >= 10){
+    clearInterval(_sbRetryTimer);
+    if(!_sb) _showDbBanner();
+  }
+}, 1000);
+
+function _showDbBanner(){
+  if(document.getElementById('dbOfflineBanner')) return;
+  var b = document.createElement('div');
+  b.id = 'dbOfflineBanner';
+  b.style.cssText = 'position:fixed;top:0;left:0;right:0;z-index:99999;background:#C0392B;color:#fff;text-align:center;padding:8px 12px;font-size:13px;font-weight:700';
+  b.textContent = '⚠️ لا يوجد اتصال بقاعدة البيانات — لن يتم حفظ أي بيانات جديدة حتى تتم إعادة الاتصال / No database connection — new data will not be saved until reconnected';
+  document.body.appendChild(b);
+}
+function _hideDbBanner(){
+  var b = document.getElementById('dbOfflineBanner');
+  if(b) b.remove();
+}
+async function dbGet(t){if(!_initSb())return[];try{var r=await _sb.from(t).select('*');return r.data||[];}catch(e){return[];}}
 async function dbSave(t,o){
-  if(!_sb){alert('Database not connected');return null;}
+  if(!_initSb()){ _showDbBanner(); alert('⚠️ لا يوجد اتصال بقاعدة البيانات، لن يتم حفظ هذه البيانات. تحقق من الإنترنت وأعد تحميل الصفحة.\n⚠️ Database not connected — this will not be saved. Check your internet and reload the page.'); return null; }
+  _hideDbBanner();
   try{
     var r;
     if(o.id){ r=await _sb.from(t).update(o).eq('id',o.id); }
@@ -1036,7 +1065,7 @@ function lgSuccess(u){
 }
 
 async function loadAllFromDB(){
-  if(!_sb) return;
+  if(!_initSb()) return;
   try {
     // Load technicians
     var r1 = await _sb.from('technicians').select('*').order('name');
@@ -1089,7 +1118,9 @@ async function loadAllFromDB(){
   try {
     // Load visits
     var r4 = await _sb.from('visits').select('*').order('date', {ascending:false}).limit(100);
-    if(r4.data && r4.data.length){
+    if(r4.data){
+      // Always sync from DB (even an empty result) so the demo/placeholder
+      // rows never linger and get mistaken for real saved visits.
       visData = r4.data.map(function(v){
         return {
           id: v.id, client: v.client, tech: v.tech,
@@ -1646,14 +1677,17 @@ function clrSig(w){var c=document.getElementById(w+'C');if(c)c.getContext('2d').
 function cfmSig(w){if(!sigDr[w])return;sigSt[w]=true;var n=new Date(),h=n.getHours(),m=n.getMinutes(),ap=h>=12?'PM':'AM';h=h%12||12;var ts=document.getElementById('sig'+w.charAt(0).toUpperCase()+w.slice(1)+'TS');if(ts){ts.textContent='Signed · '+h+':'+(m<10?'0':'')+m+' '+ap;ts.style.color='#2D7D3A';}updSig();}
 function updSig(){var both=sigSt.tech&&sigSt.client;var sb=document.getElementById('suspBtn'),cb=document.getElementById('closeBtn'),pf=document.getElementById('pFill');if(sb)sb.disabled=!both;if(cb)cb.disabled=!both;if(pf){pf.style.width=both?'100%':(sigSt.tech||sigSt.client?'75%':'50%');pf.style.background=both?'#C4680A':'#1D4E89';}}
 function suspendV(){
+  if(!currentVisitId || !_initSb()){
+    if(!_sb) _showDbBanner();
+    alert('⚠️ تعذر تعليق الكشف — لا يوجد اتصال بقاعدة البيانات أو رقم كشف صالح. أعد تحميل الصفحة وحاول مجدداً.\n⚠️ Could not suspend the report — no database connection or valid report ID. Reload the page and try again.');
+    return;
+  }
   var ab=document.getElementById('closeAB');
   if(ab)ab.innerHTML='<div style="padding:10px;color:#C4680A;font-size:13px;font-weight:700;display:flex;align-items:center;gap:8px"><i class="ti ti-clock-pause" style="font-size:18px"></i>'+t('suspended')+'</div>';
   // Update status in Supabase
-  if(currentVisitId && _sb){
-    _sb.from('visits').update({status:'معلقة'}).eq('id',currentVisitId).then(function(r){
-      if(r.error) console.log('suspendV error:', r.error);
-    });
-  }
+  _sb.from('visits').update({status:'معلقة'}).eq('id',currentVisitId).then(function(r){
+    if(r.error) console.log('suspendV error:', r.error);
+  });
 }
 async function closeV(){
   var ab=document.getElementById('closeAB');
@@ -1667,45 +1701,61 @@ async function closeV(){
 
   console.log('Closing visit #'+currentVisitId+' | TechSig:'+techSig.length+' ClientSig:'+clientSig.length);
 
-  if(currentVisitId && _sb){
-    try{
-      // 1. Update visit status
-      var r1 = await _sb.from('visits').update({status:'مكتملة'}).eq('id',currentVisitId);
-      if(r1.error) console.error('Status error:', r1.error.message);
-      else {
-        console.log('✅ Visit status = مكتملة');
-        var ca2 = document.getElementById('closeActions');
-        if(ca2) ca2.style.display='block';
-        // Hide the main action buttons row
-        var cab = document.getElementById('closeAB');
-        if(cab) cab.style.display='none';
-      }
-
-      // 2. Save signatures to visit_signatures table (separate table - no schema cache issues)
-      if(techSig || clientSig){
-        // Delete old record first (upsert alternative)
-        await _sb.from('visit_signatures').delete().eq('visit_id', currentVisitId);
-        var r2 = await _sb.from('visit_signatures').insert({
-          visit_id: currentVisitId,
-          sig_tech: techSig || null,
-          sig_client: clientSig || null
-        });
-        if(r2.error) console.error('Sig save error:', r2.error.message);
-        else console.log('✅ Signatures saved to visit_signatures table');
-      }
-
-      // Update local visData
-      var v = visData.find(function(x){ return x.id==currentVisitId; });
-      if(v){
-        v.status='Completed';
-        if(techSig) v.sig_tech=techSig;
-        if(clientSig) v.sig_client=clientSig;
-      }
-    }catch(e){ console.error('closeV exception:', e); }
+  if(!currentVisitId){
+    alert('⚠️ لا يوجد رقم كشف صالح، لم يتم إغلاق أي شيء. الرجاء إعادة تحميل الصفحة والمحاولة مجدداً.\n⚠️ No valid report ID — nothing was closed. Please reload the page and try again.');
+    return;
+  }
+  if(!_initSb()){
+    _showDbBanner();
+    alert('⚠️ لا يوجد اتصال بقاعدة البيانات، لم يتم إغلاق الكشف. تحقق من الإنترنت وأعد تحميل الصفحة ثم حاول مجدداً.\n⚠️ No database connection — the report was NOT closed. Check your internet, reload the page, and try again.');
+    return;
   }
 
-  if(ab) ab.innerHTML='<div style="padding:10px;color:#2D7D3A;font-size:13px;font-weight:700;display:flex;align-items:center;gap:8px"><i class="ti ti-circle-check" style="font-size:18px"></i>'+t('closed')+'</div>';
+  var closedOk = false;
+  try{
+    // 1. Update visit status
+    var r1 = await _sb.from('visits').update({status:'مكتملة'}).eq('id',currentVisitId);
+    if(r1.error){
+      console.error('Status error:', r1.error.message);
+      alert('⚠️ فشل حفظ إغلاق الكشف: ' + r1.error.message + '\n⚠️ Failed to close the report: ' + r1.error.message);
+    } else {
+      console.log('✅ Visit status = مكتملة');
+      closedOk = true;
+      var ca2 = document.getElementById('closeActions');
+      if(ca2) ca2.style.display='block';
+      // Hide the main action buttons row
+      var cab = document.getElementById('closeAB');
+      if(cab) cab.style.display='none';
+    }
+
+    // 2. Save signatures to visit_signatures table (separate table - no schema cache issues)
+    if(techSig || clientSig){
+      // Delete old record first (upsert alternative)
+      await _sb.from('visit_signatures').delete().eq('visit_id', currentVisitId);
+      var r2 = await _sb.from('visit_signatures').insert({
+        visit_id: currentVisitId,
+        sig_tech: techSig || null,
+        sig_client: clientSig || null
+      });
+      if(r2.error) console.error('Sig save error:', r2.error.message);
+      else console.log('✅ Signatures saved to visit_signatures table');
+    }
+
+    // Update local visData
+    var v = visData.find(function(x){ return x.id==currentVisitId; });
+    if(v){
+      if(closedOk) v.status='Completed';
+      if(techSig) v.sig_tech=techSig;
+      if(clientSig) v.sig_client=clientSig;
+    }
+  }catch(e){
+    console.error('closeV exception:', e);
+    alert('⚠️ خطأ أثناء إغلاق الكشف: ' + e.message + '\n⚠️ Error while closing the report: ' + e.message);
+  }
+
+  if(closedOk && ab) ab.innerHTML='<div style="padding:10px;color:#2D7D3A;font-size:13px;font-weight:700;display:flex;align-items:center;gap:8px"><i class="ti ti-circle-check" style="font-size:18px"></i>'+t('closed')+'</div>';
 }
+
 
 // ══════════════════════════════════════
 // MODALS
