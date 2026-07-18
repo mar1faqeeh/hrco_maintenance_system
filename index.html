@@ -1164,7 +1164,7 @@ async function loadAllFromDB(){
           type: v.visit_type||v.type||'paid',
           status: v.status==='مكتملة'?'Completed':v.status==='معلقة'?'Pending':v.status||'Pending',
           date: v.date||'', time: v.time||'', parts: v.parts||[], notes: v.notes||'',
-          location: v.location||'', fault: v.fault||'',
+          location: v.location||'', fault: v.fault||'', photos: v.photos||[],
           sig_tech: v.sig_tech||'', sig_client: v.sig_client||''
         };
       });
@@ -3221,7 +3221,11 @@ async function saveAndSign() {
   // Upload photos in background after visit created
   if(visitPhotos.length && currentVisitId){
     uploadVisitPhotos(currentVisitId).then(function(urls){
-      if(urls.length) console.log('✅ Photos uploaded:', urls.length);
+      if(urls.length){
+        console.log('✅ Photos uploaded:', urls.length);
+        var v = visData.find(function(x){ return x.id==currentVisitId; });
+        if(v) v.photos = urls;
+      }
     });
   }
 
