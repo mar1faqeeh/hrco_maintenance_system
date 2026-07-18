@@ -829,7 +829,14 @@ async function dbSave(t,o){
         if(!r2.error) return r2.data;
         console.error('DB Error (retry):', r2.error);
       }
-      console.error('DB Error:',r.error); alert('Save error: '+r.error.message); return null;
+      console.error('DB Error:',r.error);
+      var chk = r.error.message && r.error.message.match(/violates check constraint "([^"]+)"/);
+      if(chk){
+        alert('⚠️ قيمة غير مسموح بها بحقل مرتبط بالقيد "'+chk[1]+'" — راجع القيم المسموحة بجدول "'+t+'" في Supabase.\n⚠️ A value violates the database rule "'+chk[1]+'" — check the allowed values for table "'+t+'" in Supabase.\n\n('+r.error.message+')');
+      } else {
+        alert('Save error: '+r.error.message);
+      }
+      return null;
     }
     return r.data;
   }catch(e){ console.error('dbSave exception:',e); alert('Save error: '+e.message); return null; }
@@ -3220,7 +3227,7 @@ function collectVisitData() {
     model:         document.getElementById('inp-model').value,
     tech:          document.getElementById('sel-tech').value,
     visit_type:    vtMap[vt] || vt,
-    status:        'قيد التنفيذ',
+    status:        'معلقة',
     fault:         document.getElementById('inp-fault').value,
     notes:         document.getElementById('notesArea').value,
     parts:         selParts,
