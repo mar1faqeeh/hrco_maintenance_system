@@ -216,7 +216,7 @@ html,body{height:100%;font-family:Tajawal,sans-serif;font-size:14px;background:#
         <div class="sb-sec" id="sb-main">Main</div>
         <div class="nav-item" onclick="go('dashboard')" id="nav-dashboard"><i class="ti ti-layout-dashboard"></i><span id="t-dashboard">Dashboard</span></div>
         <div class="nav-item" onclick="go('visits')" id="nav-visits"><i class="ti ti-calendar"></i><span id="t-visits">Visits</span></div>
-        <div class="nav-item" onclick="go('pending')" id="nav-pending"><i class="ti ti-clock-pause"></i><span id="t-pending">Pending</span><span class="nbadge">4</span></div>
+        <div class="nav-item" onclick="go('pending')" id="nav-pending"><i class="ti ti-clock-pause"></i><span id="t-pending">Pending</span><span class="nbadge">0</span></div>
         <div class="sb-sec" id="sb-mgmt">Management</div>
         <div class="nav-item" onclick="go('newvisit')" id="nav-newvisit"><i class="ti ti-plus"></i><span id="t-newvisit">New Visit</span></div>
         <div class="nav-item" onclick="go('technicians')" id="nav-technicians"><i class="ti ti-users"></i><span id="t-techs">Technicians</span></div>
@@ -1170,6 +1170,7 @@ async function loadAllFromDB(){
       });
       rData = visData.map(function(v,i){ return Object.assign({id:i+1},v); });
       console.log('Loaded', visData.length, 'visits from DB');
+      updatePendingBadge();
     }
   } catch(e){ console.log('loadVisits error:',e); }
 
@@ -1330,6 +1331,7 @@ async function deleteVisit(id){
 }
 
 function renderPending(){
+  updatePendingBadge();
   var body = document.getElementById('pendingBody');
   var countEl = document.getElementById('pend-count');
   if(!body) return;
@@ -3089,6 +3091,15 @@ function renderDashRecent(){
   });
 }
 
+function updatePendingBadge(){
+  var badge = document.querySelector('#nav-pending .nbadge');
+  if(!badge) return;
+  var count = visData.filter(function(v){
+    return v.status==='معلقة' || v.status==='Pending' || v.status==='قيد التنفيذ';
+  }).length;
+  badge.textContent = count;
+  badge.style.display = count > 0 ? '' : 'none';
+}
 function renderDashPending(){
   var body = document.getElementById('dash-pending-body');
   if(!body) return;
@@ -3125,6 +3136,7 @@ function renderDashPending(){
 }
 
 function updateDashStats(){
+  updatePendingBadge();
   var today = new Date().toISOString().split('T')[0];
   var total = visData.length;
   var todayVisits = visData.filter(function(v){ return v.date===today; }).length;
