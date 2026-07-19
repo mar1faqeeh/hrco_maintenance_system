@@ -881,7 +881,6 @@ function setLang(l){
     't-appname':'appName','sb-main':'main','sb-mgmt':'mgmt','sb-rep':'rep','sb-acc':'acc',
     't-dashboard':'dashboard','t-visits':'visits','t-pending':'pending','t-newvisit':'newvisit',
     't-techs':'techs','t-parts':'parts','t-clients':'clients','t-reports':'reports','t-archive':'archive','t-settings':'settings',
-    't-uname':'uname','t-urole':'urole',
     't-pg-dashboard':'dashboard','t-pg-dashboard-sub':'newvisitSub',
     't-stat-today':'today','t-stat-done':'done','t-stat-pend':'pend','t-stat-parts':'missingParts',
     't-from-yest':'followup','t-needs-fu':'followup',
@@ -917,6 +916,9 @@ function setLang(l){
     't-new-visit-btn':'newvisit'
   };
   Object.keys(map).forEach(function(id){var el=document.getElementById(id);if(el)el.textContent=t(map[id]);});
+  // Account name/role reflect the actual logged-in user, never the static translation dictionary
+  var _un=document.getElementById('t-uname'); if(_un && curUser) _un.textContent=curUser;
+  var _ur=document.getElementById('t-urole'); if(_ur) _ur.textContent=curUserRole==='manager'?'Maintenance Manager':'Technician';
   // Safely call render functions (may not be defined yet on first load)
   try{ if(typeof renderTechGrid==='function') renderTechGrid(); }catch(e){}
   try{ if(typeof renderInvList==='function') renderInvList(); }catch(e){}
@@ -1218,7 +1220,15 @@ function go(pg){
   var ni=document.getElementById('nav-'+pg);
   if(ni){ni.style.background='#E6F1FB';ni.style.color='#1D4E89';ni.style.fontWeight='600';if(document.documentElement.dir==='ltr')ni.style.borderLeftColor='#1D4E89';else ni.style.borderRightColor='#1D4E89';}
   var ma=document.getElementById('main');if(ma)ma.scrollTop=0;
-  if(window.innerWidth<960){document.getElementById('sidebar').style.right='-240px';document.getElementById('ovl').style.display='none';}
+  if(window.innerWidth<960){
+    var _sbEl=document.getElementById('sidebar');
+    var _ovlEl=document.getElementById('ovl');
+    if(_sbEl){
+      if(document.documentElement.dir==='ltr'){ _sbEl.style.left='-240px'; _sbEl.style.right='auto'; }
+      else { _sbEl.style.right='-240px'; _sbEl.style.left='auto'; }
+    }
+    if(_ovlEl){ _ovlEl.style.display='none'; _ovlEl.style.pointerEvents='none'; }
+  }
   }catch(e){console.log('go() error:',e);}
   if(pg==='dashboard'){updateDashStats();renderDashTechs();renderDashRecent();renderDashPending();renderPending();}
   if(pg==='signature') setTimeout(function(){initSig('tech');initSig('client');},80);
