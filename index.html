@@ -232,7 +232,7 @@ html,body{height:100%;font-family:Tajawal,sans-serif;font-size:14px;background:#
       <div class="sb-foot">
         <div style="display:flex;align-items:center;gap:10px">
           <div class="av" style="background:#E6F1FB;color:#1D4E89;font-size:14px">M</div>
-          <div><div style="font-size:12px;font-weight:600" id="t-uname">Mohammed Al-Otaibi</div><div style="font-size:10px;color:#718096" id="t-urole">Maintenance Manager</div></div>
+          <div><div style="font-size:12px;font-weight:600" id="t-uname">Manager</div><div style="font-size:10px;color:#718096" id="t-urole">Maintenance Manager</div></div>
         </div>
       </div>
     </div>
@@ -931,7 +931,7 @@ function setLang(l){
 // LOGIN
 // ══════════════════════════════════════
 var LG_ROLE='manager';
-var USERS={'manager':{pass:'hrco2026',role:'manager',name:'Mohammed Al-Otaibi',init:'M'}};
+var USERS={'manager':{pass:'hrco2026',role:'manager',name:'Manager',init:'M'}};
 var curUser='', curUserLogin='', curUserRole='';
 
 async function loadSystemUsers(){
@@ -958,7 +958,7 @@ async function loadSystemUsers(){
         username: 'manager',
         password: USERS['manager'] ? USERS['manager'].pass : 'hrco2026',
         role: 'manager',
-        full_name: USERS['manager'] ? USERS['manager'].name : 'Mohammed Al-Otaibi'
+        full_name: USERS['manager'] ? USERS['manager'].name : 'Manager'
       },{onConflict:'username'});
       console.log('Inserted default manager to DB');
     }
