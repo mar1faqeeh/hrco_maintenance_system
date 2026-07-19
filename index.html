@@ -1473,17 +1473,12 @@ function showVmTr(l, el){
   _vmActiveLang = l;
   var notesEl = document.getElementById('vm-notes');
   if(!_vmNotesText.trim()){ notesEl.textContent='—'; _vmActiveNotesText=''; return; }
-  if(l==='ar'){
-    notesEl.textContent = _vmNotesText;
-    notesEl.style.direction = 'rtl';
-    _vmActiveNotesText = _vmNotesText;
-    return;
-  }
   notesEl.innerHTML = '<span style="color:#A0AEC0;font-size:12px"><i class="ti ti-loader" style="animation:spin 1s linear infinite;display:inline-block"></i> Translating...</span>';
   translateText(_vmNotesText, l).then(function(result){
+    if(_vmActiveLang!==l) return; // a newer tab was clicked while this was in flight
     notesEl.textContent = result;
     notesEl.style.direction = (l==='ar'||l==='ur') ? 'rtl' : 'ltr';
-    if(_vmActiveLang===l) _vmActiveNotesText = result;
+    _vmActiveNotesText = result;
   });
 }
 function openPhotoLightbox(url){
