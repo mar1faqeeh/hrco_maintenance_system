@@ -3106,9 +3106,11 @@ function renderDashPending(){
   var pending = visData.filter(function(v){
     return v.status==='معلقة' || v.status==='Pending' || v.status==='قيد التنفيذ';
   });
-  // Most urgent (oldest) first
+  // Latest (most recently created) first
   pending.sort(function(a,b){
-    return new Date(a.date||0) - new Date(b.date||0);
+    var dateDiff = new Date(b.date||0) - new Date(a.date||0);
+    if(dateDiff !== 0) return dateDiff;
+    return (b.id||0) - (a.id||0);
   });
   pending = pending.slice(0,4);
   if(!pending.length){
