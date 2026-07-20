@@ -1220,6 +1220,9 @@ function go(pg){
   var ni=document.getElementById('nav-'+pg);
   if(ni){ni.style.background='#E6F1FB';ni.style.color='#1D4E89';ni.style.fontWeight='600';if(document.documentElement.dir==='ltr')ni.style.borderLeftColor='#1D4E89';else ni.style.borderRightColor='#1D4E89';}
   var ma=document.getElementById('main');if(ma)ma.scrollTop=0;
+  window.scrollTo(0,0);
+  document.documentElement.scrollTop=0;
+  document.body.scrollTop=0;
   if(window.innerWidth<960){
     var _sbEl=document.getElementById('sidebar');
     var _ovlEl=document.getElementById('ovl');
