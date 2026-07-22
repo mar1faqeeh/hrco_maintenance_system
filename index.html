@@ -1228,6 +1228,16 @@ function go(pg){
   window.scrollTo(0,0);
   document.documentElement.scrollTop=0;
   document.body.scrollTop=0;
+  // Belt-and-braces: force the page into view no matter what pushed it down,
+  // including after any async content (e.g. DB-loaded lists) reflows the page.
+  if(el && el.scrollIntoView){
+    el.scrollIntoView({block:'start', inline:'nearest'});
+    setTimeout(function(){
+      el.scrollIntoView({block:'start', inline:'nearest'});
+      if(ma) ma.scrollTop=0;
+      window.scrollTo(0,0);
+    }, 300);
+  }
   if(window.innerWidth<960){
     var _sbEl=document.getElementById('sidebar');
     var _ovlEl=document.getElementById('ovl');
