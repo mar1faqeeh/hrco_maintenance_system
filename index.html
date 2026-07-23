@@ -2148,9 +2148,44 @@ function openDiagram(id){
   var img = document.getElementById('pr-diagram-img');
   if(img) img.src = eq.diagramBase64 || '';
 
-  // Render parts list
+  renderDiagramHotspots(eq);
+  renderExtraFiles(eq);
   renderDiagramParts(eq);
   updateSelectedList();
+}
+
+function renderDiagramHotspots(eq){
+  var overlay = document.getElementById('pr-diagram-pins');
+  if(!overlay) return;
+  overlay.innerHTML = '';
+  overlay.style.pointerEvents = 'none';
+  (eq.parts||[]).forEach(function(p){
+    if(!p.pos) return; // only parts with a placed marker get a pin
+    var isSelected = !!prSelected[p.num];
+    var dot = document.createElement('div');
+    dot.id = 'pr-pin-'+p.num;
+    dot.style.cssText = 'position:absolute;left:'+p.pos[0]+'%;top:'+p.pos[1]+'%;transform:translate(-50%,-50%);width:26px;height:26px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;color:#fff;border:2px solid #fff;box-shadow:0 1px 5px rgba(0,0,0,.35);cursor:pointer;pointer-events:auto;transition:transform .15s;'
+      + 'background:'+(isSelected?'#1D4E89':'#C0392B');
+    dot.textContent = p.num;
+    dot.title = p.name;
+    dot.onclick = function(){ togglePart(p); };
+    overlay.appendChild(dot);
+  });
+}
+
+function renderExtraFiles(eq){
+  var wrap = document.getElementById('pr-extra-files');
+  if(!wrap) return;
+  var files = eq.extraFiles || [];
+  if(!files.length){ wrap.innerHTML=''; wrap.style.display='none'; return; }
+  wrap.style.display = 'block';
+  wrap.innerHTML = '<div style="font-size:11px;color:#718096;margin-bottom:6px">Additional Files</div>'
+    + '<div style="display:flex;flex-wrap:wrap;gap:8px">' + files.map(function(f, i){
+      if(f.type==='pdf'){
+        return '<a href="'+f.dataUrl+'" download="'+(f.name||'file.pdf')+'" style="display:flex;align-items:center;gap:6px;padding:8px 12px;border:1px solid #D9E2EC;border-radius:8px;font-size:12px;color:#1D4E89;text-decoration:none;background:#F8FAFC"><i class="ti ti-file-type-pdf"></i>'+(f.name||'PDF file')+'</a>';
+      }
+      return '<img src="'+f.dataUrl+'" onclick="openPhotoLightbox(\''+f.dataUrl+'\')" style="width:64px;height:64px;object-fit:cover;border-radius:8px;border:1px solid #D9E2EC;cursor:zoom-in">';
+    }).join('') + '</div>';
 }
 
 function closeDiagram(){
@@ -2173,6 +2208,7 @@ function renderDiagramParts(eq){
     row.innerHTML = '<div style="width:28px;height:28px;border-radius:6px;background:'+(isSelected?'#1D4E89':'#F0F4F8')+';color:'+(isSelected?'#fff':'#718096')+';display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;flex-shrink:0">'+p.num+'</div>'
       +'<div style="flex:1;min-width:0"><div style="font-size:12px;font-weight:600;color:#1a202c">'+p.name+'</div>'
       +(p.desc?'<div style="font-size:10px;color:#A0AEC0">'+p.desc+'</div>':'')+'</div>'
+      +(p.pos?'<i class="ti ti-map-pin" title="Has a marker on the diagram" style="color:#A0AEC0;font-size:12px;flex-shrink:0"></i>':'')
       +(isSelected?'<i class="ti ti-check" style="color:#1D4E89;flex-shrink:0"></i>':'');
     el.appendChild(row);
   });
@@ -2185,6 +2221,7 @@ function togglePart(p){
     prSelected[p.num] = {num:p.num, name:p.name, desc:p.desc||'', qty:1};
   }
   renderDiagramParts(prCurrentEquip);
+  renderDiagramHotspots(prCurrentEquip);
   updateSelectedList();
 }
 
@@ -2251,50 +2288,165 @@ async function confirmPartsRequest(){
   alert('Parts request submitted successfully!\nThe manager will review and prepare the parts.');
 }
 
+// ── Interactive hotspot placement (Upload Equipment modal) ──
+var ueParsedParts = [];   // [{num,name,desc}]
+var uePositions = {};     // {num: [xPercent, yPercent]}
+var ueQueueIdx = 0;
+var ueExtraFilesData = []; // [{type:'image'|'pdf', name, dataUrl}]
+
+function ueOnDiagramChange(){
+  var fileInput = document.getElementById('ue-diagram');
+  var field = document.getElementById('ue-hotspot-field');
+  var preview = document.getElementById('ue-diagram-preview');
+  if(!fileInput.files || !fileInput.files[0]){ field.style.display='none'; return; }
+  var reader = new FileReader();
+  reader.onload = function(e){
+    preview.src = e.target.result;
+    uePositions = {};
+    ueRebuildHotspotList();
+  };
+  reader.readAsDataURL(fileInput.files[0]);
+}
+
+function ueRebuildHotspotList(){
+  var partsText = (document.getElementById('ue-parts')||{}).value||'';
+  ueParsedParts = [];
+  partsText.split('\n').forEach(function(line){
+    line = line.trim();
+    if(!line) return;
+    var cols = line.split('|').map(function(s){ return s.trim(); });
+    if(cols.length >= 2){
+      ueParsedParts.push({ num: cols[0], name: cols[1], desc: cols[2]||'' });
+    }
+  });
+  // Drop positions for parts that no longer exist
+  var validNums = ueParsedParts.map(function(p){ return p.num; });
+  Object.keys(uePositions).forEach(function(n){ if(validNums.indexOf(n)===-1) delete uePositions[n]; });
+
+  var hasDiagram = document.getElementById('ue-diagram-preview').src && document.getElementById('ue-diagram-preview').src.indexOf('data:')===0;
+  document.getElementById('ue-hotspot-field').style.display = (hasDiagram && ueParsedParts.length) ? 'block' : 'none';
+  ueQueueIdx = 0;
+  ueRenderHotspotOverlay();
+  ueRenderQueue();
+}
+
+function ueRenderQueue(){
+  var q = document.getElementById('ue-hotspot-queue');
+  var hint = document.getElementById('ue-hotspot-hint');
+  q.innerHTML = '';
+  var remaining = ueParsedParts.filter(function(p){ return !uePositions[p.num]; });
+  ueQueueIdx = 0; // always target the first not-yet-placed part
+  if(!remaining.length){
+    hint.textContent = ueParsedParts.length ? 'All part markers placed ✓ Click a marker to remove/replace it.' : '';
+  } else {
+    hint.innerHTML = 'Click the diagram to place: <strong>#'+remaining[0].num+' '+remaining[0].name+'</strong>';
+  }
+  ueParsedParts.forEach(function(p){
+    var tag = document.createElement('span');
+    var placed = !!uePositions[p.num];
+    tag.textContent = '#'+p.num+' '+p.name+(placed?' ✓':'');
+    tag.style.cssText = 'font-size:11px;padding:3px 9px;border-radius:99px;font-weight:600;cursor:pointer;'
+      + (placed ? 'background:#EAF3DE;color:#2D7D3A;border:1px solid #97C459' : 'background:#F1F5F9;color:#64748B;border:1px solid #D9E2EC');
+    tag.onclick = function(){
+      if(placed){ delete uePositions[p.num]; ueRenderHotspotOverlay(); ueRenderQueue(); }
+    };
+    q.appendChild(tag);
+  });
+}
+
+function ueDiagramClick(evt){
+  var remaining = ueParsedParts.filter(function(p){ return !uePositions[p.num]; });
+  if(!remaining.length) return;
+  var target = remaining[0];
+  var img = evt.currentTarget;
+  var rect = img.getBoundingClientRect();
+  var xPct = ((evt.clientX - rect.left) / rect.width) * 100;
+  var yPct = ((evt.clientY - rect.top) / rect.height) * 100;
+  uePositions[target.num] = [xPct, yPct];
+  ueRenderHotspotOverlay();
+  ueRenderQueue();
+}
+
+function ueRenderHotspotOverlay(){
+  var overlay = document.getElementById('ue-hotspot-overlay');
+  if(!overlay) return;
+  overlay.innerHTML = '';
+  Object.keys(uePositions).forEach(function(num){
+    var pos = uePositions[num];
+    var dot = document.createElement('div');
+    dot.style.cssText = 'position:absolute;left:'+pos[0]+'%;top:'+pos[1]+'%;transform:translate(-50%,-50%);width:22px;height:22px;border-radius:50%;background:#1D4E89;color:#fff;font-size:11px;font-weight:700;display:flex;align-items:center;justify-content:center;border:2px solid #fff;box-shadow:0 1px 4px rgba(0,0,0,.3);pointer-events:auto;cursor:pointer';
+    dot.textContent = num;
+    dot.title = 'Click to remove';
+    dot.onclick = function(e){ e.stopPropagation(); delete uePositions[num]; ueRenderHotspotOverlay(); ueRenderQueue(); };
+    overlay.appendChild(dot);
+  });
+}
+
+function ueReadFileAsDataUrl(file){
+  return new Promise(function(res){
+    var reader = new FileReader();
+    reader.onload = function(e){ res(e.target.result); };
+    reader.readAsDataURL(file);
+  });
+}
+
 async function saveEquipment(){
   var name = (document.getElementById('ue-name')||{}).value.trim();
   if(!name){ alert('Enter equipment name'); return; }
   var fileInput = document.getElementById('ue-diagram');
   var partsText = (document.getElementById('ue-parts')||{}).value||'';
 
-  // Parse parts list
+  // Parse parts list, attaching placed hotspot positions if any
   var parts = [];
   partsText.split('\n').forEach(function(line){
     line = line.trim();
     if(!line) return;
     var cols = line.split('|').map(function(s){ return s.trim(); });
     if(cols.length >= 2){
-      parts.push({ num: cols[0], name: cols[1], desc: cols[2]||'' });
+      var num = cols[0];
+      var part = { num: num, name: cols[1], desc: cols[2]||'' };
+      if(uePositions[num]) part.pos = uePositions[num];
+      parts.push(part);
     }
   });
 
-  // Read image as base64
+  // Read main diagram image as base64
   var base64 = '';
   if(fileInput && fileInput.files && fileInput.files[0]){
-    base64 = await new Promise(function(res){
-      var reader = new FileReader();
-      reader.onload = function(e){ res(e.target.result); };
-      reader.readAsDataURL(fileInput.files[0]);
-    });
+    base64 = await ueReadFileAsDataUrl(fileInput.files[0]);
   }
 
-  var equip = { id: Date.now(), name: name, diagramBase64: base64, parts: parts };
+  // Read any additional reference files (images or PDFs)
+  var extraInput = document.getElementById('ue-extra-files');
+  var extraFiles = [];
+  if(extraInput && extraInput.files && extraInput.files.length){
+    for(var i=0;i<extraInput.files.length;i++){
+      var f = extraInput.files[i];
+      var dataUrl = await ueReadFileAsDataUrl(f);
+      extraFiles.push({ name: f.name, type: f.type.indexOf('pdf')>-1 ? 'pdf' : 'image', dataUrl: dataUrl });
+    }
+  }
+
+  var equip = { id: Date.now(), name: name, diagramBase64: base64, parts: parts, extraFiles: extraFiles };
   equipmentData.push(equip);
 
-  // Save to Supabase
-  if(_sb){
-    await _sb.from('equipment_diagrams').insert({
-      name: name,
-      diagram_data: base64,
-      parts_list: JSON.stringify(parts)
-    });
-  }
+  // Save to Supabase (dbSave auto-retries without a field if that column doesn't exist yet)
+  await dbSave('equipment_diagrams', {
+    name: name,
+    diagram_data: base64,
+    parts_list: JSON.stringify(parts),
+    extra_files: JSON.stringify(extraFiles)
+  });
 
   closeMod('uploadEquipModal');
   renderEquipGrid();
   document.getElementById('ue-name').value='';
   document.getElementById('ue-parts').value='';
+  document.getElementById('ue-diagram-preview').src='';
+  document.getElementById('ue-hotspot-field').style.display='none';
   if(fileInput) fileInput.value='';
+  if(extraInput) extraInput.value='';
+  uePositions = {}; ueParsedParts = [];
   alert('Equipment saved!');
 }
 
@@ -2304,7 +2456,9 @@ async function loadEquipmentData(){
     var r = await _sb.from('equipment_diagrams').select('*').order('created_at',{ascending:false});
     if(r.data){
       equipmentData = r.data.map(function(e){
-        return { id:e.id, name:e.name, diagramBase64:e.diagram_data||'', parts:JSON.parse(e.parts_list||'[]') };
+        var extra = [];
+        try{ extra = JSON.parse(e.extra_files||'[]'); }catch(err){}
+        return { id:e.id, name:e.name, diagramBase64:e.diagram_data||'', parts:JSON.parse(e.parts_list||'[]'), extraFiles: extra };
       });
       console.log('Loaded', equipmentData.length, 'equipment diagrams');
     }
@@ -4224,8 +4378,9 @@ async function showPublicReport(token){
         <!-- Diagram Image -->
         <div style="position:relative;border:1.5px solid #D9E2EC;border-radius:10px;overflow:hidden;background:#F8FAFC">
           <img id="pr-diagram-img" src="" style="width:100%;display:block" alt="Equipment Diagram">
-          <div id="pr-diagram-pins"></div>
+          <div id="pr-diagram-pins" style="position:absolute;inset:0;pointer-events:none"></div>
         </div>
+        <div id="pr-extra-files" style="grid-column:1;display:none;margin-top:4px"></div>
 
         <!-- Parts List -->
         <div>
@@ -4247,16 +4402,31 @@ async function showPublicReport(token){
 
 <!-- UPLOAD EQUIPMENT MODAL -->
 <div id="uploadEquipModal" class="modal" style="display:none">
-  <div class="mbox" style="max-width:480px">
+  <div class="mbox" style="max-width:640px">
     <div class="mh"><div class="mhtitle"><i class="ti ti-upload"></i> Upload Equipment</div><button class="mclose" onclick="closeMod('uploadEquipModal')"><i class="ti ti-x"></i></button></div>
     <div class="mb">
       <div class="field"><label>Equipment Name *</label><input type="text" id="ue-name" placeholder="e.g. Manitowoc Ice Maker IM-200"></div>
-      <div class="field"><label>Exploded Diagram (Image) *</label>
-        <input type="file" id="ue-diagram" accept="image/*" style="width:100%;padding:8px;border:1.5px solid #D9E2EC;border-radius:8px;font-family:inherit;font-size:13px">
+      <div class="field"><label>Exploded Diagram Image *</label>
+        <div style="font-size:11px;color:#718096;margin-bottom:6px">The main numbered diagram — you'll click on it below to place each part's marker.</div>
+        <input type="file" id="ue-diagram" accept="image/*" onchange="ueOnDiagramChange()" style="width:100%;padding:8px;border:1.5px solid #D9E2EC;border-radius:8px;font-family:inherit;font-size:13px">
       </div>
       <div class="field"><label>Parts List</label>
         <div style="font-size:11px;color:#718096;margin-bottom:6px">Enter each part on a new line: <strong>Number | Part Name | Description</strong><br>Example: <code>1 | Compressor | 115V R-404A</code></div>
-        <textarea id="ue-parts" rows="8" placeholder="1 | Compressor | 115V R-404A&#10;2 | Fan Motor | 240V&#10;3 | Water Pump | 12L/min" style="width:100%;padding:8px 12px;border:1.5px solid #D9E2EC;border-radius:8px;font-size:12px;font-family:inherit;outline:none;resize:vertical"></textarea>
+        <textarea id="ue-parts" rows="6" oninput="ueRebuildHotspotList()" placeholder="1 | Compressor | 115V R-404A&#10;2 | Fan Motor | 240V&#10;3 | Water Pump | 12L/min" style="width:100%;padding:8px 12px;border:1.5px solid #D9E2EC;border-radius:8px;font-size:12px;font-family:inherit;outline:none;resize:vertical"></textarea>
+      </div>
+      <div class="field" id="ue-hotspot-field" style="display:none">
+        <label>Place Part Markers on the Diagram</label>
+        <div style="font-size:11px;color:#718096;margin-bottom:6px" id="ue-hotspot-hint">Click the diagram below to place the marker for the highlighted part.</div>
+        <div style="position:relative;border:1.5px solid #D9E2EC;border-radius:8px;overflow:hidden;background:#F8FAFC;max-height:340px;overflow-y:auto">
+          <img id="ue-diagram-preview" src="" style="width:100%;display:block;cursor:crosshair" onclick="ueDiagramClick(event)">
+          <div id="ue-hotspot-overlay" style="position:absolute;inset:0;pointer-events:none"></div>
+        </div>
+        <div id="ue-hotspot-queue" style="display:flex;flex-wrap:wrap;gap:6px;margin-top:8px"></div>
+      </div>
+      <div class="field"><label>Additional Files (optional)</label>
+        <div style="font-size:11px;color:#718096;margin-bottom:6px">Parts-list photos, manufacturer PDFs, or any other reference files.</div>
+        <input type="file" id="ue-extra-files" accept="image/*,application/pdf" multiple style="width:100%;padding:8px;border:1.5px solid #D9E2EC;border-radius:8px;font-family:inherit;font-size:13px">
+        <div id="ue-extra-files-list" style="font-size:11px;color:#718096;margin-top:6px"></div>
       </div>
     </div>
     <div class="mf">
