@@ -12,7 +12,7 @@ html,body{height:100%;overflow:auto;font-family:Tajawal,sans-serif;font-size:14p
 /* Layout */
 #app{display:flex;flex-direction:column;height:100vh}
 #topbar{height:56px;background:#0F2D52;display:flex;align-items:center;gap:12px;padding:0 20px;flex-shrink:0;z-index:10;box-shadow:0 2px 8px rgba(0,0,0,.25)}
-#body{display:flex;flex-direction:row;flex-wrap:nowrap;flex:1;min-height:0}
+#body{display:flex;flex:1;min-height:0}
 #sidebar{width:220px;background:#fff;border-left:1px solid #D9E2EC;display:flex;flex-direction:column;overflow-y:auto;flex-shrink:0;z-index:5;pointer-events:auto}
 [dir=ltr] #sidebar{border-left:none;border-right:1px solid #D9E2EC}
 #main{flex:1;overflow-y:auto;padding:20px;min-width:0}
@@ -4364,5 +4364,22 @@ async function showPublicReport(token){
     </div>
   </div>
 
+<script>
+// Structural fix: a leftover premature closing tag after the Archive section
+// (from an earlier restructuring) left #pg-settings and #pg-parts-request as
+// direct children of <body> instead of nested inside #main, so they rendered
+// outside the app's scrollable content pane. Move them into #main at load
+// time rather than risk hand-editing the large HTML structure.
+(function(){
+  var main = document.getElementById('main');
+  if(!main) return;
+  ['pg-settings','pg-parts-request'].forEach(function(id){
+    var el = document.getElementById(id);
+    if(el && el.parentElement !== main){
+      main.appendChild(el);
+    }
+  });
+})();
+</script>
 </body>
 </html>
