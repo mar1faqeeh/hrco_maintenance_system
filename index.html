@@ -2340,6 +2340,43 @@ async function ueOnFilesChange(){
   ueSyncMainPreview();
   document.getElementById('ue-parts-field').style.display = uePages.length ? 'block' : 'none';
   ueRebuildHotspotList();
+
+  // Auto-read the parts list from the remaining page(s) using AI vision,
+  // so the admin doesn't have to type it out by hand.
+  if(uePages.length > 1){
+    ueExtractPartsList();
+  }
+}
+
+async function ueExtractPartsList(){
+  var status = document.getElementById('ue-files-status');
+  var textarea = document.getElementById('ue-parts');
+  status.textContent = uePages.length + ' page(s) ready. Reading the parts list from page(s) 2+ ...';
+  try{
+    var listImages = uePages.slice(1).map(function(pg){ return pg.dataUrl; });
+    var response = await fetch('/api/extract-parts-list', {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ images: listImages })
+    });
+    var data = await response.json();
+    if(!response.ok){
+      status.textContent = uePages.length + ' page(s) ready. Could not auto-read the parts list ('+(data.error||'error')+') — type it manually below.';
+      return;
+    }
+    var parts = data.parts || [];
+    if(!parts.length){
+      status.textContent = uePages.length + ' page(s) ready. No parts list detected automatically — type it manually below.';
+      return;
+    }
+    textarea.value = parts.map(function(p){
+      return (p.num||'') + ' | ' + (p.code||p.name||'') + (p.desc ? (' | ' + p.desc) : '');
+    }).join('\n');
+    status.textContent = uePages.length + ' page(s) ready. ✅ Parts list read automatically ('+parts.length+' parts) — check it below and correct anything if needed.';
+    ueRebuildHotspotList();
+  }catch(e){
+    status.textContent = uePages.length + ' page(s) ready. Could not auto-read the parts list — type it manually below.';
+  }
 }
 
 function ueRenderPagesStrip(){
