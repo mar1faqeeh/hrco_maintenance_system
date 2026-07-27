@@ -12,7 +12,7 @@ export default async function handler(req, res) {
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
-  const { images } = req.body || {}; // array of data URLs (base64 images)
+  const { images, diagramImage } = req.body || {}; // images: array of data URLs (parts-list pages), diagramImage: optional data URL of the exploded-view photo
   if (!images || !Array.isArray(images) || !images.length) {
     return res.status(400).json({ error: 'images (array of data URLs) is required' });
   }
@@ -25,21 +25,32 @@ export default async function handler(req, res) {
   }
 
   try {
-    // Build one image content block per page, converting data URLs to the
-    // {type:'image', source:{type:'base64', media_type, data}} format Claude expects.
-    const content = [];
-    for (const dataUrl of images) {
+    function toBlock(dataUrl){
       const match = /^data:(image\/[a-zA-Z]+);base64,(.+)$/.exec(dataUrl);
-      if (!match) continue;
-      content.push({
-        type: 'image',
-        source: { type: 'base64', media_type: match[1], data: match[2] }
-      });
+      if (!match) return null;
+      return { type: 'image', source: { type: 'base64', media_type: match[1], data: match[2] } };
     }
-    content.push({
-      type: 'text',
-      text: 'These are page(s) from a spare-parts list table (position/pos number, part code, description columns). Extract EVERY row into a JSON array. Each item: {"num": "<position number as shown>", "code": "<part code, or empty string if none>", "desc": "<part description>"}. Return ONLY the JSON array, no other text, no markdown fences.'
-    });
+
+    const content = [];
+    var hasDiagram = false;
+    if (diagramImage) {
+      var diagBlock = toBlock(diagramImage);
+      if (diagBlock) { content.push({type:'text', text:'DIAGRAM IMAGE (the numbered exploded-view photo):'}); content.push(diagBlock); hasDiagram = true; }
+    }
+    content.push({type:'text', text:'PARTS-LIST PAGE IMAGE(S) (table of position/pos numbers with codes and descriptions):'});
+    for (const dataUrl of images) {
+      const block = toBlock(dataUrl);
+      if (block) content.push(block);
+    }
+
+    var instructions = 'Extract EVERY row from the parts-list table image(s) into a JSON array called "parts". Each item: {"num": "<position number as shown>", "code": "<part code, or empty string if none>", "desc": "<part description>"}.';
+    if (hasDiagram) {
+      instructions += ' Also look at the DIAGRAM IMAGE: it has small numbered circles/tags, each connected by a thin leader line to a specific part in the drawing. For each numbered tag, determine where its leader line actually POINTS TO on the part (not the tag\'s own printed position) and return that as a percentage of the image width/height (0-100, 0,0 = top-left) in a JSON object called "positions", e.g. {"2": [45.2, 30.1], "3": [50.0, 28.4]}. Include every number you can find a leader line for.';
+      instructions += ' Return ONLY one JSON object: {"parts": [...], "positions": {...}}. No other text, no markdown fences.';
+    } else {
+      instructions += ' Return ONLY {"parts": [...]}. No other text, no markdown fences.';
+    }
+    content.push({ type: 'text', text: instructions });
 
     const response = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
@@ -60,13 +71,13 @@ export default async function handler(req, res) {
       return res.status(response.status).json({ error: data.error?.message || 'Anthropic API error', details: data });
     }
 
-    var text = (data.content && data.content[0] && data.content[0].text) || '[]';
+    var text = (data.content && data.content[0] && data.content[0].text) || '{}';
     text = text.trim().replace(/^```json\s*/i, '').replace(/^```\s*/i, '').replace(/```\s*$/i, '');
-    let parts;
-    try { parts = JSON.parse(text); }
-    catch (e) { return res.status(200).json({ parts: [], raw: text, warning: 'Could not parse a clean JSON list' }); }
+    let parsed;
+    try { parsed = JSON.parse(text); }
+    catch (e) { return res.status(200).json({ parts: [], positions: {}, raw: text, warning: 'Could not parse a clean JSON response' }); }
 
-    return res.status(200).json({ parts: parts });
+    return res.status(200).json({ parts: parsed.parts || [], positions: parsed.positions || {} });
   } catch (e) {
     return res.status(500).json({ error: e.message });
   }
