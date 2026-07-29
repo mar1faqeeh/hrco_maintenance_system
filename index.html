@@ -2305,8 +2305,31 @@ var uePages = [];         // [{dataUrl, label}] in order — index 0 is always t
 var ueParsedParts = [];   // [{num,name,desc}]
 var uePositions = {};     // {num: [xPercent, yPercent]}
 
-async function ueFileToImages(file){
-  // Returns an array of dataURLs: one per image file, or one per PDF page.
+function ueGroupTextIntoRows(items, viewport){
+  // Cluster text fragments into visual rows by their Y position, then order
+  // each row left-to-right, so a table row reads as one continuous string.
+  var buckets = {};
+  items.forEach(function(it){
+    if(!it.str || !it.str.trim()) return;
+    var pt = viewport.convertToViewportPoint(it.transform[4], it.transform[5]);
+    var key = Math.round(pt[1] / 6); // ~6px tolerance groups one visual line
+    if(!buckets[key]) buckets[key] = [];
+    buckets[key].push({ x: pt[0], y: pt[1], str: it.str });
+  });
+  return Object.keys(buckets).map(function(k){
+    var cells = buckets[k].sort(function(a,b){ return a.x - b.x; });
+    return {
+      y: cells[0].y,
+      cells: cells,
+      text: cells.map(function(c){ return c.str; }).join(' ').replace(/\s+/g,' ').trim()
+    };
+  }).sort(function(a,b){ return a.y - b.y; });
+}
+
+async function ueFileToPages(file){
+  // Returns [{dataUrl, rows, tags}] — one entry per image file, or per PDF page.
+  // For PDFs we also pull the real embedded text layer, which gives us both the
+  // parts table AND the on-drawing number positions for free, with no OCR/AI.
   if(file.type === 'application/pdf'){
     if(!window['pdfjsLib']){
       alert('PDF support failed to load — check your internet connection and try again, or upload images instead.');
@@ -2314,18 +2337,37 @@ async function ueFileToImages(file){
     }
     var buf = await file.arrayBuffer();
     var pdf = await window['pdfjsLib'].getDocument({data: buf}).promise;
-    var images = [];
+    var pages = [];
     for(var i=1;i<=pdf.numPages;i++){
       var page = await pdf.getPage(i);
       var viewport = page.getViewport({scale: 2});
       var canvas = document.createElement('canvas');
       canvas.width = viewport.width; canvas.height = viewport.height;
       await page.render({canvasContext: canvas.getContext('2d'), viewport: viewport}).promise;
-      images.push(canvas.toDataURL('image/jpeg', 0.9));
+
+      var rows = [], tags = [];
+      try{
+        var tc = await page.getTextContent();
+        rows = ueGroupTextIntoRows(tc.items, viewport);
+        // Standalone short numbers on a drawing = the numbered callout tags
+        tc.items.forEach(function(it){
+          var s = (it.str||'').trim();
+          if(/^\d{1,3}$/.test(s)){
+            var pt = viewport.convertToViewportPoint(it.transform[4], it.transform[5]);
+            tags.push({
+              num: String(parseInt(s,10)),
+              xPct: (pt[0] / viewport.width) * 100,
+              yPct: (pt[1] / viewport.height) * 100
+            });
+          }
+        });
+      }catch(e){ console.log('text layer read failed for page '+i, e); }
+
+      pages.push({ dataUrl: canvas.toDataURL('image/jpeg', 0.9), rows: rows, tags: tags });
     }
-    return images;
+    return pages;
   }
-  return [await ueReadFileAsDataUrl(file)];
+  return [{ dataUrl: await ueReadFileAsDataUrl(file), rows: [], tags: [] }];
 }
 
 async function ueOnFilesChange(){
@@ -2335,8 +2377,8 @@ async function ueOnFilesChange(){
   status.textContent = 'Processing files...';
   uePages = [];
   for(var i=0;i<input.files.length;i++){
-    var imgs = await ueFileToImages(input.files[i]);
-    imgs.forEach(function(url){ uePages.push({dataUrl: url}); });
+    var pgs = await ueFileToPages(input.files[i]);
+    pgs.forEach(function(pg){ uePages.push(pg); });
   }
   status.textContent = uePages.length + ' page(s) ready — page 1 is the machine photo, the rest are parts-list pages.';
   uePositions = {};
@@ -2345,11 +2387,58 @@ async function ueOnFilesChange(){
   document.getElementById('ue-parts-field').style.display = uePages.length ? 'block' : 'none';
   ueRebuildHotspotList();
 
-  // Auto-read the parts list from the remaining page(s) using AI vision,
-  // so the admin doesn't have to type it out by hand.
   if(uePages.length > 1){
-    ueExtractPartsList();
+    // Try the free, offline route first (works whenever a real PDF was uploaded)
+    var done = ueExtractFromTextLayer();
+    if(!done) ueExtractPartsList(); // fall back to the AI reader for plain images
   }
+}
+
+function ueExtractFromTextLayer(){
+  // Reads the parts table straight out of the PDF's own text, and places each
+  // marker using the number positions already embedded in the drawing page.
+  // Completely offline — no API, no credits, and more accurate than OCR.
+  var status = document.getElementById('ue-files-status');
+  var textarea = document.getElementById('ue-parts');
+
+  var parts = [];
+  var seen = {};
+  uePages.slice(1).forEach(function(pg){
+    (pg.rows||[]).forEach(function(row){
+      // Typical row: "0002  CR0682610  PIPE [C] INDIRECT PANS GAUGE"
+      var m = /^(\d{1,4})\s+([A-Z0-9][A-Z0-9._\/-]{3,})\s+(.+)$/.exec(row.text);
+      if(!m) return;
+      var num = String(parseInt(m[1],10)); // "0002" -> "2", matching the drawing
+      if(!num || seen[num]) return;
+      seen[num] = true;
+      parts.push({ num: num, code: m[2], desc: m[3] });
+    });
+  });
+
+  if(!parts.length) return false; // no readable table — let the caller fall back
+
+  parts.sort(function(a,b){ return parseInt(a.num,10) - parseInt(b.num,10); });
+  textarea.value = parts.map(function(p){
+    return p.num + ' | ' + p.code + (p.desc ? (' | ' + p.desc) : '');
+  }).join('\n');
+
+  // Auto-place markers from the drawing page's own number coordinates
+  uePositions = {};
+  var validNums = {};
+  parts.forEach(function(p){ validNums[p.num] = true; });
+  (uePages[0].tags||[]).forEach(function(tag){
+    if(validNums[tag.num] && !uePositions[tag.num]){
+      uePositions[tag.num] = [tag.xPct, tag.yPct];
+    }
+  });
+
+  var placed = Object.keys(uePositions).length;
+  status.textContent = uePages.length + ' page(s) ready. ✅ Read directly from the PDF (free, no AI): '
+    + parts.length + ' parts'
+    + (placed ? ', ' + placed + ' markers placed automatically.' : '. Click the photo to place the markers.')
+    + ' Review below and adjust anything if needed.';
+  ueRebuildHotspotList();
+  return true;
 }
 
 async function ueExtractPartsList(){
@@ -2367,7 +2456,7 @@ async function ueExtractPartsList(){
     if(!response.ok){
       status.textContent = uePages.length + ' page(s) ready. Auto-read failed — type the parts list manually below.';
       console.error('extract-parts-list error:', data);
-      alert('⚠️ Could not auto-read the parts list/diagram: ' + (data.error || 'unknown error') + '\nYou can still type the parts list manually below and click on the photo to place markers.');
+      alert('تعذّرت القراءة التلقائية من الصور.\n💡 الأفضل: ارفع ملف PDF الأصلي بدل الصور — عندها يقرأ النظام القائمة ويضع الأرقام تلقائياً بدون أي تكلفة.\nأو اكتب القائمة يدوياً بالأسفل واضغط على الصورة لتحديد المواقع.\n\nAuto-read from images failed.\n💡 Best option: upload the original PDF instead of images — it then reads the list and places the markers automatically at no cost.\nOtherwise, type the list manually below and click the photo to place markers.');
       return;
     }
     var parts = data.parts || [];
@@ -2392,7 +2481,7 @@ async function ueExtractPartsList(){
   }catch(e){
     status.textContent = uePages.length + ' page(s) ready. Auto-read failed — type the parts list manually below.';
     console.error('extract-parts-list exception:', e);
-    alert('⚠️ Could not auto-read the parts list/diagram: ' + e.message + '\nYou can still type the parts list manually below and click on the photo to place markers.');
+    alert('تعذّرت القراءة التلقائية من الصور.\n💡 الأفضل: ارفع ملف PDF الأصلي بدل الصور — عندها يقرأ النظام القائمة ويضع الأرقام تلقائياً بدون أي تكلفة.\nأو اكتب القائمة يدوياً بالأسفل واضغط على الصورة لتحديد المواقع.\n\nAuto-read from images failed.\n💡 Best option: upload the original PDF instead of images — it then reads the list and places the markers automatically at no cost.\nOtherwise, type the list manually below and click the photo to place markers.');
   }
 }
 
