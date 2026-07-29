@@ -1346,8 +1346,12 @@ async function deleteVisit(id){
     // Delete report token
     await _sb.from('report_tokens').delete().eq('visit_id', id);
     // Delete visit
-    var r = await _sb.from('visits').delete().eq('id', id);
+    var r = await _sb.from('visits').delete().eq('id', id).select();
     if(r.error){ alert('خطأ في الحذف: ' + r.error.message); return; }
+    if(!r.data || !r.data.length){
+      alert('⚠️ لم يتم حذف الزيارة من قاعدة البيانات.\nالسبب الأرجح: صلاحيات الحذف (Row Level Security) في Supabase تمنع الحذف لجدول visits.\n\n⚠️ The visit was not deleted in the database.\nMost likely cause: a Supabase Row Level Security policy is blocking DELETE on the visits table.');
+      return;
+    }
     // Remove from local data
     visData = visData.filter(function(v){ return v.id != id; });
     rData = visData.map(function(v,i){ return Object.assign({id:i+1},v); });
@@ -2563,11 +2567,33 @@ async function loadEquipmentData(){
   }catch(e){ console.log('loadEquipment error:',e); }
 }
 
-function deleteEquipment(id){
+async function deleteEquipment(id){
   if(!confirm('Delete this equipment?')) return;
-  equipmentData = equipmentData.filter(function(e){ return e.id!==id; });
-  if(_sb) _sb.from('equipment_diagrams').delete().eq('id',id);
-  renderEquipGrid();
+  if(!_initSb()){
+    alert('⚠️ لا يوجد اتصال بقاعدة البيانات — لم يتم الحذف.\n⚠️ No database connection — nothing was deleted.');
+    return;
+  }
+  try{
+    // Ask the DB to return the deleted row, so we can tell a real delete
+    // apart from a silently-rejected one (e.g. blocked by RLS policy).
+    var r = await _sb.from('equipment_diagrams').delete().eq('id', id).select();
+    if(r.error){
+      console.error('deleteEquipment error:', r.error);
+      alert('⚠️ فشل الحذف: '+r.error.message+'\n⚠️ Delete failed: '+r.error.message);
+      return;
+    }
+    if(!r.data || !r.data.length){
+      console.error('deleteEquipment: no rows deleted for id', id);
+      alert('⚠️ لم يتم حذف أي سجل من قاعدة البيانات.\nالسبب الأرجح: صلاحيات الحذف (Row Level Security) في Supabase تمنع الحذف لجدول equipment_diagrams.\n\n⚠️ No row was deleted in the database.\nMost likely cause: a Supabase Row Level Security policy is blocking DELETE on the equipment_diagrams table. Enable DELETE for the anon role on that table.');
+      return;
+    }
+    // Only drop it locally once the database confirms it's really gone
+    equipmentData = equipmentData.filter(function(e){ return e.id != id; });
+    renderEquipGrid();
+  }catch(e){
+    console.error('deleteEquipment exception:', e);
+    alert('⚠️ خطأ أثناء الحذف: '+e.message+'\n⚠️ Error while deleting: '+e.message);
+  }
 }
 
 // ══════════════════════════════════════
