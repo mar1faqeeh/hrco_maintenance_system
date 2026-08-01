@@ -416,14 +416,36 @@ function looksLikeSerial(v) {
 // Without these the endpoint still works, falling back to the model's own
 // knowledge — but with them it finds real, current PDF catalogues.
 
+// Values pasted into a dashboard often pick up a trailing newline, a stray
+// space, or wrapping quotes. Strip all of that before use.
+function cleanEnv(name) {
+  let v = process.env[name] || '';
+  v = v.trim().replace(/^["']|["']$/g, '').trim();
+  return v;
+}
+
 function cseConfigured() {
-  return !!(process.env.GOOGLE_CSE_KEY && process.env.GOOGLE_CSE_CX);
+  return !!(cleanEnv('GOOGLE_CSE_KEY') && cleanEnv('GOOGLE_CSE_CX'));
+}
+
+// Describe a credential without revealing it, so problems are diagnosable.
+function describeSecret(name) {
+  const raw = process.env[name] || '';
+  const clean = cleanEnv(name);
+  if (!raw) return { set: false };
+  return {
+    set: true,
+    length: clean.length,
+    starts_with: clean.slice(0, 4),
+    ends_with: clean.slice(-4),
+    had_whitespace_or_quotes: raw !== clean
+  };
 }
 
 async function cseSearch(query, opts) {
   const params = new URLSearchParams({
-    key: process.env.GOOGLE_CSE_KEY,
-    cx: (opts && opts.forceCx) || process.env.GOOGLE_CSE_CX,
+    key: cleanEnv('GOOGLE_CSE_KEY'),
+    cx: (opts && opts.forceCx) || cleanEnv('GOOGLE_CSE_CX'),
     q: query,
     num: String((opts && opts.num) || 8),
     safe: 'off'
@@ -531,6 +553,8 @@ export default async function handler(req, res) {
         const sameError = cxProbe.error === probe.error;
         webSearch = {
           configured: true, working: false, problem: probe.error,
+          cx: describeSecret('GOOGLE_CSE_CX'),
+          key: describeSecret('GOOGLE_CSE_KEY'),
           likely_cause: sameError
             ? 'The API KEY is the problem: either Custom Search API is not enabled on the same Google Cloud project this key belongs to, or the key is restricted. Re-create the key inside the project where Custom Search API shows "API Enabled".'
             : 'The SEARCH ENGINE ID (GOOGLE_CSE_CX) is the problem: the key works, but this engine id was rejected. Copy it again from programmablesearchengine.google.com and update GOOGLE_CSE_CX in Vercel, then redeploy.',
