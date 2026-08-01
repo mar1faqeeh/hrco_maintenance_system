@@ -247,6 +247,46 @@ async function callGemini(apiKey, spec) {
   throw err;
 }
 
+
+// Models are inconsistent about coordinate scales: some answer in a 0-1000
+// normalised grid (Gemini's native convention), some in percent, some in
+// 0-1 fractions, and some in raw pixels. Convert everything to percentages,
+// and drop anything that still can't be made sense of.
+function normalisePositions(raw) {
+  const pairs = [];
+  Object.keys(raw || {}).forEach(key => {
+    const v = raw[key];
+    let x, y;
+    if (v && typeof v === 'object' && !Array.isArray(v)) {
+      x = Number(v.x); y = Number(v.y);
+    } else if (Array.isArray(v) && v.length >= 2) {
+      // Ambiguous order — Gemini documents [y, x], so assume that, but the
+      // scale check below is what actually matters most.
+      y = Number(v[0]); x = Number(v[1]);
+    } else {
+      return;
+    }
+    if (!isFinite(x) || !isFinite(y)) return;
+    pairs.push({ key: key, x: x, y: y });
+  });
+  if (!pairs.length) return {};
+
+  const maxVal = pairs.reduce((m, p) => Math.max(m, Math.abs(p.x), Math.abs(p.y)), 0);
+  let divisor = 1;                 // already a percentage
+  if (maxVal <= 1.5) divisor = 0.01;      // 0-1 fractions
+  else if (maxVal > 100 && maxVal <= 1000) divisor = 10;   // 0-1000 grid
+  else if (maxVal > 1000) divisor = maxVal / 100;          // raw pixels
+
+  const out = {};
+  pairs.forEach(p => {
+    const xPct = p.x / divisor;
+    const yPct = p.y / divisor;
+    if (xPct < -1 || xPct > 101 || yPct < -1 || yPct > 101) return;
+    out[p.key] = [Math.min(100, Math.max(0, xPct)), Math.min(100, Math.max(0, yPct))];
+  });
+  return out;
+}
+
 export default async function handler(req, res) {
   const apiKey = process.env.GEMINI_API_KEY;
 
@@ -338,9 +378,10 @@ export default async function handler(req, res) {
     if (hasDiagram) {
       instructions +=
         ' Then look at the DIAGRAM IMAGE. It contains small numbered circles (callout bubbles), each joined by a thin leader line to a component in the drawing. ' +
-        'For EACH numbered circle, report the position of THE CIRCLE ITSELF as a percentage of the image width and height, where [0,0] is the top-left corner and [100,100] is the bottom-right. ' +
-        'Be as precise as you can and include every numbered circle you can see. ' +
-        'Return these in a JSON object called "positions", for example {"1": [45.2, 30.1], "2": [50.0, 28.4]}. ' +
+        'Locate the CENTRE OF EACH NUMBERED CIRCLE and report it using normalised coordinates on a 0-1000 grid, where y=0 is the top edge, y=1000 the bottom edge, x=0 the left edge and x=1000 the right edge. ' +
+        'Put them in a JSON object called "positions", keyed by the number, each value an object with explicit x and y keys, like: ' +
+        '{"1": {"y": 301, "x": 452}, "2": {"y": 284, "x": 500}}. ' +
+        'Always use the "x" and "y" key names — never a bare array. Include every numbered circle you can see and be as precise as possible. ' +
         'Return ONLY one JSON object shaped exactly like {"parts": [...], "positions": {...}} — no explanations, no markdown code fences.';
     } else {
       instructions += ' Return ONLY {"parts": [...]} — no explanations, no markdown code fences.';
@@ -384,7 +425,7 @@ export default async function handler(req, res) {
     }
 
     const outParts = Array.isArray(parsed) ? parsed : (parsed.parts || []);
-    const outPositions = (parsed && parsed.positions) || {};
+    const outPositions = normalisePositions((parsed && parsed.positions) || {});
 
     return res.status(200).json({ parts: outParts, positions: outPositions, model: model, api: result.api });
   } catch (e) {
