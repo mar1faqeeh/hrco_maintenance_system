@@ -3032,11 +3032,25 @@ function renderAIResults(brand,model,data){
     html+='</div>';
   }
   if(data.results&&data.results.length){
-    html+='<div style="font-size:12px;font-weight:700;color:#718096;margin-bottom:8px">RESOURCES ('+data.results.length+')</div>';
+    var pdfCount = data.results.filter(function(r){ return r.type==='pdf'; }).length;
+    html+='<div style="font-size:12px;font-weight:700;color:#718096;margin-bottom:8px">PARTS DOCUMENTS ('+data.results.length+(pdfCount?' — '+pdfCount+' PDF':'')+')</div>';
     data.results.forEach(function(r){
-      var tc=r.type==='pdf'?'#C0392B':r.type==='image'?'#2D7D3A':'#1D4E89';
-      var tb=r.type==='pdf'?'#FCEBEB':r.type==='image'?'#EAF3DE':'#E6F1FB';
-      html+='<div style="border:1.5px solid #D9E2EC;border-radius:8px;padding:10px 12px;margin-bottom:8px"><div style="display:flex;align-items:start;gap:8px"><span style="background:'+tb+';color:'+tc+';font-size:9px;font-weight:700;padding:2px 6px;border-radius:4px;flex-shrink:0;margin-top:2px">'+r.type.toUpperCase()+'</span><div style="flex:1"><div style="font-size:12px;font-weight:600;color:#1a202c">'+r.title+'</div>'+(r.description?'<div style="font-size:11px;color:#718096">'+r.description+'</div>':'')+'<a href="'+r.url+'" target="_blank" style="font-size:10px;color:#1D4E89;word-break:break-all">'+r.url+'</a></div></div></div>';
+      var isPdf = r.type==='pdf';
+      var tc=isPdf?'#C0392B':r.type==='image'?'#2D7D3A':'#1D4E89';
+      var tb=isPdf?'#FCEBEB':r.type==='image'?'#EAF3DE':'#E6F1FB';
+      // PDFs are what the technician actually wants — make them stand out
+      var border = isPdf ? '2px solid #F5C6C6' : '1.5px solid #D9E2EC';
+      var bg = isPdf ? '#FFFBFB' : '#fff';
+      html+='<div style="border:'+border+';background:'+bg+';border-radius:8px;padding:10px 12px;margin-bottom:8px">'
+        +'<div style="display:flex;align-items:start;gap:8px">'
+        +'<span style="background:'+tb+';color:'+tc+';font-size:9px;font-weight:700;padding:2px 6px;border-radius:4px;flex-shrink:0;margin-top:2px">'+String(r.type||'page').toUpperCase()+'</span>'
+        +'<div style="flex:1;min-width:0">'
+        +'<div style="font-size:12px;font-weight:600;color:#1a202c">'+r.title+(r.verified?' <span style="color:#2D7D3A;font-size:10px" title="Link checked and reachable">✓ checked</span>':'')+'</div>'
+        +(r.description?'<div style="font-size:11px;color:#718096">'+r.description+'</div>':'')
+        +'<a href="'+r.url+'" target="_blank" style="font-size:10px;color:#1D4E89;word-break:break-all">'+r.url+'</a>'
+        +'</div>'
+        +'<a href="'+r.url+'" target="_blank" style="flex-shrink:0;padding:5px 10px;border-radius:6px;background:'+(isPdf?'#C0392B':'#1D4E89')+';color:#fff;font-size:11px;font-weight:700;text-decoration:none;white-space:nowrap">'+(isPdf?'Open PDF':'Open')+'</a>'
+        +'</div></div>';
     });
   }
   if(data.tips) html+='<div style="background:#F0F4F8;border-radius:8px;padding:10px 12px;font-size:12px;color:#718096;margin-top:8px"><i class="ti ti-bulb" style="color:#C4680A"></i> <strong>Tip:</strong> '+data.tips+'</div>';
