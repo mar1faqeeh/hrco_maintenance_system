@@ -423,7 +423,7 @@ function cseConfigured() {
 async function cseSearch(query, opts) {
   const params = new URLSearchParams({
     key: process.env.GOOGLE_CSE_KEY,
-    cx: process.env.GOOGLE_CSE_CX,
+    cx: (opts && opts.forceCx) || process.env.GOOGLE_CSE_CX,
     q: query,
     num: String((opts && opts.num) || 8),
     safe: 'off'
@@ -519,10 +519,24 @@ export default async function handler(req, res) {
     let webSearch = null;
     if (cseConfigured()) {
       const probe = await cseSearch('Rational SCC61 spare parts catalogue', { pdfOnly: true, num: 5 });
-      webSearch = probe.error
-        ? { configured: true, working: false, problem: probe.error }
-        : { configured: true, working: true, sample_hits: probe.items.length,
-            example: probe.items[0] ? probe.items[0].url : null };
+      if (!probe.error) {
+        webSearch = { configured: true, working: true, sample_hits: probe.items.length,
+                      example: probe.items[0] ? probe.items[0].url : null };
+      } else {
+        // Google returns the same vague "no access" message for several very
+        // different causes, so probe once more with a deliberately bogus engine
+        // id: if the error CHANGES, the key itself is fine and the problem is
+        // the engine id (cx); if it stays the same, the key/API is the problem.
+        const cxProbe = await cseSearch('test', { num: 1, forceCx: 'definitely-not-a-real-cx' });
+        const sameError = cxProbe.error === probe.error;
+        webSearch = {
+          configured: true, working: false, problem: probe.error,
+          likely_cause: sameError
+            ? 'The API KEY is the problem: either Custom Search API is not enabled on the same Google Cloud project this key belongs to, or the key is restricted. Re-create the key inside the project where Custom Search API shows "API Enabled".'
+            : 'The SEARCH ENGINE ID (GOOGLE_CSE_CX) is the problem: the key works, but this engine id was rejected. Copy it again from programmablesearchengine.google.com and update GOOGLE_CSE_CX in Vercel, then redeploy.',
+          key_looks_valid: !sameError
+        };
+      }
     } else {
       webSearch = { configured: false,
         note: 'Add GOOGLE_CSE_KEY and GOOGLE_CSE_CX to search the real web for PDF parts catalogues (free, 100/day). Setup steps are in the comments at the top of this file.' };
