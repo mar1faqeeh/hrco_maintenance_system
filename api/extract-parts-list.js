@@ -11,19 +11,22 @@
 //       Value: the key from step 1
 // 3. Save this file at:  api/extract-parts-list.js   then redeploy.
 //
-// Model selection is AUTOMATIC: this asks Google which models the key can
-// actually use and picks the best current one. That means it keeps working
-// when Google renames or retires models. To pin a specific model instead,
-// set the optional GEMINI_MODEL environment variable.
+// You do NOT need to pick a model. This asks Google which models your key can
+// use, then tries them cheapest-first until one answers — so it keeps working
+// when Google renames models, retires them, or makes the newest one paid-only.
+// To pin one anyway, set the optional GEMINI_MODEL environment variable.
 
-let cachedModel = null;      // remembered between warm invocations
+// ── Model selection with automatic fallback ──────────────────────────────
+// Google keeps renaming/retiring models, and the newest model is usually
+// PAID-ONLY while older "flash"/"lite" ones stay on the free tier. So instead
+// of betting on one name, we rank every model the key can see and try them in
+// order until one actually answers — then remember that one.
+
+let cachedModel = null;
 let cachedModelAt = 0;
-const MODEL_TTL_MS = 6 * 60 * 60 * 1000; // re-check twice a day
+const MODEL_TTL_MS = 6 * 60 * 60 * 1000;
 
-async function pickModel(apiKey) {
-  if (process.env.GEMINI_MODEL) return process.env.GEMINI_MODEL;
-  if (cachedModel && (Date.now() - cachedModelAt) < MODEL_TTL_MS) return cachedModel;
-
+async function listCandidateModels(apiKey) {
   const res = await fetch('https://generativelanguage.googleapis.com/v1beta/models', {
     headers: { 'x-goog-api-key': apiKey }
   });
@@ -39,24 +42,99 @@ async function pickModel(apiKey) {
   );
   if (!usable.length) throw new Error('No Gemini models available to this API key.');
 
-  // Prefer stable "flash" models (fast + cheap + vision-capable), newest first.
   const versionOf = name => {
     const m = /gemini-(\d+(?:\.\d+)?)/.exec(name);
     return m ? parseFloat(m[1]) : 0;
   };
+  // Cheap, widely free-tier-eligible models first: "lite" and "flash" beat
+  // "pro", and we do NOT chase the newest version — brand-new releases are
+  // typically paid-only, which is exactly what blows the free quota.
   const score = m => {
     const n = m.name;
-    let s = versionOf(n) * 100;
-    if (/flash/i.test(n)) s += 50;      // flash = ideal for this task
-    if (/lite/i.test(n)) s -= 20;       // lite is weaker at vision
-    if (/preview|exp/i.test(n)) s -= 30; // prefer stable releases
+    let s = 0;
+    if (/flash/i.test(n)) s += 100;
+    if (/lite/i.test(n)) s += 40;
+    if (/pro/i.test(n)) s -= 60;
+    if (/preview|exp/i.test(n)) s -= 30;
+    s += versionOf(n); // mild tie-breaker only
     return s;
   };
   usable.sort((a, b) => score(b) - score(a));
+  return usable.map(m => m.name.replace(/^models\//, ''));
+}
 
-  cachedModel = usable[0].name.replace(/^models\//, '');
-  cachedModelAt = Date.now();
-  return cachedModel;
+// Calls generateContent, walking down the candidate list whenever a model is
+// missing (404) or out of quota on this plan (429), so a paid-only or retired
+// model never becomes a dead end.
+async function callGemini(apiKey, buildBody) {
+  if (process.env.GEMINI_MODEL) {
+    const forced = process.env.GEMINI_MODEL;
+    const r = await tryModel(apiKey, forced, buildBody);
+    if (r.ok) return { data: r.data, model: forced };
+    throw new Error(r.message + ' [model: ' + forced + ']');
+  }
+
+  let candidates;
+  if (cachedModel && (Date.now() - cachedModelAt) < MODEL_TTL_MS) {
+    candidates = [cachedModel];
+  } else {
+    candidates = await listCandidateModels(apiKey);
+  }
+
+  let lastMessage = '';
+  let lastStatus = 500;
+  for (const name of candidates) {
+    const r = await tryModel(apiKey, name, buildBody);
+    if (r.ok) {
+      cachedModel = name;
+      cachedModelAt = Date.now();
+      return { data: r.data, model: name };
+    }
+    lastMessage = r.message;
+    lastStatus = r.status;
+    // Retryable on another model: not found, no quota on this plan, or the
+    // model rejected the request shape.
+    if (r.status === 404 || r.status === 429 || r.status === 400) {
+      if (cachedModel === name) { cachedModel = null; cachedModelAt = 0; }
+      continue;
+    }
+    break; // auth errors etc. — trying another model won't help
+  }
+
+  // Every candidate failed. If we'd been using a cached model, retry once with
+  // the full freshly-listed set before giving up.
+  if (candidates.length === 1 && cachedModel === null) {
+    const fresh = await listCandidateModels(apiKey);
+    for (const name of fresh) {
+      const r = await tryModel(apiKey, name, buildBody);
+      if (r.ok) {
+        cachedModel = name;
+        cachedModelAt = Date.now();
+        return { data: r.data, model: name };
+      }
+      lastMessage = r.message;
+      lastStatus = r.status;
+    }
+  }
+
+  const err = new Error(lastMessage || 'All available Gemini models failed.');
+  err.status = lastStatus;
+  throw err;
+}
+
+async function tryModel(apiKey, modelName, buildBody) {
+  const url = 'https://generativelanguage.googleapis.com/v1beta/models/' +
+              encodeURIComponent(modelName) + ':generateContent';
+  const response = await fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'x-goog-api-key': apiKey },
+    body: JSON.stringify(buildBody())
+  });
+  const data = await response.json();
+  if (response.ok) return { ok: true, data: data };
+  const message = (data && data.error && data.error.message) ||
+                  ('Gemini API error (HTTP ' + response.status + ')');
+  return { ok: false, status: response.status, message: message };
 }
 
 export default async function handler(req, res) {
@@ -77,8 +155,6 @@ export default async function handler(req, res) {
   }
 
   try {
-    const model = await pickModel(apiKey);
-
     function toPart(dataUrl) {
       const match = /^data:(image\/[a-zA-Z+]+);base64,(.+)$/.exec(dataUrl);
       if (!match) return null;
@@ -120,34 +196,16 @@ export default async function handler(req, res) {
 
     parts.push({ text: instructions });
 
-    const url = 'https://generativelanguage.googleapis.com/v1beta/models/' +
-                encodeURIComponent(model) + ':generateContent';
-
-    const response = await fetch(url, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-goog-api-key': apiKey
-      },
-      body: JSON.stringify({
-        contents: [{ role: 'user', parts: parts }],
-        // NOTE: temperature/top_p are deprecated on Gemini 3.x — defaults are best.
-        generationConfig: {
-          maxOutputTokens: 8192,
-          responseMimeType: 'application/json'
-        }
-      })
-    });
-
-    const data = await response.json();
-
-    if (!response.ok) {
-      // A stale cached model name is the most likely cause of a 404 — clear it
-      // so the next attempt re-discovers a working model.
-      if (response.status === 404) { cachedModel = null; cachedModelAt = 0; }
-      const msg = (data && data.error && data.error.message) || ('Gemini API error (HTTP ' + response.status + ')');
-      return res.status(response.status).json({ error: msg + ' [model: ' + model + ']', details: data });
-    }
+    const result = await callGemini(apiKey, () => ({
+      contents: [{ role: 'user', parts: parts }],
+      // NOTE: temperature/top_p are deprecated on Gemini 3.x — defaults are best.
+      generationConfig: {
+        maxOutputTokens: 8192,
+        responseMimeType: 'application/json'
+      }
+    }));
+    const data = result.data;
+    const model = result.model;
 
     let text = '';
     try {
@@ -184,6 +242,6 @@ export default async function handler(req, res) {
 
     return res.status(200).json({ parts: outParts, positions: outPositions, model: model });
   } catch (e) {
-    return res.status(500).json({ error: e.message });
+    return res.status(e.status || 500).json({ error: e.message });
   }
 }
