@@ -2917,13 +2917,20 @@ async function aiSearchDiagram(){
       if(btn){ btn.disabled=false; btn.innerHTML='<i class="ti ti-search"></i> Search'; }
       return;
     }
-    var text='';
-    if(data.content) data.content.forEach(function(b){ if(b.type==='text') text+=b.text; });
-    var parsed=null;
-    try{ var m=text.match(/\{[\s\S]*\}/); if(m) parsed=JSON.parse(m[0]); }catch(e){}
     if(thinking) thinking.style.display='none';
+    // The endpoint now returns the parsed result object directly.
+    // (Older Anthropic-style {content:[{type:'text',...}]} replies are still
+    //  handled below, so an outdated deployment doesn't break the page.)
+    var parsed = null;
+    if(data && (data.results || data.found !== undefined)){
+      parsed = data;
+    } else if(data && data.content){
+      var text='';
+      data.content.forEach(function(b){ if(b.type==='text') text+=b.text; });
+      try{ var m=text.match(/\{[\s\S]*\}/); if(m) parsed=JSON.parse(m[0]); }catch(e){}
+    }
     if(parsed) renderAIResults(brand,model,parsed);
-    else if(content) content.innerHTML='<div style="padding:12px;background:#FDF0E0;border-radius:8px;font-size:13px;color:#C4680A">Could not parse response.<br><pre style="font-size:10px;color:#718096;white-space:pre-wrap">'+text.slice(0,500)+'</pre></div>';
+    else if(content) content.innerHTML='<div style="padding:12px;background:#FDF0E0;border-radius:8px;font-size:13px;color:#C4680A">Could not read the search response.</div>';
   }catch(e){
     if(thinking) thinking.style.display='none';
     if(content) content.innerHTML='<div style="padding:12px;background:#FCEBEB;border-radius:8px;color:#C0392B;font-size:13px">Search failed: '+e.message+'</div>';
