@@ -1,23 +1,63 @@
 // Vercel Serverless Function — reads a parts-list table image and locates the
 // numbered callouts on an exploded-view diagram, using GOOGLE GEMINI.
 //
-// This is a drop-in replacement: it keeps the exact same URL and the same
-// request/response shape as before, so NO changes are needed in
-// maintenance_system.html.
+// Drop-in replacement: same URL, same request/response shape, so NO changes
+// are needed in maintenance_system.html.
 //
 // ── SETUP (one time) ──────────────────────────────────────────────────────
 // 1. Get a free API key: https://aistudio.google.com/app/apikey
-// 2. In Vercel: your project → Settings → Environment Variables → add
+// 2. In Vercel: project → Settings → Environment Variables → add
 //       Key:   GEMINI_API_KEY
 //       Value: the key from step 1
-//    (Optional) add GEMINI_MODEL to use a different model than the default
-//    below — handy if Google renames or retires models later.
 // 3. Save this file at:  api/extract-parts-list.js   then redeploy.
 //
-// ANTHROPIC_API_KEY is no longer used by this file. Leave it in place if
-// search-diagram.js still uses it, or remove it.
+// Model selection is AUTOMATIC: this asks Google which models the key can
+// actually use and picks the best current one. That means it keeps working
+// when Google renames or retires models. To pin a specific model instead,
+// set the optional GEMINI_MODEL environment variable.
 
-const DEFAULT_MODEL = 'gemini-2.5-flash';
+let cachedModel = null;      // remembered between warm invocations
+let cachedModelAt = 0;
+const MODEL_TTL_MS = 6 * 60 * 60 * 1000; // re-check twice a day
+
+async function pickModel(apiKey) {
+  if (process.env.GEMINI_MODEL) return process.env.GEMINI_MODEL;
+  if (cachedModel && (Date.now() - cachedModelAt) < MODEL_TTL_MS) return cachedModel;
+
+  const res = await fetch('https://generativelanguage.googleapis.com/v1beta/models', {
+    headers: { 'x-goog-api-key': apiKey }
+  });
+  const data = await res.json();
+  if (!res.ok) {
+    const msg = (data && data.error && data.error.message) || ('HTTP ' + res.status);
+    throw new Error('Could not list available Gemini models: ' + msg);
+  }
+
+  const usable = (data.models || []).filter(m =>
+    (m.supportedGenerationMethods || []).includes('generateContent') &&
+    !/embedding|aqa|tts|image|audio|video|robotics|learnlm|gemma/i.test(m.name)
+  );
+  if (!usable.length) throw new Error('No Gemini models available to this API key.');
+
+  // Prefer stable "flash" models (fast + cheap + vision-capable), newest first.
+  const versionOf = name => {
+    const m = /gemini-(\d+(?:\.\d+)?)/.exec(name);
+    return m ? parseFloat(m[1]) : 0;
+  };
+  const score = m => {
+    const n = m.name;
+    let s = versionOf(n) * 100;
+    if (/flash/i.test(n)) s += 50;      // flash = ideal for this task
+    if (/lite/i.test(n)) s -= 20;       // lite is weaker at vision
+    if (/preview|exp/i.test(n)) s -= 30; // prefer stable releases
+    return s;
+  };
+  usable.sort((a, b) => score(b) - score(a));
+
+  cachedModel = usable[0].name.replace(/^models\//, '');
+  cachedModelAt = Date.now();
+  return cachedModel;
+}
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
@@ -32,13 +72,13 @@ export default async function handler(req, res) {
   const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) {
     return res.status(500).json({
-      error: 'Server not configured: the GEMINI_API_KEY environment variable is missing. Add it in your Vercel project settings (get a free key at aistudio.google.com/app/apikey).'
+      error: 'Server not configured: the GEMINI_API_KEY environment variable is missing. Add it in your Vercel project settings (free key at aistudio.google.com/app/apikey).'
     });
   }
-  const model = process.env.GEMINI_MODEL || DEFAULT_MODEL;
 
   try {
-    // Convert a data URL into Gemini's inline_data format
+    const model = await pickModel(apiKey);
+
     function toPart(dataUrl) {
       const match = /^data:(image\/[a-zA-Z+]+);base64,(.+)$/.exec(dataUrl);
       if (!match) return null;
@@ -91,8 +131,8 @@ export default async function handler(req, res) {
       },
       body: JSON.stringify({
         contents: [{ role: 'user', parts: parts }],
+        // NOTE: temperature/top_p are deprecated on Gemini 3.x — defaults are best.
         generationConfig: {
-          temperature: 0,
           maxOutputTokens: 8192,
           responseMimeType: 'application/json'
         }
@@ -102,27 +142,28 @@ export default async function handler(req, res) {
     const data = await response.json();
 
     if (!response.ok) {
+      // A stale cached model name is the most likely cause of a 404 — clear it
+      // so the next attempt re-discovers a working model.
+      if (response.status === 404) { cachedModel = null; cachedModelAt = 0; }
       const msg = (data && data.error && data.error.message) || ('Gemini API error (HTTP ' + response.status + ')');
-      return res.status(response.status).json({ error: msg, details: data });
+      return res.status(response.status).json({ error: msg + ' [model: ' + model + ']', details: data });
     }
 
-    // Pull the text out of Gemini's response shape
     let text = '';
     try {
       const cand = data.candidates && data.candidates[0];
       const cparts = cand && cand.content && cand.content.parts;
       if (cparts) text = cparts.map(function (p) { return p.text || ''; }).join('');
-    } catch (e) { /* handled by the empty-text check below */ }
+    } catch (e) { /* handled below */ }
 
     if (!text.trim()) {
       return res.status(200).json({
         parts: [], positions: {},
         warning: 'The model returned an empty response.',
-        details: data
+        model: model, details: data
       });
     }
 
-    // Strip any stray code fences just in case
     text = text.trim()
       .replace(/^```json\s*/i, '')
       .replace(/^```\s*/i, '')
@@ -133,16 +174,15 @@ export default async function handler(req, res) {
       parsed = JSON.parse(text);
     } catch (e) {
       return res.status(200).json({
-        parts: [], positions: {}, raw: text,
+        parts: [], positions: {}, raw: text, model: model,
         warning: 'Could not parse a clean JSON response from the model.'
       });
     }
 
-    // Accept either {parts, positions} or a bare array of parts
     const outParts = Array.isArray(parsed) ? parsed : (parsed.parts || []);
     const outPositions = (parsed && parsed.positions) || {};
 
-    return res.status(200).json({ parts: outParts, positions: outPositions });
+    return res.status(200).json({ parts: outParts, positions: outPositions, model: model });
   } catch (e) {
     return res.status(500).json({ error: e.message });
   }
