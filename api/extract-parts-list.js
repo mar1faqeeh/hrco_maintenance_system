@@ -1,8 +1,8 @@
 // Vercel Serverless Function — reads a parts-list table image and locates the
 // numbered callouts on an exploded-view diagram, using GOOGLE GEMINI.
 //
-// Drop-in replacement: same URL, same request/response shape, so NO changes
-// are needed in maintenance_system.html.
+// Drop-in replacement: same URL and response shape, so NO changes are needed
+// in maintenance_system.html.
 //
 // ── SETUP (one time) ──────────────────────────────────────────────────────
 // 1. Free API key: https://aistudio.google.com/app/apikey
@@ -11,21 +11,23 @@
 //       Value: the key from step 1
 // 3. Save this file at:  api/extract-parts-list.js   then redeploy.
 //
-// You do NOT need to choose a model or an API version. This discovers the
-// models your key can use and tries them over BOTH Google API styles (the new
-// Interactions API and the legacy generateContent endpoint) until one answers.
-// To pin a model anyway, set the optional GEMINI_MODEL environment variable.
+// ── SELF-TEST ─────────────────────────────────────────────────────────────
+// Open this URL in your browser after deploying:
+//     https://YOUR-SITE.vercel.app/api/extract-parts-list
+// It reports whether the key works, which models your key can see, and which
+// model + API style actually answered — no upload needed.
 
 // ── Gemini transport ─────────────────────────────────────────────────────
-// Google is migrating from the legacy `:generateContent` endpoint to the new
-// `/interactions` endpoint, and which one a given model accepts changes over
-// time. So instead of committing to either, we describe the job abstractly
-// and try BOTH shapes, across every model the key can see, until one answers.
+// Google is mid-migration from the legacy `:generateContent` endpoint to the
+// new `/interactions` endpoint, and support varies per model and changes over
+// time. So we describe the job abstractly and probe: every model, over both
+// API styles, and — because optional fields like a forced JSON response
+// format or a search tool can make the server reject an otherwise fine
+// request — from the richest request body down to the barest one.
 
-let cachedRoute = null;   // { model, api } that last worked
+let cachedRoute = null;   // { model, api, variant } that last worked
 let cachedRouteAt = 0;
 const ROUTE_TTL_MS = 6 * 60 * 60 * 1000;
-
 const API_REVISION = '2026-05-20';
 
 async function listCandidateModels(apiKey) {
@@ -39,7 +41,7 @@ async function listCandidateModels(apiKey) {
   }
 
   const usable = (data.models || []).filter(m =>
-    !/embedding|aqa|tts|image|audio|video|robotics|learnlm|gemma|lyria|nano-banana|computer-use|deep-research|antigravity/i.test(m.name)
+    !/embedding|aqa|tts|image|audio|video|robotics|learnlm|gemma|lyria|nano-banana|computer-use|deep-research|antigravity|omni/i.test(m.name)
   );
   if (!usable.length) throw new Error('No Gemini models available to this API key.');
 
@@ -47,7 +49,7 @@ async function listCandidateModels(apiKey) {
     const m = /gemini-(\d+(?:\.\d+)?)/.exec(name);
     return m ? parseFloat(m[1]) : 0;
   };
-  // Cheap, free-tier-friendly models first. Newest is usually paid-only, so
+  // Cheap, free-tier-friendly models first; newest is usually paid-only, so
   // version is only a mild tie-breaker.
   const score = m => {
     const n = m.name;
@@ -65,18 +67,19 @@ async function listCandidateModels(apiKey) {
 }
 
 // spec: { parts:[{text}|{image:{mime,data}}], json:bool, search:bool, maxTokens:int }
-function buildInteractionsBody(model, spec, withTools) {
+// opts: { json:bool, tools:bool } — which optional features to include
+function buildInteractionsBody(model, spec, opts) {
   const input = spec.parts.map(p =>
     p.image ? { type: 'image', mime_type: p.image.mime, data: p.image.data }
             : { type: 'text', text: p.text }
   );
-  const body = { model: model, input: input, store: false };
-  if (spec.json) body.response_format = { type: 'text', mime_type: 'application/json' };
-  if (spec.search && withTools) body.tools = [{ type: 'google_search' }];
+  const body = { model: model, input: input };
+  if (opts.json) body.response_format = { type: 'text', mime_type: 'application/json' };
+  if (opts.tools) body.tools = [{ type: 'google_search' }];
   return body;
 }
 
-function buildGenerateContentBody(spec, withTools) {
+function buildGenerateContentBody(spec, opts) {
   const parts = spec.parts.map(p =>
     p.image ? { inline_data: { mime_type: p.image.mime, data: p.image.data } }
             : { text: p.text }
@@ -85,12 +88,11 @@ function buildGenerateContentBody(spec, withTools) {
     contents: [{ role: 'user', parts: parts }],
     generationConfig: { maxOutputTokens: spec.maxTokens || 4096 }
   };
-  if (spec.json) body.generationConfig.responseMimeType = 'application/json';
-  if (spec.search && withTools) body.tools = [{ google_search: {} }];
+  if (opts.json) body.generationConfig.responseMimeType = 'application/json';
+  if (opts.tools) body.tools = [{ google_search: {} }];
   return body;
 }
 
-// Pulls the model's text out of either response shape.
 function extractText(data) {
   let text = '';
   try {
@@ -110,11 +112,10 @@ function extractText(data) {
   return text;
 }
 
-// Pulls any web sources the search tool cited, from either shape.
 function extractSources(data) {
   const out = [];
   const push = (uri, title) => {
-    if (uri && !out.some(o => o.url === uri)) {
+    if (uri && typeof uri === 'string' && /^https?:/i.test(uri) && !out.some(o => o.url === uri)) {
       out.push({
         title: title || uri,
         url: uri,
@@ -129,28 +130,34 @@ function extractSources(data) {
     ((gm && gm.groundingChunks) || []).forEach(c => { if (c.web) push(c.web.uri, c.web.title); });
   } catch (e) {}
   try {
-    (data.steps || []).forEach(step => {
-      const scan = obj => {
-        if (!obj || typeof obj !== 'object') return;
-        if (typeof obj.uri === 'string') push(obj.uri, obj.title);
-        if (typeof obj.url === 'string') push(obj.url, obj.title);
-        Object.keys(obj).forEach(k => scan(obj[k]));
-      };
-      scan(step);
-    });
+    const scan = obj => {
+      if (!obj || typeof obj !== 'object') return;
+      if (typeof obj.uri === 'string') push(obj.uri, obj.title);
+      if (typeof obj.url === 'string') push(obj.url, obj.title);
+      Object.keys(obj).forEach(k => scan(obj[k]));
+    };
+    (data.steps || []).forEach(scan);
   } catch (e) {}
   return out;
 }
 
+// A failure worth trying somewhere else, rather than reporting to the user.
+// Google returns 500 "Internal error encountered" for request shapes a model
+// dislikes, so that counts too.
 function isRetryable(message, status) {
-  if (status === 404 || status === 429 || status === 400) return true;
-  return /Interactions API|generateContent|no longer available|not supported|not found|quota|unsupported|invalid/i.test(message || '');
+  if ([400, 404, 429, 500, 503].indexOf(status) !== -1) return true;
+  return /Interactions API|generateContent|no longer available|not supported|not found|quota|unsupported|invalid|internal/i.test(message || '');
 }
 
 async function postJson(url, apiKey, body, extraHeaders) {
   const headers = { 'Content-Type': 'application/json', 'x-goog-api-key': apiKey };
   if (extraHeaders) Object.assign(headers, extraHeaders);
-  const response = await fetch(url, { method: 'POST', headers: headers, body: JSON.stringify(body) });
+  let response;
+  try {
+    response = await fetch(url, { method: 'POST', headers: headers, body: JSON.stringify(body) });
+  } catch (e) {
+    return { ok: false, status: 0, message: 'Network error: ' + e.message };
+  }
   const data = await response.json().catch(() => ({}));
   if (response.ok) return { ok: true, data: data };
   const message = (data && data.error && data.error.message) ||
@@ -158,25 +165,46 @@ async function postJson(url, apiKey, body, extraHeaders) {
   return { ok: false, status: response.status, message: message };
 }
 
-// Tries one model over one API style, dropping the search tool if the model
-// accepts the call but rejects that specific tool.
-async function tryRoute(apiKey, model, api, spec) {
-  for (const withTools of (spec.search ? [true, false] : [false])) {
+// Request-body variants, richest first. Anything optional gets dropped on the
+// way down, because a plain request is the most widely accepted.
+function variantsFor(spec) {
+  const list = [];
+  if (spec.json || spec.search) list.push({ json: !!spec.json, tools: !!spec.search });
+  if (spec.search) list.push({ json: false, tools: true });
+  if (spec.json) list.push({ json: true, tools: false });
+  list.push({ json: false, tools: false });
+  // de-duplicate
+  const seen = {};
+  return list.filter(v => {
+    const k = v.json + '|' + v.tools;
+    if (seen[k]) return false;
+    seen[k] = 1;
+    return true;
+  });
+}
+
+async function tryRoute(apiKey, model, api, spec, variantIndex) {
+  const variants = variantsFor(spec);
+  const start = (typeof variantIndex === 'number') ? variantIndex : 0;
+  let last = { ok: false, status: 500, message: 'No variant attempted', variant: start };
+  for (let i = start; i < variants.length; i++) {
+    const opts = variants[i];
     let r;
     if (api === 'interactions') {
       r = await postJson('https://generativelanguage.googleapis.com/v1beta/interactions',
-                         apiKey, buildInteractionsBody(model, spec, withTools),
+                         apiKey, buildInteractionsBody(model, spec, opts),
                          { 'Api-Revision': API_REVISION });
     } else {
       r = await postJson('https://generativelanguage.googleapis.com/v1beta/models/' +
                          encodeURIComponent(model) + ':generateContent',
-                         apiKey, buildGenerateContentBody(spec, withTools));
+                         apiKey, buildGenerateContentBody(spec, opts));
     }
+    r.variant = i;
     if (r.ok) return r;
-    // Only worth retrying without tools if the tool itself was the problem
-    if (withTools && /tool|search|grounding/i.test(r.message || '')) continue;
-    return r;
+    last = r;
+    if (!isRetryable(r.message, r.status)) break; // auth-type failure: stop here
   }
+  return last;
 }
 
 async function callGemini(apiKey, spec) {
@@ -185,13 +213,10 @@ async function callGemini(apiKey, spec) {
   let lastMessage = '', lastStatus = 500;
 
   if (process.env.GEMINI_MODEL) {
-    for (const api of ['interactions', 'generateContent']) {
-      attempts.push({ model: process.env.GEMINI_MODEL, api: api });
-    }
+    attempts.push({ model: process.env.GEMINI_MODEL, api: 'interactions' });
+    attempts.push({ model: process.env.GEMINI_MODEL, api: 'generateContent' });
   } else {
-    if (cachedRoute && (Date.now() - cachedRouteAt) < ROUTE_TTL_MS) {
-      attempts.push(cachedRoute);
-    }
+    if (cachedRoute && (Date.now() - cachedRouteAt) < ROUTE_TTL_MS) attempts.push(cachedRoute);
     const models = await listCandidateModels(apiKey);
     // New API first — the legacy endpoint is being retired model by model.
     models.forEach(m => attempts.push({ model: m, api: 'interactions' }));
@@ -199,9 +224,9 @@ async function callGemini(apiKey, spec) {
   }
 
   for (const attempt of attempts) {
-    const r = await tryRoute(apiKey, attempt.model, attempt.api, spec);
+    const r = await tryRoute(apiKey, attempt.model, attempt.api, spec, attempt.variant);
     if (r.ok) {
-      cachedRoute = attempt;
+      cachedRoute = { model: attempt.model, api: attempt.api, variant: r.variant };
       cachedRouteAt = Date.now();
       return { data: r.data, model: attempt.model, api: attempt.api };
     }
@@ -223,6 +248,50 @@ async function callGemini(apiKey, spec) {
 }
 
 export default async function handler(req, res) {
+  const apiKey = process.env.GEMINI_API_KEY;
+
+  // ── Self-test: plain GET in a browser ──────────────────────────────────
+  if (req.method === 'GET') {
+    if (!apiKey) {
+      return res.status(200).json({
+        ok: false,
+        step: 'api key',
+        problem: 'GEMINI_API_KEY is not set in this project\'s environment variables.',
+        fix: 'Vercel → your project → Settings → Environment Variables → add GEMINI_API_KEY, then redeploy.'
+      });
+    }
+    let models = [];
+    try {
+      models = await listCandidateModels(apiKey);
+    } catch (e) {
+      return res.status(200).json({
+        ok: false, step: 'list models', problem: e.message,
+        fix: 'The API key was rejected by Google. Check it was pasted in full, then redeploy.'
+      });
+    }
+    try {
+      const probe = await callGemini(apiKey, {
+        parts: [{ text: 'Reply with exactly: OK' }],
+        json: false, search: false, maxTokens: 32
+      });
+      return res.status(200).json({
+        ok: true,
+        working_model: probe.model,
+        working_api: probe.api,
+        reply: extractText(probe.data).trim().slice(0, 100),
+        models_visible: models.length,
+        first_models: models.slice(0, 8)
+      });
+    } catch (e) {
+      return res.status(200).json({
+        ok: false, step: 'model call', problem: e.message,
+        models_visible: models.length,
+        first_models: models.slice(0, 8),
+        fix: 'Google rejected every model. If it mentions quota, the free tier is exhausted for today — try again after it resets.'
+      });
+    }
+  }
+
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' });
   }
@@ -231,8 +300,6 @@ export default async function handler(req, res) {
   if (!images || !Array.isArray(images) || !images.length) {
     return res.status(400).json({ error: 'images (array of data URLs) is required' });
   }
-
-  const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) {
     return res.status(500).json({
       error: 'Server not configured: the GEMINI_API_KEY environment variable is missing. Add it in your Vercel project settings (free key at aistudio.google.com/app/apikey).'
@@ -272,8 +339,8 @@ export default async function handler(req, res) {
       instructions +=
         ' Then look at the DIAGRAM IMAGE. It contains small numbered circles (callout bubbles), each joined by a thin leader line to a component in the drawing. ' +
         'For EACH numbered circle, report the position of THE CIRCLE ITSELF as a percentage of the image width and height, where [0,0] is the top-left corner and [100,100] is the bottom-right. ' +
-        'Return these in a JSON object called "positions", for example {"1": [45.2, 30.1], "2": [50.0, 28.4]}. ' +
         'Be as precise as you can and include every numbered circle you can see. ' +
+        'Return these in a JSON object called "positions", for example {"1": [45.2, 30.1], "2": [50.0, 28.4]}. ' +
         'Return ONLY one JSON object shaped exactly like {"parts": [...], "positions": {...}} — no explanations, no markdown code fences.';
     } else {
       instructions += ' Return ONLY {"parts": [...]} — no explanations, no markdown code fences.';
@@ -282,10 +349,7 @@ export default async function handler(req, res) {
     parts.push({ text: instructions });
 
     const result = await callGemini(apiKey, {
-      parts: parts,
-      json: true,
-      search: false,
-      maxTokens: 8192
+      parts: parts, json: true, search: false, maxTokens: 8192
     });
 
     const model = result.model;
@@ -305,9 +369,7 @@ export default async function handler(req, res) {
       .replace(/```\s*$/i, '');
     if (text[0] !== '{' && text[0] !== '[') {
       const first = text.search(/[{[]/);
-      const lastObj = text.lastIndexOf('}');
-      const lastArr = text.lastIndexOf(']');
-      const last = Math.max(lastObj, lastArr);
+      const last = Math.max(text.lastIndexOf('}'), text.lastIndexOf(']'));
       if (first !== -1 && last > first) text = text.slice(first, last + 1);
     }
 
