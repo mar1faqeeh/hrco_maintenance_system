@@ -336,9 +336,10 @@ export default async function handler(req, res) {
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
-  const { images, diagramImage } = req.body || {};
-  if (!images || !Array.isArray(images) || !images.length) {
-    return res.status(400).json({ error: 'images (array of data URLs) is required' });
+  const { images, diagramImage, numbers, positionsOnly } = req.body || {};
+  const hasList = images && Array.isArray(images) && images.length;
+  if (!hasList && !diagramImage) {
+    return res.status(400).json({ error: 'images (array of data URLs) or diagramImage is required' });
   }
   if (!apiKey) {
     return res.status(500).json({
@@ -365,10 +366,56 @@ export default async function handler(req, res) {
       }
     }
 
-    parts.push({ text: 'PARTS-LIST PAGE IMAGE(S) (a table with position/pos number, part code and description columns):' });
-    for (const dataUrl of images) {
-      const part = toImagePart(dataUrl);
-      if (part) parts.push(part);
+    // Positions-only mode: the caller already read the parts table itself
+    // (for free, from the PDF text layer) and just needs the callout
+    // coordinates. Giving the model the exact list of numbers to find is far
+    // more reliable than asking it to infer everything.
+    if (positionsOnly && hasDiagram) {
+      const wanted = Array.isArray(numbers) && numbers.length
+        ? numbers.map(n => String(n)).join(', ')
+        : '';
+      parts.push({ text:
+        'This drawing has small numbered circles (callout bubbles), each joined by a thin leader line to a component.' +
+        (wanted ? ' The numbers used on it are: ' + wanted + '.' : '') +
+        ' Find the CENTRE OF EACH NUMBERED CIRCLE and report it on a 0-1000 grid, where y=0 is the top edge, y=1000 the bottom edge, x=0 the left edge and x=1000 the right edge.' +
+        ' Answer with ONLY a JSON object mapping each number to its centre, using explicit x and y keys, like:' +
+        ' {"1": {"y": 301, "x": 452}, "2": {"y": 284, "x": 500}}' +
+        ' No explanations, no markdown code fences, no other keys.'
+      });
+
+      const posResult = await callGemini(apiKey, {
+        parts: parts, json: true, search: false, maxTokens: 2048
+      });
+      let posText = extractText(posResult.data).trim()
+        .replace(/^```json\s*/i, '').replace(/^```\s*/i, '').replace(/```\s*$/i, '');
+      const pf = posText.indexOf('{');
+      const pl = posText.lastIndexOf('}');
+      if (pf !== -1 && pl > pf) posText = posText.slice(pf, pl + 1);
+      let posParsed = null;
+      try { posParsed = JSON.parse(posText); } catch (e) { posParsed = null; }
+      if (!posParsed) {
+        return res.status(200).json({
+          parts: [], positions: {},
+          warning: 'The model did not return readable coordinates.',
+          raw: extractText(posResult.data).slice(0, 400),
+          model: posResult.model, api: posResult.api
+        });
+      }
+      const posOut = normalisePositions(posParsed.positions || posParsed);
+      return res.status(200).json({
+        parts: [], positions: posOut,
+        model: posResult.model, api: posResult.api,
+        raw: Object.keys(posOut).length ? undefined : extractText(posResult.data).slice(0, 400),
+        warning: Object.keys(posOut).length ? undefined : 'The model answered, but no usable coordinates were found in its reply.'
+      });
+    }
+
+    if (hasList) {
+      parts.push({ text: 'PARTS-LIST PAGE IMAGE(S) (a table with position/pos number, part code and description columns):' });
+      for (const dataUrl of images) {
+        const part = toImagePart(dataUrl);
+        if (part) parts.push(part);
+      }
     }
 
     let instructions =
