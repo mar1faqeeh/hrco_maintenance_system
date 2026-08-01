@@ -2349,17 +2349,25 @@ async function ueFileToPages(file){
       try{
         var tc = await page.getTextContent();
         rows = ueGroupTextIntoRows(tc.items, viewport);
-        // Standalone short numbers on a drawing = the numbered callout tags
+        // Candidate callout tags = text items that are ONLY a 1-3 digit number.
+        // Recorded with the glyph's visual centre (not its baseline-left origin)
+        // and its font size, so bogus digits (dates, page numbers, model codes)
+        // can be filtered out later by size and page position.
         tc.items.forEach(function(it){
           var s = (it.str||'').trim();
-          if(/^\d{1,3}$/.test(s)){
-            var pt = viewport.convertToViewportPoint(it.transform[4], it.transform[5]);
-            tags.push({
-              num: String(parseInt(s,10)),
-              xPct: (pt[0] / viewport.width) * 100,
-              yPct: (pt[1] / viewport.height) * 100
-            });
-          }
+          if(!/^\d{1,3}$/.test(s)) return;
+          var fs = Math.abs(it.transform[3]) || 0;
+          // Offset to the glyph centre in PDF space, then convert once.
+          var centre = viewport.convertToViewportPoint(
+            it.transform[4] + (it.width || 0) / 2,
+            it.transform[5] + fs * 0.35
+          );
+          var xPct = (centre[0] / viewport.width) * 100;
+          var yPct = (centre[1] / viewport.height) * 100;
+          // Ignore the header/footer bands — that's where dates, page numbers
+          // and document notices live, never part callouts.
+          if(yPct < 4 || yPct > 93) return;
+          tags.push({ num: String(parseInt(s,10)), xPct: xPct, yPct: yPct, size: fs });
         });
       }catch(e){ console.log('text layer read failed for page '+i, e); }
 
@@ -2388,9 +2396,65 @@ async function ueOnFilesChange(){
   ueRebuildHotspotList();
 
   if(uePages.length > 1){
-    // Try the free, offline route first (works whenever a real PDF was uploaded)
-    var done = ueExtractFromTextLayer();
-    if(!done) ueExtractPartsList(); // fall back to the AI reader for plain images
+    // Two separate jobs:
+    //  1. the parts list  → free, straight from the PDF's text layer when possible
+    //  2. marker positions → free only if the drawing has real text numbers;
+    //     on scanned/raster drawings (most manufacturer PDFs) this needs vision.
+    var res = ueExtractFromTextLayer();
+    if(!res){
+      ueExtractPartsList();            // no text layer at all → vision does both
+    } else if(res.placed === 0){
+      ueExtractPositionsOnly();        // list came free, still need the markers
+    }
+  }
+}
+
+async function ueExtractPositionsOnly(){
+  // The parts list was already read for free; only the marker coordinates are
+  // missing (the drawing is a flat image), so ask the vision API just for those.
+  var status = document.getElementById('ue-files-status');
+  var partsCount = ueParsedParts.length;
+  status.textContent = partsCount + ' parts read from the PDF. Locating the numbers on the drawing...';
+  try{
+    var response = await fetch('/api/extract-parts-list', {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({
+        images: uePages.slice(1).map(function(pg){ return pg.dataUrl; }),
+        diagramImage: uePages[0].dataUrl
+      })
+    });
+    var data = await response.json();
+    if(!response.ok){
+      status.textContent = partsCount + ' parts read. Could not locate the numbers automatically — click the photo to place them.';
+      console.error('extract positions error:', data);
+      alert('تعذّر تحديد مواقع الأرقام تلقائياً:\n' + (data.error || 'خطأ غير معروف') + '\n\nيمكنك الضغط على الصورة لتحديد المواقع يدوياً.\n\nCould not locate the numbers automatically:\n' + (data.error || 'unknown error') + '\n\nYou can click the photo to place them manually.');
+      return;
+    }
+    var positions = data.positions || {};
+    var validNums = {};
+    ueParsedParts.forEach(function(p){ validNums[p.num] = true; });
+    var placed = 0;
+    Object.keys(positions).forEach(function(num){
+      var key = String(parseInt(num,10)); // "0002" -> "2", matching the list
+      var pos = positions[num];
+      if(validNums[key] && Array.isArray(pos) && pos.length===2 && !uePositions[key]){
+        uePositions[key] = [pos[0], pos[1]];
+        placed++;
+      }
+    });
+    if(!placed){
+      status.textContent = partsCount + ' parts read. No numbers were detected on the drawing — click the photo to place them.';
+      alert('لم يتم التعرف على أي أرقام في صورة الرسم.\nاضغط على الصورة لتحديد المواقع يدوياً (يمكنك سحب أي علامة لتعديل مكانها).\n\nNo numbers were detected on the drawing image.\nClick the photo to place them manually (you can drag any marker to adjust it).');
+    } else {
+      status.textContent = '✅ ' + partsCount + ' parts read from the PDF, ' + placed + ' markers placed automatically. Drag any marker to correct it, or click the photo to add missing ones.';
+    }
+    ueRenderHotspotOverlay();
+    ueRenderQueue();
+  }catch(e){
+    status.textContent = partsCount + ' parts read. Could not locate the numbers automatically — click the photo to place them.';
+    console.error('extract positions exception:', e);
+    alert('تعذّر تحديد مواقع الأرقام تلقائياً: ' + e.message + '\nيمكنك الضغط على الصورة لتحديد المواقع يدوياً.\n\nCould not locate the numbers automatically: ' + e.message + '\nYou can click the photo to place them manually.');
   }
 }
 
@@ -2422,23 +2486,36 @@ function ueExtractFromTextLayer(){
     return p.num + ' | ' + p.code + (p.desc ? (' | ' + p.desc) : '');
   }).join('\n');
 
-  // Auto-place markers from the drawing page's own number coordinates
+  // Auto-place markers from the drawing page's own number coordinates.
+  // Callout numbers on a drawing all share one font size, so when the same
+  // number appears more than once on the page, prefer the one matching the
+  // dominant callout size — that filters out stray digits from titles,
+  // dimension labels and model codes.
   uePositions = {};
   var validNums = {};
   parts.forEach(function(p){ validNums[p.num] = true; });
-  (uePages[0].tags||[]).forEach(function(tag){
-    if(validNums[tag.num] && !uePositions[tag.num]){
-      uePositions[tag.num] = [tag.xPct, tag.yPct];
-    }
-  });
+  var candidates = (uePages[0].tags||[]).filter(function(t){ return validNums[t.num]; });
+  if(candidates.length){
+    var sizeCount = {};
+    candidates.forEach(function(c){
+      var k = Math.round(c.size);
+      sizeCount[k] = (sizeCount[k]||0) + 1;
+    });
+    var domSize = Object.keys(sizeCount).sort(function(a,b){ return sizeCount[b]-sizeCount[a]; })[0];
+    var preferred = candidates.filter(function(c){ return Math.abs(Math.round(c.size) - domSize) <= 1; });
+    var pool = preferred.length ? preferred : candidates;
+    pool.forEach(function(c){
+      if(!uePositions[c.num]) uePositions[c.num] = [c.xPct, c.yPct];
+    });
+  }
 
   var placed = Object.keys(uePositions).length;
   status.textContent = uePages.length + ' page(s) ready. ✅ Read directly from the PDF (free, no AI): '
     + parts.length + ' parts'
-    + (placed ? ', ' + placed + ' markers placed automatically.' : '. Click the photo to place the markers.')
+    + (placed ? ', ' + placed + ' markers placed automatically.' : '.')
     + ' Review below and adjust anything if needed.';
   ueRebuildHotspotList();
-  return true;
+  return { parts: parts.length, placed: placed };
 }
 
 async function ueExtractPartsList(){
@@ -2473,7 +2550,8 @@ async function ueExtractPartsList(){
     uePositions = {};
     Object.keys(positions).forEach(function(num){
       var pos = positions[num];
-      if(Array.isArray(pos) && pos.length===2) uePositions[num] = pos;
+      var key = String(parseInt(num,10)); // "0002" -> "2", matching the parts list
+      if(Array.isArray(pos) && pos.length===2 && !uePositions[key]) uePositions[key] = pos;
     });
     var placedCount = Object.keys(uePositions).length;
     status.textContent = uePages.length + ' page(s) ready. ✅ '+parts.length+' parts read, '+placedCount+' markers placed automatically on the photo. Review below and adjust/add markers if needed.';
@@ -2538,7 +2616,7 @@ function ueRenderQueue(){
   q.innerHTML = '';
   var remaining = ueParsedParts.filter(function(p){ return !uePositions[p.num]; });
   if(!remaining.length){
-    hint.textContent = ueParsedParts.length ? 'All part markers placed ✓ Click a marker to remove/replace it.' : '';
+    hint.textContent = ueParsedParts.length ? 'All part markers placed ✓ Drag any marker to correct its position, or tap it to remove.' : '';
   } else {
     hint.innerHTML = 'Click the photo to place: <strong>#'+remaining[0].num+' '+remaining[0].name+'</strong>';
   }
@@ -2572,13 +2650,37 @@ function ueRenderHotspotOverlay(){
   var overlay = document.getElementById('ue-hotspot-overlay');
   if(!overlay) return;
   overlay.innerHTML = '';
+  var img = document.getElementById('ue-diagram-preview');
   Object.keys(uePositions).forEach(function(num){
     var pos = uePositions[num];
     var dot = document.createElement('div');
-    dot.style.cssText = 'position:absolute;left:'+pos[0]+'%;top:'+pos[1]+'%;transform:translate(-50%,-50%);width:22px;height:22px;border-radius:50%;background:#1D4E89;color:#fff;font-size:11px;font-weight:700;display:flex;align-items:center;justify-content:center;border:2px solid #fff;box-shadow:0 1px 4px rgba(0,0,0,.3);pointer-events:auto;cursor:pointer';
+    dot.style.cssText = 'position:absolute;left:'+pos[0]+'%;top:'+pos[1]+'%;transform:translate(-50%,-50%);width:22px;height:22px;border-radius:50%;background:#1D4E89;color:#fff;font-size:11px;font-weight:700;display:flex;align-items:center;justify-content:center;border:2px solid #fff;box-shadow:0 1px 4px rgba(0,0,0,.3);pointer-events:auto;cursor:grab;touch-action:none';
     dot.textContent = num;
-    dot.title = 'Click to remove';
-    dot.onclick = function(e){ e.stopPropagation(); delete uePositions[num]; ueRenderHotspotOverlay(); ueRenderQueue(); };
+    dot.title = 'Drag to move · click to remove';
+    dot.addEventListener('pointerdown', function(e){
+      e.preventDefault(); e.stopPropagation();
+      var startX = e.clientX, startY = e.clientY, moved = false;
+      try{ dot.setPointerCapture(e.pointerId); }catch(err){}
+      dot.style.cursor = 'grabbing';
+      function onMove(ev){
+        if(Math.abs(ev.clientX-startX) > 3 || Math.abs(ev.clientY-startY) > 3) moved = true;
+        var rect = img.getBoundingClientRect();
+        var x = Math.max(0, Math.min(100, ((ev.clientX - rect.left)/rect.width)*100));
+        var y = Math.max(0, Math.min(100, ((ev.clientY - rect.top)/rect.height)*100));
+        uePositions[num] = [x, y];
+        dot.style.left = x+'%';
+        dot.style.top = y+'%';
+      }
+      function onUp(){
+        dot.removeEventListener('pointermove', onMove);
+        dot.removeEventListener('pointerup', onUp);
+        dot.style.cursor = 'grab';
+        // A tap with no movement means "remove this marker"
+        if(!moved){ delete uePositions[num]; ueRenderHotspotOverlay(); ueRenderQueue(); }
+      }
+      dot.addEventListener('pointermove', onMove);
+      dot.addEventListener('pointerup', onUp);
+    });
     overlay.appendChild(dot);
   });
 }
