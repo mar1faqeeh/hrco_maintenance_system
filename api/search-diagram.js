@@ -384,6 +384,104 @@ async function verifyLinks(list, limit) {
   return checked.filter(Boolean);
 }
 
+
+// Technicians often type the serial off the rating plate instead of the model.
+// Serials are long and mix letters and digits without the spaces/dashes that
+// model designations usually have.
+function looksLikeSerial(v) {
+  const s2 = String(v || '').trim();
+  if (s2.length < 7) return false;
+  if (/[\s-]/.test(s2)) return false;
+  const digits = (s2.match(/\d/g) || []).length;
+  const letters = (s2.match(/[A-Za-z]/g) || []).length;
+  return digits >= 4 && letters >= 2;
+}
+
+
+// ── Real web search via Google Programmable Search ───────────────────────
+// Relying on the model's own "grounding" proved unreliable — on a free key it
+// often returns no citations at all, and we (correctly) forbid it from
+// inventing URLs, so results came back empty. Google's Programmable Search
+// JSON API gives us genuine search results, including PDFs.
+//
+// SETUP (free, 100 searches/day):
+//   1. Create a search engine at https://programmablesearchengine.google.com/
+//      — set it to "Search the entire web", then copy its "Search engine ID".
+//   2. Get an API key at https://developers.google.com/custom-search/v1/introduction
+//      (button "Get a Key").
+//   3. In Vercel → Settings → Environment Variables add:
+//        GOOGLE_CSE_CX   = the Search engine ID
+//        GOOGLE_CSE_KEY  = the API key
+//   4. Redeploy.
+// Without these the endpoint still works, falling back to the model's own
+// knowledge — but with them it finds real, current PDF catalogues.
+
+function cseConfigured() {
+  return !!(process.env.GOOGLE_CSE_KEY && process.env.GOOGLE_CSE_CX);
+}
+
+async function cseSearch(query, opts) {
+  const params = new URLSearchParams({
+    key: process.env.GOOGLE_CSE_KEY,
+    cx: process.env.GOOGLE_CSE_CX,
+    q: query,
+    num: String((opts && opts.num) || 8),
+    safe: 'off'
+  });
+  if (opts && opts.pdfOnly) params.set('fileType', 'pdf');
+  const url = 'https://www.googleapis.com/customsearch/v1?' + params.toString();
+  try {
+    const resp = await withTimeout(fetch(url), 10000);
+    const data = await resp.json();
+    if (!resp.ok) {
+      const msg = (data && data.error && data.error.message) || ('HTTP ' + resp.status);
+      return { error: msg, items: [] };
+    }
+    const items = (data.items || []).map(it => ({
+      title: it.title || it.link,
+      url: it.link,
+      type: /\.pdf(\?|#|$)/i.test(it.link) || (it.mime === 'application/pdf') ? 'pdf'
+            : /\.(png|jpe?g|gif|webp)(\?|#|$)/i.test(it.link) ? 'image' : 'page',
+      description: it.snippet || '',
+      relevance: 'medium'
+    }));
+    return { items: items };
+  } catch (e) {
+    return { error: e.message, items: [] };
+  }
+}
+
+// Search the web for real parts-diagram documents for this brand/model.
+async function findPartsDocuments(brand, equipModel, family) {
+  const queries = [
+    { q: '"' + equipModel + '" ' + brand + ' spare parts catalogue', pdfOnly: true },
+    { q: brand + ' ' + equipModel + ' exploded view spare parts diagram pdf' },
+    { q: brand + ' ' + equipModel + ' parts manual diagram' }
+  ];
+  if (family && family !== equipModel) {
+    queries.push({ q: brand + ' ' + family + ' service parts catalogue', pdfOnly: true });
+  }
+  queries.push({ q: brand + ' service parts catalogue exploded view', pdfOnly: true });
+
+  const found = [];
+  const seen = new Set();
+  let lastError = null;
+
+  for (const spec of queries) {
+    const res = await cseSearch(spec.q, { pdfOnly: spec.pdfOnly, num: 8 });
+    if (res.error) { lastError = res.error; continue; }
+    res.items.forEach(item => {
+      if (seen.has(item.url)) return;
+      seen.add(item.url);
+      if (!isDocumentLink(item)) return;
+      found.push(item);
+    });
+    // A few solid PDFs is plenty — stop burning the daily quota
+    if (found.filter(r => r.type === 'pdf').length >= 4) break;
+  }
+  return { found: found, error: lastError };
+}
+
 // Allow Vercel a longer window than the 10s default.
 export const maxDuration = 60;
 
@@ -418,8 +516,21 @@ export default async function handler(req, res) {
                    sources_found: extractSources(g.data).length };
     } catch (e) { grounded = { error: e.message }; }
 
+    let webSearch = null;
+    if (cseConfigured()) {
+      const probe = await cseSearch('Rational SCC61 spare parts catalogue', { pdfOnly: true, num: 5 });
+      webSearch = probe.error
+        ? { configured: true, working: false, problem: probe.error }
+        : { configured: true, working: true, sample_hits: probe.items.length,
+            example: probe.items[0] ? probe.items[0].url : null };
+    } else {
+      webSearch = { configured: false,
+        note: 'Add GOOGLE_CSE_KEY and GOOGLE_CSE_CX to search the real web for PDF parts catalogues (free, 100/day). Setup steps are in the comments at the top of this file.' };
+    }
+
     return res.status(200).json({
       ok: !!(plain && !plain.error),
+      web_search: webSearch,
       models_visible: models.length,
       plain_call: plain,
       grounded_search: grounded,
@@ -444,6 +555,29 @@ export default async function handler(req, res) {
   }
 
   try {
+    // ── Preferred path: a real web search ────────────────────────────────
+    if (cseConfigured()) {
+      const fam = deriveFamily(equipModel);
+      const web = await findPartsDocuments(brand, equipModel, fam);
+      const verifiedWeb = await verifyLinks(web.found, 10);
+      verifiedWeb.sort((a, b) => scoreDoc(b) - scoreDoc(a));
+      if (verifiedWeb.length) {
+        return res.status(200).json({
+          found: true,
+          equipment_name: brand + ' ' + equipModel,
+          manufacturer_parts_url: null,
+          direct_image_urls: verifiedWeb.filter(r => r.type === 'image').map(r => r.url),
+          results: verifiedWeb,
+          tips: verifiedWeb.some(r => r.type === 'pdf')
+            ? 'These links were found by a live web search and checked to be reachable. Open the closest match, then add its diagram here with "Upload Manually".'
+            : 'No downloadable PDF surfaced, but these pages show or lead to parts diagrams.',
+          source: 'web-search'
+        });
+      }
+      if (web.error) console.warn('web search problem:', web.error);
+      // nothing usable — fall through to the model-knowledge path below
+    }
+
     // Goal: DIRECT links to exploded-view / spare-parts PDF documents.
     // Generic homepages are useless to a technician, so they are filtered out
     // and every surviving link is checked to be actually reachable.
@@ -454,6 +588,7 @@ export default async function handler(req, res) {
         hints: [
           brand + ' ' + equipModel + ' spare parts catalogue filetype:pdf',
           brand + ' ' + equipModel + ' exploded view parts list pdf',
+          brand + ' ' + equipModel + ' parts manual site:partstown.com OR site:partstown.co.uk',
           '"' + equipModel + '" ricambi OR "spare parts" pdf'
         ] }
     ];
@@ -470,6 +605,7 @@ export default async function handler(req, res) {
       hints: [
         brand + ' spare parts catalogue filetype:pdf',
         brand + ' exploded view parts list pdf',
+        brand + ' parts manual site:partstown.com OR site:partstown.co.uk',
         brand + ' service manual parts pdf'
       ] });
 
@@ -483,6 +619,10 @@ export default async function handler(req, res) {
         'TASK: find DIRECT DOWNLOAD LINKS to documents containing exploded-view spare parts diagrams for ' + stage.ask + '.\n' +
         'Brand: ' + brand + '\nModel: ' + equipModel + '\n\n' +
         'Use Google Search. Useful queries include:\n- ' + stage.hints.join('\n- ') + '\n\n' +
+        'ALSO search the big foodservice parts distributors, which publish exploded-view parts manuals and diagrams ' +
+        'for most brands — for example Parts Town (partstown.com / partstown.co.uk, which hosts a large manuals library), ' +
+        'Gastroparts, Alliance Parts, Heritage Parts, 4Cooking, and the brand\'s own technical/service documentation area. ' +
+        'A distributor-hosted parts manual PDF is a perfectly good result.\n\n' +
         'WHAT COUNTS AS A RESULT:\n' +
         '- A URL that points straight at a PDF parts catalogue, parts list or service manual (ideally ending in .pdf)\n' +
         '- A URL of a page that displays the exploded-view diagram itself\n' +
@@ -560,8 +700,11 @@ export default async function handler(req, res) {
         ? (verified.some(r => r.type === 'pdf')
             ? 'These PDF links were checked and are reachable. Open the closest match, then add its diagram here with "Upload Manually".'
             : 'No downloadable PDF catalogue surfaced, but these pages show or lead to parts diagrams.')
-        : ('No downloadable parts diagram is published for ' + brand + ' ' + equipModel + '. ' +
-           'Manufacturers of this type usually keep parts catalogues behind a dealer portal — request the PDF from an authorised ' + brand +
+        : ('No downloadable parts diagram was found for ' + brand + ' ' + equipModel + '.' +
+           (looksLikeSerial(equipModel)
+             ? ' NOTE: "' + equipModel + '" looks like a SERIAL number rather than a model designation. Try the model shown on the rating plate instead (for example Rational uses SCC 61, CMP 101, iCombi Pro 6-1-1 — not the serial).'
+             : '') +
+           ' Otherwise request the parts catalogue from an authorised ' + brand +
            ' dealer with the unit\'s serial number, then add it here with "Upload Manually".'),
       model: lastModel, api: lastApi
     };
