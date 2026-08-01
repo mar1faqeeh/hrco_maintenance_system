@@ -2451,8 +2451,11 @@ async function ueExtractPositionsOnly(){
       method: 'POST',
       headers: {'Content-Type':'application/json'},
       body: JSON.stringify({
-        images: uePages.slice(1).map(function(pg){ return pg.dataUrl; }),
-        diagramImage: uePages[0].dataUrl
+        diagramImage: uePages[0].dataUrl,
+        // We already read the table for free, so tell the model exactly which
+        // numbers to look for instead of making it work them out again.
+        numbers: ueParsedParts.map(function(p){ return p.num; }),
+        positionsOnly: true
       })
     });
     var data = await response.json();
@@ -2476,7 +2479,12 @@ async function ueExtractPositionsOnly(){
     });
     if(!placed){
       status.textContent = partsCount + ' parts read. No numbers were detected on the drawing — click the photo to place them.';
-      alert('لم يتم التعرف على أي أرقام في صورة الرسم.\nاضغط على الصورة لتحديد المواقع يدوياً (يمكنك سحب أي علامة لتعديل مكانها).\n\nNo numbers were detected on the drawing image.\nClick the photo to place them manually (you can drag any marker to adjust it).');
+      console.warn('position extraction returned nothing:', data);
+      var detail = '';
+      if(data.warning) detail += '\n(' + data.warning + ')';
+      if(data.raw) detail += '\nModel replied: ' + String(data.raw).slice(0, 200);
+      if(data.model) detail += '\n[' + data.model + ' / ' + (data.api||'') + ']';
+      alert('لم يتم التعرف على أي أرقام في صورة الرسم.\nاضغط على الصورة لتحديد المواقع يدوياً (يمكنك سحب أي علامة لتعديل مكانها).\n\nNo numbers were detected on the drawing image.\nClick the photo to place them manually (you can drag any marker to adjust it).' + detail);
     } else {
       status.textContent = '✅ ' + partsCount + ' parts read from the PDF, ' + placed + ' markers placed automatically. Drag any marker to correct it, or click the photo to add missing ones.';
     }
