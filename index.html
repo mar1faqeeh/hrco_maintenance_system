@@ -2412,6 +2412,15 @@ async function ueOnFilesChange(){
 // Whatever scale the model answered in (percent, 0-1 fraction, Gemini's
 // 0-1000 grid, or raw pixels), turn it into percentages of the image, and
 // discard anything that still lands outside the picture.
+// Never let a request hang the UI forever — abort it and surface a clear error.
+function fetchWithTimeout(url, options, ms){
+  var controller = new AbortController();
+  var timer = setTimeout(function(){ controller.abort(); }, ms || 60000);
+  options = options || {};
+  options.signal = controller.signal;
+  return fetch(url, options).finally(function(){ clearTimeout(timer); });
+}
+
 function ueNormalisePositions(raw){
   var pairs = [];
   Object.keys(raw||{}).forEach(function(key){
@@ -2447,7 +2456,7 @@ async function ueExtractPositionsOnly(){
   var partsCount = ueParsedParts.length;
   status.textContent = partsCount + ' parts read from the PDF. Locating the numbers on the drawing...';
   try{
-    var response = await fetch('/api/extract-parts-list', {
+    var response = await fetchWithTimeout('/api/extract-parts-list', {
       method: 'POST',
       headers: {'Content-Type':'application/json'},
       body: JSON.stringify({
@@ -2457,7 +2466,7 @@ async function ueExtractPositionsOnly(){
         numbers: ueParsedParts.map(function(p){ return p.num; }),
         positionsOnly: true
       })
-    });
+    }, 70000);
     var data = await response.json();
     if(!response.ok){
       status.textContent = partsCount + ' parts read. Could not locate the numbers automatically — click the photo to place them.';
@@ -2491,7 +2500,10 @@ async function ueExtractPositionsOnly(){
     ueRenderHotspotOverlay();
     ueRenderQueue();
   }catch(e){
-    status.textContent = partsCount + ' parts read. Could not locate the numbers automatically — click the photo to place them.';
+    var timedOut = (e && e.name === 'AbortError');
+    status.textContent = partsCount + ' parts read. ' + (timedOut
+      ? 'Locating the numbers took too long — click the photo to place them.'
+      : 'Could not locate the numbers automatically — click the photo to place them.');
     console.error('extract positions exception:', e);
     alert('تعذّر تحديد مواقع الأرقام تلقائياً: ' + e.message + '\nيمكنك الضغط على الصورة لتحديد المواقع يدوياً.\n\nCould not locate the numbers automatically: ' + e.message + '\nYou can click the photo to place them manually.');
   }
@@ -2943,11 +2955,11 @@ async function aiSearchDiagram(){
   if(content) content.innerHTML='';
   if(btn){ btn.disabled=true; btn.innerHTML='<i class="ti ti-loader" style="animation:spin 1s linear infinite"></i> Searching...'; }
   try{
-    var response=await fetch('/api/search-diagram',{
+    var response=await fetchWithTimeout('/api/search-diagram',{
       method:'POST',
       headers:{'Content-Type':'application/json'},
       body:JSON.stringify({ brand:brand, model:model })
-    });
+    }, 70000);
     var data=await response.json();
     if(!response.ok){
       if(thinking) thinking.style.display='none';
@@ -2972,7 +2984,10 @@ async function aiSearchDiagram(){
     else if(content) content.innerHTML='<div style="padding:12px;background:#FDF0E0;border-radius:8px;font-size:13px;color:#C4680A">Could not read the search response.</div>';
   }catch(e){
     if(thinking) thinking.style.display='none';
-    if(content) content.innerHTML='<div style="padding:12px;background:#FCEBEB;border-radius:8px;color:#C0392B;font-size:13px">Search failed: '+e.message+'</div>';
+    var msg = (e && e.name === 'AbortError')
+      ? 'The search took too long and was stopped. Please try again — if it keeps happening, use "Upload Manually" instead.'
+      : ('Search failed: ' + e.message);
+    if(content) content.innerHTML='<div style="padding:12px;background:#FCEBEB;border-radius:8px;color:#C0392B;font-size:13px">'+msg+'</div>';
   }
   if(btn){ btn.disabled=false; btn.innerHTML='<i class="ti ti-search"></i> Search'; }
 }
