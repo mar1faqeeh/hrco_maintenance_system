@@ -320,6 +320,70 @@ function shapeResult(parsed, brand, equipModel, stageLabel) {
   };
 }
 
+
+// Is this a link to an actual parts document, rather than a homepage or noise?
+function isDocumentLink(r) {
+  if (!r || !r.url || !/^https?:\/\//i.test(r.url)) return false;
+  const url = r.url;
+  let path = '';
+  try { path = new URL(url).pathname || '/'; } catch (e) { return false; }
+
+  // Obvious noise
+  if (/wikipedia\.org|youtube\.com|youtu\.be|facebook\.com|instagram\.com|linkedin\.com|twitter\.com|x\.com|pinterest\.|amazon\.|ebay\.|alibaba\.|aliexpress\./i.test(url)) return false;
+  if (/\/(search|find|results)\b|[?&]q=|[?&]query=/i.test(url)) return false;
+  if (/\/(about|contact|news|blog|careers|privacy|terms|login|cart)\b/i.test(path)) return false;
+
+  const isPdf = /\.pdf(\?|#|$)/i.test(url) || r.type === 'pdf';
+  const isImage = /\.(png|jpe?g|gif|webp|svg)(\?|#|$)/i.test(url) || r.type === 'image';
+  if (isPdf || isImage) return true;
+
+  // A bare homepage is useless to a technician
+  const depth = path.split('/').filter(Boolean).length;
+  if (depth === 0) return false;
+
+  // Otherwise keep it only if it looks parts-related
+  return /part|spare|ricambi|catalog|catalogue|manual|diagram|exploded|service|schema|ersatzteil|pieces/i.test(url + ' ' + (r.title || '') + ' ' + (r.description || ''));
+}
+
+// Rank: real PDFs first, then diagram images, then parts pages.
+function scoreDoc(r) {
+  let s = 0;
+  const hay = (r.url + ' ' + (r.title || '') + ' ' + (r.description || '')).toLowerCase();
+  if (r.type === 'pdf' || /\.pdf(\?|#|$)/i.test(r.url)) s += 100;
+  if (r.type === 'image') s += 60;
+  if (/exploded|spaccato|explosionszeichnung/.test(hay)) s += 40;
+  if (/spare|ricambi|ersatzteil|part/.test(hay)) s += 25;
+  if (/catalog|catalogue|manual/.test(hay)) s += 15;
+  if (r.relevance === 'high') s += 20;
+  else if (r.relevance === 'medium') s += 8;
+  if (r.verified) s += 30;
+  return s;
+}
+
+// Models sometimes cite URLs that 404. Check each one really loads, in
+// parallel and with a tight timeout, and drop the dead ones.
+async function verifyLinks(list, limit) {
+  const subset = list.slice(0, limit || 10);
+  const checked = await Promise.all(subset.map(async r => {
+    try {
+      let resp = await withTimeout(fetch(r.url, { method: 'HEAD', redirect: 'follow' }), 6000);
+      // Some servers reject HEAD — retry with a tiny ranged GET
+      if (resp.status === 405 || resp.status === 501) {
+        resp = await withTimeout(fetch(r.url, { method: 'GET', redirect: 'follow', headers: { Range: 'bytes=0-256' } }), 6000);
+      }
+      if (!resp.ok && resp.status !== 206) return null;
+      const ctype = (resp.headers.get('content-type') || '').toLowerCase();
+      if (ctype.includes('pdf')) r.type = 'pdf';
+      else if (ctype.startsWith('image/')) r.type = 'image';
+      r.verified = true;
+      return r;
+    } catch (e) {
+      return null;   // unreachable — don't show a dead link
+    }
+  }));
+  return checked.filter(Boolean);
+}
+
 // Allow Vercel a longer window than the 10s default.
 export const maxDuration = 60;
 
@@ -380,44 +444,58 @@ export default async function handler(req, res) {
   }
 
   try {
-    // Progressive widening: exact model first, then the model family, then the
-    // brand's parts catalogue in general. Stop as soon as something useful
-    // turns up, so a common model costs one call and a rare one still ends
-    // with something actionable rather than a dead end.
+    // Goal: DIRECT links to exploded-view / spare-parts PDF documents.
+    // Generic homepages are useless to a technician, so they are filtered out
+    // and every surviving link is checked to be actually reachable.
     const family = deriveFamily(equipModel);
     const stages = [
-      { label: 'exact', query: brand + ' ' + equipModel,
-        ask: 'the exact model "' + equipModel + '"' },
+      { label: 'exact',
+        ask: 'the exact model "' + equipModel + '"',
+        hints: [
+          brand + ' ' + equipModel + ' spare parts catalogue filetype:pdf',
+          brand + ' ' + equipModel + ' exploded view parts list pdf',
+          '"' + equipModel + '" ricambi OR "spare parts" pdf'
+        ] }
     ];
     if (family && family !== equipModel) {
-      stages.push({ label: 'family', query: brand + ' ' + family,
-        ask: 'the "' + family + '" model family (the closest relative of ' + equipModel + ')' });
+      stages.push({ label: 'family',
+        ask: 'the "' + family + '" model family (closest relative of ' + equipModel + ')',
+        hints: [
+          brand + ' ' + family + ' series spare parts catalogue filetype:pdf',
+          brand + ' ' + family + ' exploded view parts manual pdf'
+        ] });
     }
-    stages.push({ label: 'brand', query: brand + ' spare parts catalogue',
-      ask: 'the ' + brand + ' spare-parts catalogue in general (any entry point that leads to exploded-view diagrams)' });
+    stages.push({ label: 'brand',
+      ask: 'any ' + brand + ' spare-parts catalogue PDF that covers this type of equipment',
+      hints: [
+        brand + ' spare parts catalogue filetype:pdf',
+        brand + ' exploded view parts list pdf',
+        brand + ' service manual parts pdf'
+      ] });
 
-    let best = null;
+    let headline = null;
     let lastModel = null, lastApi = null;
-    const allSources = [];
+    const candidates = [];
 
     for (const stage of stages) {
       const prompt =
-        'You are a commercial kitchen and refrigeration equipment parts expert. ' +
-        'Find official exploded-view spare parts diagrams for ' + stage.ask + '.\n' +
-        'Brand / Manufacturer: ' + brand + '\n' +
-        'Model: ' + equipModel + '\n\n' +
-        'Prefer the manufacturer\'s own spare-parts portal, service manual PDFs, and reputable parts distributors.\n' +
-        'Even if you cannot find the diagram itself, ALWAYS fill "results" with genuinely useful starting points: ' +
-        'the brand\'s official website and spare-parts portal, distributor or dealer pages that stock this brand, ' +
-        'and any service/technical documentation you are aware of. An empty "results" list is not acceptable ' +
-        'unless you know nothing at all about this brand.\n\n' +
-        'Reply with ONLY a JSON object (no explanations, no markdown fences) shaped exactly like this:\n' +
-        '{"found": true, "equipment_name": "...", "manufacturer_parts_url": "https://... or null", ' +
-        '"direct_image_urls": ["https://..."], ' +
-        '"results": [{"title": "...", "url": "https://...", "type": "pdf|image|page", "description": "...", "relevance": "high|medium|low"}], ' +
-        '"tips": "short practical advice for getting this exact parts diagram"}\n' +
-        'Set "found" to false if you did not find the diagram itself — but still return useful "results". ' +
-        'Never invent a URL you are not confident about.';
+        'You are a spare-parts researcher for commercial kitchen and refrigeration equipment.\n' +
+        'TASK: find DIRECT DOWNLOAD LINKS to documents containing exploded-view spare parts diagrams for ' + stage.ask + '.\n' +
+        'Brand: ' + brand + '\nModel: ' + equipModel + '\n\n' +
+        'Use Google Search. Useful queries include:\n- ' + stage.hints.join('\n- ') + '\n\n' +
+        'WHAT COUNTS AS A RESULT:\n' +
+        '- A URL that points straight at a PDF parts catalogue, parts list or service manual (ideally ending in .pdf)\n' +
+        '- A URL of a page that displays the exploded-view diagram itself\n' +
+        'WHAT DOES NOT COUNT (never include these):\n' +
+        '- Company homepages, "about us", contact or news pages\n' +
+        '- Search-result pages, marketplaces, Wikipedia, forums, YouTube\n' +
+        '- Any URL you did not actually see in the search results — never guess or construct one\n\n' +
+        'Reply with ONLY this JSON (no prose, no markdown fences):\n' +
+        '{"found": true, "equipment_name": "...", "manufacturer_parts_url": "url of the brand\'s spare-parts portal or null", ' +
+        '"direct_image_urls": ["direct image URLs of the diagram, if any"], ' +
+        '"results": [{"title": "...", "url": "https://...", "type": "pdf|image|page", "description": "what this document contains", "relevance": "high|medium|low"}], ' +
+        '"tips": "how to obtain this specific diagram"}\n' +
+        'If you found no qualifying documents, return "found": false with an empty "results" list.';
 
       let result;
       try {
@@ -425,70 +503,68 @@ export default async function handler(req, res) {
           parts: [{ text: prompt }], json: false, search: true, maxTokens: 4096
         });
       } catch (e) {
-        if (best) break;      // earlier stage already gave us something
-        throw e;              // nothing at all yet — surface the real error
+        if (candidates.length) break;
+        throw e;
       }
 
       lastModel = result.model; lastApi = result.api;
-      extractSources(result.data).forEach(src => {
-        if (!allSources.some(s2 => s2.url === src.url)) allSources.push(src);
-      });
 
       const parsed = parseLoose(extractText(result.data));
       if (parsed) {
-        const stageOut = shapeResult(parsed, brand, equipModel, stage.label);
-        if (!best) best = stageOut;
-        else {
-          // keep the first stage's headline, but absorb extra links
-          stageOut.results.forEach(r => {
-            if (r && r.url && !best.results.some(b => b.url === r.url)) best.results.push(r);
-          });
-          if (!best.manufacturer_parts_url && stageOut.manufacturer_parts_url) {
-            best.manufacturer_parts_url = stageOut.manufacturer_parts_url;
-          }
-          if (stageOut.found && !best.found) {
-            best.found = true;
-            best.equipment_name = stageOut.equipment_name;
-            best.tips = stageOut.tips || best.tips;
-          }
+        const shaped = shapeResult(parsed, brand, equipModel, stage.label);
+        if (!headline) headline = shaped;
+        else if (!headline.manufacturer_parts_url && shaped.manufacturer_parts_url) {
+          headline.manufacturer_parts_url = shaped.manufacturer_parts_url;
         }
-        // Good enough to stop widening
-        if (best.found && best.results.length) break;
+        shaped.results.forEach(r => candidates.push(r));
+        (shaped.direct_image_urls || []).forEach(u => candidates.push({
+          title: 'Diagram image', url: u, type: 'image',
+          description: 'Direct diagram image', relevance: 'high'
+        }));
       }
+      // Sources Google actually cited — these are real URLs, worth keeping
+      extractSources(result.data).forEach(src => candidates.push(src));
+
+      // Enough strong material? stop widening.
+      if (candidates.filter(isDocumentLink).length >= 3) break;
     }
 
-    if (!best) {
-      best = {
-        found: false,
-        equipment_name: brand + ' ' + equipModel,
-        manufacturer_parts_url: null,
-        direct_image_urls: [],
-        results: [],
-        tips: ''
+    if (!headline) {
+      headline = {
+        found: false, equipment_name: brand + ' ' + equipModel,
+        manufacturer_parts_url: null, direct_image_urls: [], results: [], tips: ''
       };
     }
 
-    // Fold in every real link the search tool cited across all stages
-    allSources.forEach(src => {
-      if (!best.results.some(r => r.url === src.url)) best.results.push(src);
+    // Keep only real documents, de-duplicate, then verify they actually load.
+    const docs = [];
+    const seenUrls = new Set();
+    candidates.forEach(r => {
+      if (!r || !r.url || seenUrls.has(r.url)) return;
+      if (!isDocumentLink(r)) return;
+      seenUrls.add(r.url);
+      docs.push(r);
     });
 
-    if (best.results.length) {
-      // We have somewhere useful to send them, even without the diagram itself
-      best.found = true;
-      if (!best.tips) {
-        best.tips = 'The exact diagram was not found directly, but these sources are the best places to look. ' +
-                    'If nothing here has it, request the parts catalogue from an authorised ' + brand + ' dealer with the unit\'s serial number.';
-      }
-    } else {
-      best.tips = best.tips ||
-        ('No public parts diagram was found for ' + brand + ' ' + equipModel + '. ' +
-         'Manufacturers like this often keep parts catalogues behind a dealer portal — request it from an authorised dealer with the serial number, then add it here with "Upload Manually".');
-    }
+    const verified = await verifyLinks(docs, 10);
 
-    best.model = lastModel;
-    best.api = lastApi;
-    const out = best;
+    verified.sort((a, b) => scoreDoc(b) - scoreDoc(a));
+
+    const out = {
+      found: verified.length > 0,
+      equipment_name: headline.equipment_name,
+      manufacturer_parts_url: headline.manufacturer_parts_url || null,
+      direct_image_urls: verified.filter(r => r.type === 'image').map(r => r.url),
+      results: verified,
+      tips: verified.length
+        ? (verified.some(r => r.type === 'pdf')
+            ? 'These PDF links were checked and are reachable. Open the closest match, then add its diagram here with "Upload Manually".'
+            : 'No downloadable PDF catalogue surfaced, but these pages show or lead to parts diagrams.')
+        : ('No downloadable parts diagram is published for ' + brand + ' ' + equipModel + '. ' +
+           'Manufacturers of this type usually keep parts catalogues behind a dealer portal — request the PDF from an authorised ' + brand +
+           ' dealer with the unit\'s serial number, then add it here with "Upload Manually".'),
+      model: lastModel, api: lastApi
+    };
 
     return res.status(200).json(out);
   } catch (e) {
