@@ -83,6 +83,7 @@ async function callGemini(apiKey, buildBody) {
 
   let lastMessage = '';
   let lastStatus = 500;
+  const tried = [];
   for (const name of candidates) {
     const r = await tryModel(apiKey, name, buildBody);
     if (r.ok) {
@@ -92,9 +93,8 @@ async function callGemini(apiKey, buildBody) {
     }
     lastMessage = r.message;
     lastStatus = r.status;
-    // Retryable on another model: not found, no quota on this plan, or the
-    // model rejected the request shape.
-    if (r.status === 404 || r.status === 429 || r.status === 400) {
+    tried.push(name);
+    if (isRetryable(r)) {
       if (cachedModel === name) { cachedModel = null; cachedModelAt = 0; }
       continue;
     }
@@ -114,12 +114,25 @@ async function callGemini(apiKey, buildBody) {
       }
       lastMessage = r.message;
       lastStatus = r.status;
+      tried.push(name);
     }
   }
 
-  const err = new Error(lastMessage || 'All available Gemini models failed.');
+  const err = new Error(
+    (lastMessage || 'All available Gemini models failed.') +
+    (tried.length ? ' [tried: ' + tried.join(', ') + ']' : '')
+  );
   err.status = lastStatus;
   throw err;
+}
+
+
+// Some models are retired, some are paid-only on this plan, and some only
+// work through Google's newer Interactions API. None of those are fatal —
+// they just mean "try the next model".
+function isRetryable(r) {
+  if (r.status === 404 || r.status === 429 || r.status === 400) return true;
+  return /Interactions API|no longer available|not supported|not found|quota|unsupported/i.test(r.message || '');
 }
 
 async function tryModel(apiKey, modelName, buildBody) {
