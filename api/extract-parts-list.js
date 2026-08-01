@@ -30,6 +30,20 @@ let cachedRouteAt = 0;
 const ROUTE_TTL_MS = 6 * 60 * 60 * 1000;
 const API_REVISION = '2026-05-20';
 
+// Hard limits so a request can never hang: stop probing new routes once the
+// time budget is spent, and never walk more than a handful of models.
+const TIME_BUDGET_MS = 40000;
+const MAX_MODELS_TO_TRY = 4;
+
+function withTimeout(promise, ms) {
+  let timer;
+  return Promise.race([
+    promise,
+    new Promise((_, reject) => { timer = setTimeout(() => reject(new Error('Request to Google timed out')), ms); })
+  ]).finally(() => clearTimeout(timer));
+}
+
+
 async function listCandidateModels(apiKey) {
   const res = await fetch('https://generativelanguage.googleapis.com/v1beta/models', {
     headers: { 'x-goog-api-key': apiKey }
@@ -154,7 +168,8 @@ async function postJson(url, apiKey, body, extraHeaders) {
   if (extraHeaders) Object.assign(headers, extraHeaders);
   let response;
   try {
-    response = await fetch(url, { method: 'POST', headers: headers, body: JSON.stringify(body) });
+    response = await withTimeout(
+      fetch(url, { method: 'POST', headers: headers, body: JSON.stringify(body) }), 20000);
   } catch (e) {
     return { ok: false, status: 0, message: 'Network error: ' + e.message };
   }
@@ -217,13 +232,19 @@ async function callGemini(apiKey, spec) {
     attempts.push({ model: process.env.GEMINI_MODEL, api: 'generateContent' });
   } else {
     if (cachedRoute && (Date.now() - cachedRouteAt) < ROUTE_TTL_MS) attempts.push(cachedRoute);
-    const models = await listCandidateModels(apiKey);
+    const all = await listCandidateModels(apiKey);
+    const models = all.slice(0, MAX_MODELS_TO_TRY);
     // New API first — the legacy endpoint is being retired model by model.
     models.forEach(m => attempts.push({ model: m, api: 'interactions' }));
     models.forEach(m => attempts.push({ model: m, api: 'generateContent' }));
   }
 
+  const deadline = Date.now() + TIME_BUDGET_MS;
   for (const attempt of attempts) {
+    if (Date.now() > deadline) {
+      lastMessage = lastMessage || 'Timed out while trying Gemini models.';
+      break;
+    }
     const r = await tryRoute(apiKey, attempt.model, attempt.api, spec, attempt.variant);
     if (r.ok) {
       cachedRoute = { model: attempt.model, api: attempt.api, variant: r.variant };
@@ -286,6 +307,9 @@ function normalisePositions(raw) {
   });
   return out;
 }
+
+// Allow Vercel a longer window than the 10s default.
+export const maxDuration = 60;
 
 export default async function handler(req, res) {
   const apiKey = process.env.GEMINI_API_KEY;

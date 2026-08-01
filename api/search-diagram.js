@@ -28,6 +28,20 @@ let cachedRouteAt = 0;
 const ROUTE_TTL_MS = 6 * 60 * 60 * 1000;
 const API_REVISION = '2026-05-20';
 
+// Hard limits so a request can never hang: stop probing new routes once the
+// time budget is spent, and never walk more than a handful of models.
+const TIME_BUDGET_MS = 40000;
+const MAX_MODELS_TO_TRY = 4;
+
+function withTimeout(promise, ms) {
+  let timer;
+  return Promise.race([
+    promise,
+    new Promise((_, reject) => { timer = setTimeout(() => reject(new Error('Request to Google timed out')), ms); })
+  ]).finally(() => clearTimeout(timer));
+}
+
+
 async function listCandidateModels(apiKey) {
   const res = await fetch('https://generativelanguage.googleapis.com/v1beta/models', {
     headers: { 'x-goog-api-key': apiKey }
@@ -152,7 +166,8 @@ async function postJson(url, apiKey, body, extraHeaders) {
   if (extraHeaders) Object.assign(headers, extraHeaders);
   let response;
   try {
-    response = await fetch(url, { method: 'POST', headers: headers, body: JSON.stringify(body) });
+    response = await withTimeout(
+      fetch(url, { method: 'POST', headers: headers, body: JSON.stringify(body) }), 20000);
   } catch (e) {
     return { ok: false, status: 0, message: 'Network error: ' + e.message };
   }
@@ -215,13 +230,19 @@ async function callGemini(apiKey, spec) {
     attempts.push({ model: process.env.GEMINI_MODEL, api: 'generateContent' });
   } else {
     if (cachedRoute && (Date.now() - cachedRouteAt) < ROUTE_TTL_MS) attempts.push(cachedRoute);
-    const models = await listCandidateModels(apiKey);
+    const all = await listCandidateModels(apiKey);
+    const models = all.slice(0, MAX_MODELS_TO_TRY);
     // New API first — the legacy endpoint is being retired model by model.
     models.forEach(m => attempts.push({ model: m, api: 'interactions' }));
     models.forEach(m => attempts.push({ model: m, api: 'generateContent' }));
   }
 
+  const deadline = Date.now() + TIME_BUDGET_MS;
   for (const attempt of attempts) {
+    if (Date.now() > deadline) {
+      lastMessage = lastMessage || 'Timed out while trying Gemini models.';
+      break;
+    }
     const r = await tryRoute(apiKey, attempt.model, attempt.api, spec, attempt.variant);
     if (r.ok) {
       cachedRoute = { model: attempt.model, api: attempt.api, variant: r.variant };
@@ -246,6 +267,61 @@ async function callGemini(apiKey, spec) {
 }
 
 
+
+
+// "NECE94E" -> "NECE9" / "NECE": strip the trailing size/variant so a close
+// relative of the model can be searched when the exact one draws a blank.
+function deriveFamily(model) {
+  if (!model) return '';
+  const m = String(model).trim();
+  // Prefer a natural break: "IM-200" -> "IM", "F-801MRJ3-C" -> "F-801MRJ3"
+  if (m.indexOf('-') > 0) {
+    const head = m.slice(0, m.lastIndexOf('-'));
+    if (head.length >= 2 && head.length < m.length) return head;
+  }
+  if (m.indexOf(' ') > 0) {
+    const head = m.slice(0, m.lastIndexOf(' ')).trim();
+    if (head.length >= 2) return head;
+  }
+  // Otherwise the leading letters are the series: "NECE94E" -> "NECE"
+  const letters = /^([A-Za-z]+)/.exec(m);
+  const base = letters ? letters[1] : '';
+  if (base && base.length >= 2 && base.length < m.length) return base;
+  return '';
+}
+
+function parseLoose(text) {
+  if (!text || !text.trim()) return null;
+  let clean = text.trim()
+    .replace(/^```json\s*/i, '').replace(/^```\s*/i, '').replace(/```\s*$/i, '');
+  if (clean[0] !== '{') {
+    const first = clean.indexOf('{');
+    const last = clean.lastIndexOf('}');
+    if (first !== -1 && last > first) clean = clean.slice(first, last + 1);
+  }
+  try { return JSON.parse(clean); } catch (e) { return null; }
+}
+
+function shapeResult(parsed, brand, equipModel, stageLabel) {
+  const results = Array.isArray(parsed.results) ? parsed.results.filter(r => r && r.url) : [];
+  if (stageLabel !== 'exact') {
+    results.forEach(r => {
+      r.description = (r.description ? r.description + ' ' : '') +
+        (stageLabel === 'family' ? '(related model family)' : '(brand-level source)');
+    });
+  }
+  return {
+    found: parsed.found !== undefined ? !!parsed.found : true,
+    equipment_name: parsed.equipment_name || (brand + ' ' + equipModel),
+    manufacturer_parts_url: parsed.manufacturer_parts_url || null,
+    direct_image_urls: Array.isArray(parsed.direct_image_urls) ? parsed.direct_image_urls : [],
+    results: results,
+    tips: parsed.tips || ''
+  };
+}
+
+// Allow Vercel a longer window than the 10s default.
+export const maxDuration = 60;
 
 export default async function handler(req, res) {
   const apiKey = process.env.GEMINI_API_KEY;
@@ -304,72 +380,115 @@ export default async function handler(req, res) {
   }
 
   try {
-    const prompt =
-      'You are a commercial kitchen and refrigeration equipment parts expert. ' +
-      'Find the official exploded-view spare parts diagram for this equipment:\n' +
-      'Brand / Manufacturer: ' + brand + '\n' +
-      'Model: ' + equipModel + '\n\n' +
-      'Prefer the manufacturer\'s own spare-parts portal, service manual PDFs, and reputable parts distributors.\n\n' +
-      'Reply with ONLY a JSON object (no explanations, no markdown fences) shaped exactly like this:\n' +
-      '{"found": true, "equipment_name": "...", "manufacturer_parts_url": "https://... or null", ' +
-      '"direct_image_urls": ["https://..."], ' +
-      '"results": [{"title": "...", "url": "https://...", "type": "pdf|image|page", "description": "...", "relevance": "high|medium|low"}], ' +
-      '"tips": "short practical advice for finding this parts diagram"}\n' +
-      'Set "found" to false and still return the same shape if you find nothing. ' +
-      'Never invent a URL you are not confident about.';
+    // Progressive widening: exact model first, then the model family, then the
+    // brand's parts catalogue in general. Stop as soon as something useful
+    // turns up, so a common model costs one call and a rare one still ends
+    // with something actionable rather than a dead end.
+    const family = deriveFamily(equipModel);
+    const stages = [
+      { label: 'exact', query: brand + ' ' + equipModel,
+        ask: 'the exact model "' + equipModel + '"' },
+    ];
+    if (family && family !== equipModel) {
+      stages.push({ label: 'family', query: brand + ' ' + family,
+        ask: 'the "' + family + '" model family (the closest relative of ' + equipModel + ')' });
+    }
+    stages.push({ label: 'brand', query: brand + ' spare parts catalogue',
+      ask: 'the ' + brand + ' spare-parts catalogue in general (any entry point that leads to exploded-view diagrams)' });
 
-    // search:true is attempted first; if grounding is unavailable the transport
-    // automatically retries without it rather than failing.
-    const result = await callGemini(apiKey, {
-      parts: [{ text: prompt }],
-      json: false,          // grounded search and strict JSON mode can conflict; we parse leniently
-      search: true,
-      maxTokens: 4096
-    });
+    let best = null;
+    let lastModel = null, lastApi = null;
+    const allSources = [];
 
-    const geminiModel = result.model;
-    const text = extractText(result.data);
-    const grounded = extractSources(result.data);
+    for (const stage of stages) {
+      const prompt =
+        'You are a commercial kitchen and refrigeration equipment parts expert. ' +
+        'Find official exploded-view spare parts diagrams for ' + stage.ask + '.\n' +
+        'Brand / Manufacturer: ' + brand + '\n' +
+        'Model: ' + equipModel + '\n\n' +
+        'Prefer the manufacturer\'s own spare-parts portal, service manual PDFs, and reputable parts distributors.\n' +
+        'Even if you cannot find the diagram itself, ALWAYS fill "results" with genuinely useful starting points: ' +
+        'the brand\'s official website and spare-parts portal, distributor or dealer pages that stock this brand, ' +
+        'and any service/technical documentation you are aware of. An empty "results" list is not acceptable ' +
+        'unless you know nothing at all about this brand.\n\n' +
+        'Reply with ONLY a JSON object (no explanations, no markdown fences) shaped exactly like this:\n' +
+        '{"found": true, "equipment_name": "...", "manufacturer_parts_url": "https://... or null", ' +
+        '"direct_image_urls": ["https://..."], ' +
+        '"results": [{"title": "...", "url": "https://...", "type": "pdf|image|page", "description": "...", "relevance": "high|medium|low"}], ' +
+        '"tips": "short practical advice for getting this exact parts diagram"}\n' +
+        'Set "found" to false if you did not find the diagram itself — but still return useful "results". ' +
+        'Never invent a URL you are not confident about.';
 
-    let parsed = null;
-    if (text.trim()) {
-      let clean = text.trim()
-        .replace(/^```json\s*/i, '').replace(/^```\s*/i, '').replace(/```\s*$/i, '');
-      if (clean[0] !== '{') {
-        const first = clean.indexOf('{');
-        const last = clean.lastIndexOf('}');
-        if (first !== -1 && last > first) clean = clean.slice(first, last + 1);
+      let result;
+      try {
+        result = await callGemini(apiKey, {
+          parts: [{ text: prompt }], json: false, search: true, maxTokens: 4096
+        });
+      } catch (e) {
+        if (best) break;      // earlier stage already gave us something
+        throw e;              // nothing at all yet — surface the real error
       }
-      try { parsed = JSON.parse(clean); } catch (e) { parsed = null; }
+
+      lastModel = result.model; lastApi = result.api;
+      extractSources(result.data).forEach(src => {
+        if (!allSources.some(s2 => s2.url === src.url)) allSources.push(src);
+      });
+
+      const parsed = parseLoose(extractText(result.data));
+      if (parsed) {
+        const stageOut = shapeResult(parsed, brand, equipModel, stage.label);
+        if (!best) best = stageOut;
+        else {
+          // keep the first stage's headline, but absorb extra links
+          stageOut.results.forEach(r => {
+            if (r && r.url && !best.results.some(b => b.url === r.url)) best.results.push(r);
+          });
+          if (!best.manufacturer_parts_url && stageOut.manufacturer_parts_url) {
+            best.manufacturer_parts_url = stageOut.manufacturer_parts_url;
+          }
+          if (stageOut.found && !best.found) {
+            best.found = true;
+            best.equipment_name = stageOut.equipment_name;
+            best.tips = stageOut.tips || best.tips;
+          }
+        }
+        // Good enough to stop widening
+        if (best.found && best.results.length) break;
+      }
     }
 
-    if (!parsed) {
-      return res.status(200).json({
-        found: grounded.length > 0,
+    if (!best) {
+      best = {
+        found: false,
         equipment_name: brand + ' ' + equipModel,
         manufacturer_parts_url: null,
         direct_image_urls: [],
-        results: grounded,
-        tips: grounded.length
-          ? 'These are the web sources found for this model. Open them to locate the parts diagram.'
-          : 'No parts diagram was found automatically. Try the manufacturer\'s own spare-parts portal, or upload the diagram manually.',
-        model: geminiModel, api: result.api,
-        raw: grounded.length ? undefined : text.slice(0, 300)
-      });
+        results: [],
+        tips: ''
+      };
     }
 
-    const out = {
-      found: parsed.found !== undefined ? parsed.found : true,
-      equipment_name: parsed.equipment_name || (brand + ' ' + equipModel),
-      manufacturer_parts_url: parsed.manufacturer_parts_url || null,
-      direct_image_urls: Array.isArray(parsed.direct_image_urls) ? parsed.direct_image_urls : [],
-      results: Array.isArray(parsed.results) ? parsed.results : [],
-      tips: parsed.tips || '',
-      model: geminiModel, api: result.api
-    };
-    const seen = new Set(out.results.map(r => r && r.url));
-    grounded.forEach(g => { if (!seen.has(g.url)) { out.results.push(g); seen.add(g.url); } });
-    if (out.results.length) out.found = true;
+    // Fold in every real link the search tool cited across all stages
+    allSources.forEach(src => {
+      if (!best.results.some(r => r.url === src.url)) best.results.push(src);
+    });
+
+    if (best.results.length) {
+      // We have somewhere useful to send them, even without the diagram itself
+      best.found = true;
+      if (!best.tips) {
+        best.tips = 'The exact diagram was not found directly, but these sources are the best places to look. ' +
+                    'If nothing here has it, request the parts catalogue from an authorised ' + brand + ' dealer with the unit\'s serial number.';
+      }
+    } else {
+      best.tips = best.tips ||
+        ('No public parts diagram was found for ' + brand + ' ' + equipModel + '. ' +
+         'Manufacturers like this often keep parts catalogues behind a dealer portal — request it from an authorised dealer with the serial number, then add it here with "Upload Manually".');
+    }
+
+    best.model = lastModel;
+    best.api = lastApi;
+    const out = best;
 
     return res.status(200).json(out);
   } catch (e) {
