@@ -1190,7 +1190,7 @@ async function loadAllFromDB(){
           sig_tech: v.sig_tech||'', sig_client: v.sig_client||''
         };
       });
-      rData = visData.map(function(v,i){ return Object.assign({id:i+1},v); });
+      rData = visData.map(function(v,i){ return Object.assign({}, v, {id:i+1, visitId:v.id}); });
       console.log('Loaded', visData.length, 'visits from DB');
       updatePendingBadge();
     }
@@ -1406,7 +1406,7 @@ async function deleteVisit(id){
     }
     // Remove from local data
     visData = visData.filter(function(v){ return v.id != id; });
-    rData = visData.map(function(v,i){ return Object.assign({id:i+1},v); });
+    rData = visData.map(function(v,i){ return Object.assign({}, v, {id:i+1, visitId:v.id}); });
     renderVisits(visFil, '');
     updateDashStats();
     console.log('✅ Visit #'+id+' deleted');
@@ -4015,7 +4015,7 @@ function runReport(){
   res.forEach(function(r){
     var ph=r.parts.length?'<span class="bdg b-d" style="font-size:10px"><i class="ti ti-tool" style="font-size:10px"></i> '+r.parts.length+'</span>':'<span style="font-size:11px;color:#A0AEC0">—</span>';
     var row=document.createElement('div');row.className='trow';row.style.gridTemplateColumns='1.8fr 1.2fr 1fr 1.2fr 0.8fr 0.8fr 70px';
-    row.innerHTML='<div class="tc"><div style="font-weight:500">'+r.client+'</div><div class="tc2">'+r.equip+'</div></div><div class="tc">'+r.tech+'</div><div class="tc">'+ph+'</div><div class="tc"><span class="bdg b-i" style="font-size:10px">'+(typeLabel[r.type]||r.type)+'</span></div><div class="tc"><span class="bdg '+(stBdg[r.status]||'b-g')+'">'+r.status+'</span></div><div class="tc2">'+r.date+'</div><div><button class="rbtn"><i class="ti ti-eye"></i></button></div>';
+    row.innerHTML='<div class="tc"><div style="font-weight:500">'+r.client+'</div><div class="tc2">'+r.equip+'</div></div><div class="tc">'+r.tech+'</div><div class="tc">'+ph+'</div><div class="tc"><span class="bdg b-i" style="font-size:10px">'+(typeLabel[r.type]||r.type)+'</span></div><div class="tc"><span class="bdg '+(stBdg[r.status]||'b-g')+'">'+r.status+'</span></div><div class="tc2">'+r.date+'</div><div style="display:flex;gap:4px"><button class="rbtn" onclick="viewVisit('+(r.visitId||r.id)+')" title="View"><i class="ti ti-eye"></i></button><button class="rbtn" onclick="showPrintOptions('+(r.visitId||r.id)+')" title="Print"><i class="ti ti-printer"></i></button></div>';
     body.appendChild(row);
   });
 }
@@ -4384,7 +4384,7 @@ async function saveAndSign() {
     });
     if(existing) Object.assign(existing, merged);
     else visData.unshift(merged);
-    rData = visData.map(function(v,i){ return Object.assign({id:i+1}, v, {parts:v.parts||[]}); });
+    rData = visData.map(function(v,i){ return Object.assign({}, v, {id:i+1, visitId:v.id, parts:v.parts||[]}); });
   }
   // Write values DIRECTLY to summary elements before navigating
   var _client = document.getElementById('inp-client');
