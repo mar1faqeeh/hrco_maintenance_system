@@ -2165,15 +2165,49 @@ var equipmentData = []; // {id, name, diagramBase64, parts:[{num,name,desc}]}
 var prCurrentEquip = null;
 var prSelected = {}; // {partNum: {num,name,desc,qty}}
 
+function clearEquipSearch(){
+  var box = document.getElementById('pr-equip-search');
+  if(box) box.value = '';
+  renderEquipGrid();
+  if(box) box.focus();
+}
+
 function renderEquipGrid(){
   var el = document.getElementById('pr-equip-list');
   if(!el) return;
+
+  var box = document.getElementById('pr-equip-search');
+  var q = box ? box.value.trim().toLowerCase() : '';
+  var clearBtn = document.getElementById('pr-equip-clear');
+  if(clearBtn) clearBtn.style.display = q ? 'block' : 'none';
+
+  // Search the equipment name AND its parts (code, name, description), so a
+  // technician can find the machine by a part number they're holding.
+  var list = !q ? equipmentData : equipmentData.filter(function(eq){
+    if((eq.name||'').toLowerCase().indexOf(q) !== -1) return true;
+    return (eq.parts||[]).some(function(p){
+      return String(p.num||'').toLowerCase().indexOf(q) !== -1
+          || String(p.name||'').toLowerCase().indexOf(q) !== -1
+          || String(p.desc||'').toLowerCase().indexOf(q) !== -1;
+    });
+  });
+
+  var counter = document.getElementById('pr-equip-count');
+  if(counter) counter.textContent = q
+    ? '(' + list.length + ' of ' + equipmentData.length + ')'
+    : (equipmentData.length ? '(' + equipmentData.length + ')' : '');
+
   if(!equipmentData.length){
     el.innerHTML = '<div style="padding:40px;text-align:center;color:#A0AEC0"><i class="ti ti-tools" style="font-size:36px;display:block;margin-bottom:8px"></i>No equipment added yet<br><small>Click "Upload Equipment" to add</small></div>';
     return;
   }
+  if(!list.length){
+    el.innerHTML = '<div style="padding:34px;text-align:center;color:#A0AEC0"><i class="ti ti-search-off" style="font-size:32px;display:block;margin-bottom:8px"></i>No equipment matches "'+q.replace(/</g,'&lt;')+'"<br><small>Try the machine name or a part number</small></div>';
+    return;
+  }
+
   el.innerHTML = '';
-  equipmentData.forEach(function(eq){
+  list.forEach(function(eq){
     var row = document.createElement('div');
     row.style.cssText = 'display:flex;align-items:center;gap:14px;border:1.5px solid #D9E2EC;border-radius:10px;padding:10px 14px;cursor:pointer;background:#fff;transition:box-shadow .2s,border-color .2s';
     row.onmouseover = function(){ this.style.boxShadow='0 2px 12px rgba(0,0,0,.08)'; this.style.borderColor='#1D4E89'; };
@@ -5264,8 +5298,19 @@ async function showPublicReport(token){
   </div>
 
   <!-- Saved Equipment List -->
-  <div style="font-size:13px;font-weight:700;color:#0F2D52;margin-bottom:10px;display:flex;align-items:center;gap:6px">
-    <i class="ti ti-archive"></i> Saved Equipment Archive
+  <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px;flex-wrap:wrap">
+    <div style="font-size:13px;font-weight:700;color:#0F2D52;display:flex;align-items:center;gap:6px">
+      <i class="ti ti-archive"></i> Saved Equipment Archive
+      <span id="pr-equip-count" style="font-weight:600;color:#718096;font-size:11px"></span>
+    </div>
+    <div style="flex:1"></div>
+    <div style="position:relative;min-width:220px">
+      <i class="ti ti-search" style="position:absolute;top:50%;transform:translateY(-50%);inset-inline-start:10px;color:#A0AEC0;font-size:14px;pointer-events:none"></i>
+      <input type="text" id="pr-equip-search" oninput="renderEquipGrid()" placeholder="Search equipment / بحث عن معدة..."
+             style="width:100%;padding:8px 32px;border:1.5px solid #D9E2EC;border-radius:8px;font-size:12px;font-family:inherit;outline:none">
+      <button type="button" id="pr-equip-clear" onclick="clearEquipSearch()" title="Clear"
+              style="display:none;position:absolute;top:50%;transform:translateY(-50%);inset-inline-end:6px;border:none;background:none;color:#A0AEC0;cursor:pointer;font-size:14px;padding:2px 4px"><i class="ti ti-x"></i></button>
+    </div>
   </div>
   <div id="pr-equip-list" style="display:flex;flex-direction:column;gap:8px;margin-bottom:16px"></div>
 
