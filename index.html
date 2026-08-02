@@ -173,6 +173,7 @@ html,body{height:100%;overflow:auto;font-family:Tajawal,sans-serif;font-size:14p
 }
 @media(max-width:520px){
   #main{padding:12px}
+  .grf-label{display:none}
   .sg-4{gap:8px}
   .sg-5{grid-template-columns:repeat(2,1fr)}
   .tcgrid{grid-template-columns:1fr}
@@ -206,6 +207,7 @@ html,body{height:100%;overflow:auto;font-family:Tajawal,sans-serif;font-size:14p
         <button class="lbtn" id="lb-ar" onclick="setLang('ar')">ع</button>
         <button class="lbtn" id="lb-ur" onclick="setLang('ur')">اردو</button>
       </div>
+      <button id="globalRefreshBtn" onclick="refreshAll()" title="تحديث البيانات / Refresh data" style="display:flex;align-items:center;gap:6px;background:rgba(255,255,255,.12);color:#fff;border:none;border-radius:8px;padding:7px 12px;cursor:pointer;font-size:12px;font-weight:700;font-family:inherit"><i class="ti ti-refresh" id="globalRefreshIcon"></i><span class="grf-label">Refresh</span></button>
       <button class="notif"><div class="ndot"></div><i class="ti ti-bell"></i> 3</button>
       <div class="uav" id="uAv" onclick="logout()">M</div>
     </div>
@@ -807,7 +809,7 @@ function _showDbBanner(){
   if(document.getElementById('dbOfflineBanner')) return;
   var b = document.createElement('div');
   b.id = 'dbOfflineBanner';
-  b.style.cssText = 'position:fixed;top:0;left:0;right:0;z-index:99999;background:#C0392B;color:#fff;text-align:center;padding:8px 12px;font-size:13px;font-weight:700';
+  b.style.cssText = 'position:fixed;bottom:0;left:0;right:0;z-index:9998;background:#C0392B;color:#fff;text-align:center;padding:8px 12px;font-size:13px;font-weight:700;pointer-events:none';
   b.textContent = '⚠️ لا يوجد اتصال بقاعدة البيانات — لن يتم حفظ أي بيانات جديدة حتى تتم إعادة الاتصال / No database connection — new data will not be saved until reconnected';
   document.body.appendChild(b);
 }
@@ -1049,7 +1051,16 @@ async function lgLogin(){
   
   err.textContent=t('err'); err.style.display='block';
 }
-function lgSuccess(u){
+function lgSuccess(u, restoring){
+  // Remember who's signed in, so a browser refresh doesn't kick them out.
+  if(!restoring){
+    try{
+      var loginKey = Object.keys(USERS).find(function(k){ return USERS[k]===u; })
+                     || (document.getElementById('lg-email')||{}).value || '';
+      localStorage_set('hrco_session', JSON.stringify({ login: loginKey, at: Date.now() }));
+    }catch(e){}
+  }
+
   // Hide login screen
   var ls=document.getElementById('loginScreen');
   if(ls){
@@ -1215,7 +1226,46 @@ async function loadAllFromDB(){
     }
   } catch(e){ console.log('loadHistory error:', e); }
 }
-function logout(){if(confirm('Sign out?')){document.getElementById('loginScreen').style.display='flex';if(_sb)_sb.auth.signOut().catch(function(){});}}
+// Reload everything from the database and repaint whatever page is open —
+// so the user never has to reload the browser (which used to sign them out).
+var _refreshing = false;
+async function refreshAll(){
+  if(_refreshing) return;
+  _refreshing = true;
+  var icon = document.getElementById('globalRefreshIcon');
+  if(icon) icon.style.animation = 'spin 1s linear infinite';
+  try{
+    await loadSystemUsers();
+    await loadAllFromDB();
+    try{ await loadEquipmentData(); }catch(e){}
+    try{ await loadPartsRequests(); }catch(e){}
+    updatePendingBadge();
+    // repaint the page currently on screen
+    var current = 'dashboard';
+    PAGES.forEach(function(p){
+      var el = document.getElementById('pg-'+p);
+      if(el && el.style.display !== 'none') current = p;
+    });
+    go(current);
+  }catch(e){
+    console.error('refreshAll:', e);
+    alert('تعذّر تحديث البيانات: ' + e.message + '\nCould not refresh data: ' + e.message);
+  }finally{
+    if(icon) icon.style.animation = '';
+    _refreshing = false;
+  }
+}
+
+function logout(){
+  if(!confirm('Sign out?')) return;
+  try{ window.localStorage.removeItem('hrco_session'); }catch(e){}
+  var ls = document.getElementById('loginScreen');
+  if(ls){
+    ls.removeAttribute('hidden');
+    ls.style.cssText = 'position:fixed;inset:0;background:#0F2D52;z-index:9999;display:flex;align-items:center;justify-content:center;padding:16px;font-family:Tajawal,sans-serif';
+  }
+  if(_sb) _sb.auth.signOut().catch(function(){});
+}
 
 // ══════════════════════════════════════
 // NAVIGATION
@@ -4859,6 +4909,20 @@ window.addEventListener('load', async function() {
   await loadVisitsFromDB();
   await loadAC();
   setupRealtime();
+
+  // Restore a previous session so refreshing the browser doesn't sign you out.
+  try{
+    var raw = localStorage_get('hrco_session');
+    if(raw){
+      var sess = JSON.parse(raw);
+      var u = sess && sess.login ? USERS[sess.login] : null;
+      if(u){
+        var sel = document.getElementById('lg-email');
+        if(sel){ try{ sel.value = sess.login; }catch(e){} }
+        lgSuccess(u, true);
+      }
+    }
+  }catch(e){ console.log('session restore skipped:', e); }
 });
 
 async function showPublicReport(token){
