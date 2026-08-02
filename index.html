@@ -225,6 +225,7 @@ html,body{height:100%;overflow:auto;font-family:Tajawal,sans-serif;font-size:14p
         <div class="nav-item" onclick="go('technicians')" id="nav-technicians"><i class="ti ti-users"></i><span id="t-techs">Technicians</span></div>
         <div class="nav-item" onclick="go('parts')" id="nav-parts"><i class="ti ti-tool"></i><span id="t-parts">Spare Parts</span></div>
         <div class="nav-item" onclick="go('parts-request')" id="nav-parts-request"><i class="ti ti-zoom-question"></i><span>Parts Request</span></div>
+        <div class="nav-item" onclick="go('parts-orders')" id="nav-parts-orders"><i class="ti ti-clipboard-list"></i><span>Parts Orders</span><span class="nbadge" id="po-badge" style="display:none">0</span></div>
         <div class="nav-item" onclick="go('clients')" id="nav-clients"><i class="ti ti-building"></i><span id="t-clients">Clients</span></div>
         <div class="sb-sec" id="sb-rep">Reports</div>
         <div class="nav-item" onclick="go('reports')" id="nav-reports"><i class="ti ti-chart-bar"></i><span id="t-reports">Reports</span></div>
@@ -1219,7 +1220,7 @@ function logout(){if(confirm('Sign out?')){document.getElementById('loginScreen'
 // ══════════════════════════════════════
 // NAVIGATION
 // ══════════════════════════════════════
-var PAGES=['dashboard','visits','pending','newvisit','signature','technicians','parts','parts-request','clients','reports','archive','settings'];
+var PAGES=['dashboard','visits','pending','newvisit','signature','technicians','parts','parts-request','parts-orders','clients','reports','archive','settings'];
 function go(pg){
   try{
   PAGES.forEach(function(p){var el=document.getElementById('pg-'+p);if(el){el.style.cssText='display:none';}});
@@ -1259,6 +1260,7 @@ function go(pg){
   if(pg==='technicians'){renderTechGrid();renderTechCharts();}
   if(pg==='parts'){renderInvList();renderHistList();}
   if(pg==='parts-request'){loadEquipmentData().then(function(){renderEquipGrid();});}
+  if(pg==='parts-orders'){loadPartsRequests();}
   if(pg==='clients'){renderClientGrid();renderDonut();renderTopClients();}
   if(pg==='reports') runReport();
   if(pg==='visits') renderVisits('all','');
@@ -2286,22 +2288,346 @@ async function confirmPartsRequest(){
   var parts = Object.values(prSelected);
   var today = new Date().toISOString().split('T')[0];
 
-  // Save request to Supabase parts_requests table (create if needed)
-  if(_sb){
-    await _sb.from('parts_requests').insert({
-      equipment: prCurrentEquip.name,
-      tech: tech,
-      client: client,
-      notes: notes,
-      parts: JSON.stringify(parts),
-      date: today,
-      status: 'pending'
-    });
+  if(!_initSb()){
+    alert('⚠️ لا يوجد اتصال بقاعدة البيانات — لم يتم إرسال الطلب.\n⚠️ No database connection — the request was NOT submitted.');
+    return;
+  }
+
+  // Save the request, and verify it really landed rather than assuming it did
+  var r = await _sb.from('parts_requests').insert({
+    equipment: prCurrentEquip.name,
+    equipment_id: prCurrentEquip.id,
+    tech: tech,
+    client: client,
+    notes: notes,
+    parts: JSON.stringify(parts),
+    date: today,
+    status: 'pending'
+  }).select();
+
+  if(r.error){
+    console.error('parts request insert failed:', r.error);
+    var missingTable = /relation .* does not exist|could not find the table/i.test(r.error.message||'');
+    var missingCol = /Could not find the '([^']+)' column/.exec(r.error.message||'');
+    if(missingCol){
+      // Retry without the column this database doesn't have yet
+      var payload = { equipment: prCurrentEquip.name, tech: tech, client: client,
+                      notes: notes, parts: JSON.stringify(parts), date: today, status: 'pending' };
+      delete payload[missingCol[1]];
+      var r2 = await _sb.from('parts_requests').insert(payload).select();
+      if(!r2.error && r2.data && r2.data.length){
+        closeMod('prRequestModal');
+        closeDiagram();
+        alert('تم إرسال الطلب بنجاح!\nParts request submitted successfully — the manager will review it.');
+        return;
+      }
+    }
+    alert(missingTable
+      ? '⚠️ جدول الطلبات غير موجود بقاعدة البيانات، لم يتم الحفظ.\nشغّل أمر إنشاء الجدول في Supabase (موجود في صفحة Parts Orders).\n\n⚠️ The parts_requests table does not exist — nothing was saved.'
+      : ('⚠️ تعذّر إرسال الطلب: ' + r.error.message + '\n⚠️ Could not submit the request: ' + r.error.message));
+    return;
+  }
+
+  if(!r.data || !r.data.length){
+    alert('⚠️ تم الإرسال لكن لم يرجع أي سجل — تحقّق من صلاحيات (RLS) لجدول parts_requests.\n⚠️ Submitted but no row returned — check the RLS policies on parts_requests.');
+    return;
   }
 
   closeMod('prRequestModal');
   closeDiagram();
-  alert('Parts request submitted successfully!\nThe manager will review and prepare the parts.');
+  alert('تم إرسال الطلب بنجاح!\nParts request submitted successfully — the manager will review it.');
+}
+
+
+// ══════════════════════════════════════
+// PARTS ORDERS — manager inbox for technician requests
+// ══════════════════════════════════════
+var partsRequests = [];
+var poFilter = 'pending';
+
+async function loadPartsRequests(){
+  var el = document.getElementById('po-list');
+  if(el) el.innerHTML = '<div style="padding:30px;text-align:center;color:#A0AEC0;font-size:13px">Loading...</div>';
+  if(!_initSb()){
+    if(el) el.innerHTML = '<div style="padding:30px;text-align:center;color:#C0392B;font-size:13px">لا يوجد اتصال بقاعدة البيانات / No database connection</div>';
+    return;
+  }
+  try{
+    var r = await _sb.from('parts_requests').select('*').order('id',{ascending:false}).limit(200);
+    if(r.error){
+      console.error('loadPartsRequests:', r.error);
+      var missing = /relation .* does not exist|could not find the table/i.test(r.error.message||'');
+      if(el) el.innerHTML = '<div style="padding:24px;background:#FCEBEB;border:1px solid #F5C6C6;border-radius:10px;color:#C0392B;font-size:13px;line-height:1.7">'
+        + (missing
+            ? '<strong>جدول الطلبات غير موجود بقاعدة البيانات.</strong><br>شغّل هذا الأمر مرة واحدة في Supabase → SQL Editor:<br><code style="display:block;background:#fff;padding:10px;border-radius:6px;margin-top:8px;font-size:11px;direction:ltr;text-align:left">'
+              + 'create table if not exists parts_requests (id bigserial primary key, equipment text, tech text, client text, notes text, parts text, date date, status text default \'pending\', warehouse_email text, sent_at timestamptz, equipment_id bigint, created_at timestamptz default now());'
+              + '</code>'
+            : 'تعذّر تحميل الطلبات: ' + r.error.message)
+        + '</div>';
+      return;
+    }
+    partsRequests = (r.data||[]).map(function(row){
+      var parts = [];
+      try{ parts = typeof row.parts === 'string' ? JSON.parse(row.parts) : (row.parts||[]); }catch(e){}
+      return Object.assign({}, row, { parts: parts });
+    });
+    renderPartsRequests();
+  }catch(e){
+    console.error('loadPartsRequests exception:', e);
+    if(el) el.innerHTML = '<div style="padding:30px;text-align:center;color:#C0392B;font-size:13px">'+e.message+'</div>';
+  }
+}
+
+function setPOFilter(f, btn){
+  poFilter = f;
+  document.querySelectorAll('#pg-parts-orders .ftab').forEach(function(b){ b.style.background=''; b.style.color=''; });
+  if(btn){ btn.style.background='#1D4E89'; btn.style.color='#fff'; }
+  renderPartsRequests();
+}
+
+function poBadgeStyle(status){
+  if(status==='approved') return 'background:#EAF3DE;color:#2D7D3A';
+  if(status==='sent')     return 'background:#E6F1FB;color:#1D4E89';
+  if(status==='rejected') return 'background:#FCEBEB;color:#C0392B';
+  return 'background:#FDF0E0;color:#C4680A'; // pending
+}
+function poBadgeLabel(status){
+  return status==='approved' ? 'Approved'
+       : status==='sent'     ? 'Sent to Warehouse'
+       : status==='rejected' ? 'Rejected' : 'Pending';
+}
+
+// Parts are stored in the database as a JSON string, but may already be an
+// array when the request was just created in this session. Accept both.
+function reqParts(req){
+  var v = req && req.parts;
+  if(!v) return [];
+  if(Array.isArray(v)) return v;
+  if(typeof v === 'string'){
+    try{ var parsed = JSON.parse(v); return Array.isArray(parsed) ? parsed : []; }
+    catch(e){ return []; }
+  }
+  return [];
+}
+
+function renderPartsRequests(){
+  var el = document.getElementById('po-list');
+  if(!el) return;
+  var list = partsRequests.filter(function(r){ return poFilter==='all' ? true : (r.status||'pending')===poFilter; });
+
+  // keep the sidebar badge in step with the real pending count
+  var pendingCount = partsRequests.filter(function(r){ return (r.status||'pending')==='pending'; }).length;
+  var badge = document.getElementById('po-badge');
+  if(badge){ badge.textContent = pendingCount; badge.style.display = pendingCount ? '' : 'none'; }
+
+  if(!list.length){
+    el.innerHTML = '<div style="padding:40px;text-align:center;color:#A0AEC0"><i class="ti ti-clipboard-off" style="font-size:36px;display:block;margin-bottom:8px"></i>No '+(poFilter==='all'?'':poFilter+' ')+'requests</div>';
+    return;
+  }
+
+  el.innerHTML = '';
+  list.forEach(function(req){
+    var status = req.status||'pending';
+    var card = document.createElement('div');
+    card.style.cssText = 'border:1.5px solid #D9E2EC;border-radius:10px;background:#fff;overflow:hidden';
+
+    var partsHtml = reqParts(req).map(function(p){
+      return '<span style="display:inline-flex;align-items:center;gap:5px;background:#F8FAFC;border:1px solid #D9E2EC;border-radius:99px;padding:3px 10px;font-size:11px;margin:2px">'
+        + '<b style="color:#1D4E89">#'+p.num+'</b> '+(p.name||'')
+        + '<span style="color:#C0392B;font-weight:700">× '+(p.qty||1)+'</span></span>';
+    }).join('');
+
+    card.innerHTML =
+      '<div style="display:flex;align-items:center;gap:12px;padding:12px 14px;border-bottom:1px solid #D9E2EC">'
+      + '<div style="flex:1;min-width:0">'
+      +   '<div style="font-size:14px;font-weight:700;color:#1a202c">'+(req.equipment||'—')+'</div>'
+      +   '<div style="font-size:11px;color:#718096;margin-top:2px">'
+      +     '<i class="ti ti-user" style="font-size:11px"></i> '+(req.tech||'—')
+      +     (req.client ? ' · <i class="ti ti-building" style="font-size:11px"></i> '+req.client : '')
+      +     ' · '+(req.date||'')
+      +   '</div>'
+      + '</div>'
+      + '<span class="bdg" style="'+poBadgeStyle(status)+';flex-shrink:0">'+poBadgeLabel(status)+'</span>'
+      + '</div>'
+      + '<div style="padding:10px 14px">'
+      +   '<div style="font-size:11px;color:#718096;margin-bottom:4px">Requested parts ('+reqParts(req).length+')</div>'
+      +   '<div>'+(partsHtml||'<span style="color:#A0AEC0;font-size:12px">—</span>')+'</div>'
+      +   (req.notes ? '<div style="margin-top:8px;font-size:12px;color:#4A5568"><b>Notes:</b> '+req.notes+'</div>' : '')
+      +   (req.warehouse_email ? '<div style="margin-top:8px;font-size:11px;color:#2D7D3A"><i class="ti ti-mail-check"></i> Sent to '+req.warehouse_email+'</div>' : '')
+      + '</div>'
+      + '<div style="display:flex;gap:8px;padding:10px 14px;border-top:1px solid #D9E2EC;background:#F8FAFC">'
+      +   (status==='pending'
+          ? '<button onclick="setRequestStatus('+req.id+',\'approved\')" class="btn btn-p" style="flex:1"><i class="ti ti-check"></i> Approve</button>'
+            + '<button onclick="setRequestStatus('+req.id+',\'rejected\')" class="btn btn-o" style="flex:1;color:#C0392B;border-color:#F5C6C6"><i class="ti ti-x"></i> Reject</button>'
+          : '')
+      +   ((status==='approved'||status==='sent')
+          ? '<button onclick="openWarehouseSend('+req.id+')" class="btn btn-p" style="flex:2;background:'+(status==='sent'?'#2D7D3A':'#1D4E89')+'"><i class="ti ti-truck-delivery"></i> '+(status==='sent'?'Send Again to Warehouse':'Send to Warehouse')+'</button>'
+          : '')
+      +   (status==='rejected'
+          ? '<button onclick="setRequestStatus('+req.id+',\'pending\')" class="btn btn-o" style="flex:1"><i class="ti ti-rotate"></i> Reopen</button>'
+          : '')
+      + '</div>';
+    el.appendChild(card);
+  });
+}
+
+async function setRequestStatus(id, status){
+  if(!_initSb()){ alert('لا يوجد اتصال بقاعدة البيانات / No database connection'); return; }
+  try{
+    var r = await _sb.from('parts_requests').update({ status: status }).eq('id', id).select();
+    if(r.error){ alert('تعذّر التحديث / Update failed: '+r.error.message); return; }
+    if(!r.data || !r.data.length){
+      alert('⚠️ لم يتم تحديث أي سجل — تحقّق من صلاحيات التعديل (RLS) لجدول parts_requests في Supabase.\n⚠️ No row was updated — check the UPDATE policy on parts_requests.');
+      return;
+    }
+    var local = partsRequests.find(function(x){ return x.id === id; });
+    if(local) local.status = status;
+    renderPartsRequests();
+  }catch(e){ alert('خطأ: '+e.message); }
+}
+
+
+var _whRequest = null;
+
+async function openWarehouseSend(id){
+  var req = partsRequests.find(function(x){ return x.id === id; });
+  if(!req){ alert('Request not found'); return; }
+  _whRequest = req;
+
+  // Make sure we have the equipment (for the diagram image + full parts list)
+  if(!equipmentData.length) await loadEquipmentData();
+  var eq = equipmentData.find(function(e){ return e.name === req.equipment; });
+  _whRequest._equip = eq || null;
+
+  document.getElementById('wh-to').value = localStorage_get('hrco_warehouse_email') || '';
+  document.getElementById('wh-subject').value = 'طلب قطع غيار / Spare Parts Request #' + req.id + ' — ' + (req.equipment||'');
+  document.getElementById('wh-msg').value = '';
+  var st = document.getElementById('wh-status'); if(st) st.style.display='none';
+
+  var imgCount = eq ? ((eq.diagramBase64?1:0) + ((eq.extraFiles||[]).length)) : 0;
+  document.getElementById('wh-preview').innerHTML =
+      '<div>• Parts list: <b>'+reqParts(req).length+' item(s)</b> with quantities</div>'
+    + '<div>• Equipment: <b>'+(req.equipment||'—')+'</b></div>'
+    + '<div>• Requested by: <b>'+(req.tech||'—')+'</b>'+(req.client?' — for '+req.client:'')+'</div>'
+    + '<div>• Images attached: <b>'+imgCount+'</b>'
+    + (eq ? (eq.diagramBase64 ? ' (exploded-view drawing' : ' (') + ((eq.extraFiles||[]).length ? ' + '+(eq.extraFiles||[]).length+' parts-list page(s)' : '') + ')' : ' — equipment not found in the archive')
+    + '</div>';
+
+  openMod('warehouseModal');
+}
+
+// tiny helpers so a blocked localStorage can never break the flow
+function localStorage_get(k){ try{ return window.localStorage.getItem(k); }catch(e){ return null; } }
+function localStorage_set(k,v){ try{ window.localStorage.setItem(k,v); }catch(e){} }
+
+function buildWarehouseHtml(req, eq, extraMsg){
+  var rows = reqParts(req).map(function(p, i){
+    return '<tr style="background:'+(i%2?'#F8FAFC':'#fff')+'">'
+      + '<td style="padding:8px 10px;border:1px solid #D9E2EC;text-align:center;font-weight:700;color:#1D4E89">'+p.num+'</td>'
+      + '<td style="padding:8px 10px;border:1px solid #D9E2EC">'+(p.name||'')+'</td>'
+      + '<td style="padding:8px 10px;border:1px solid #D9E2EC;color:#718096;font-size:12px">'+(p.desc||'')+'</td>'
+      + '<td style="padding:8px 10px;border:1px solid #D9E2EC;text-align:center;font-weight:700;color:#C0392B">'+(p.qty||1)+'</td>'
+      + '</tr>';
+  }).join('');
+
+  var images = '';
+  if(eq){
+    if(eq.diagramBase64){
+      images += '<div style="margin-top:18px"><div style="font-weight:700;color:#0F2D52;margin-bottom:6px">الرسم المفكك / Exploded-view drawing</div>'
+              + '<img src="'+eq.diagramBase64+'" style="width:100%;max-width:640px;border:1px solid #D9E2EC;border-radius:8px"></div>';
+    }
+    (eq.extraFiles||[]).forEach(function(f, i){
+      if(f && f.type === 'image' && f.dataUrl){
+        images += '<div style="margin-top:14px"><div style="font-weight:700;color:#0F2D52;margin-bottom:6px">قائمة القطع / Parts list page '+(i+1)+'</div>'
+                + '<img src="'+f.dataUrl+'" style="width:100%;max-width:640px;border:1px solid #D9E2EC;border-radius:8px"></div>';
+      }
+    });
+  }
+
+  return ''
+  + '<div style="font-family:Tahoma,Arial,sans-serif;max-width:700px;margin:0 auto;color:#1a202c">'
+  + '<div style="background:#0F2D52;color:#fff;padding:16px 20px;border-radius:10px 10px 0 0">'
+  +   '<div style="font-size:18px;font-weight:700">طلب قطع غيار / Spare Parts Request</div>'
+  +   '<div style="font-size:12px;opacity:.85;margin-top:2px">HRCO Refrigeration — Request #'+req.id+'</div>'
+  + '</div>'
+  + '<div style="border:1px solid #D9E2EC;border-top:none;border-radius:0 0 10px 10px;padding:20px">'
+  +   (extraMsg ? '<div style="background:#FDF0E0;border:1px solid #F5D5A8;border-radius:8px;padding:10px 12px;margin-bottom:16px;font-size:13px">'+extraMsg+'</div>' : '')
+  +   '<table style="width:100%;border-collapse:collapse;font-size:13px;margin-bottom:16px">'
+  +     '<tr><td style="padding:6px 0;color:#718096;width:130px">المعدة / Equipment</td><td style="padding:6px 0;font-weight:700">'+(req.equipment||'—')+'</td></tr>'
+  +     '<tr><td style="padding:6px 0;color:#718096">الفني / Technician</td><td style="padding:6px 0;font-weight:700">'+(req.tech||'—')+'</td></tr>'
+  +     (req.client ? '<tr><td style="padding:6px 0;color:#718096">العميل / Client</td><td style="padding:6px 0;font-weight:700">'+req.client+'</td></tr>' : '')
+  +     '<tr><td style="padding:6px 0;color:#718096">التاريخ / Date</td><td style="padding:6px 0;font-weight:700">'+(req.date||'')+'</td></tr>'
+  +   '</table>'
+  +   '<div style="font-weight:700;color:#0F2D52;margin-bottom:8px">القطع المطلوبة / Requested parts</div>'
+  +   '<table style="width:100%;border-collapse:collapse;font-size:13px">'
+  +     '<tr style="background:#0F2D52;color:#fff">'
+  +       '<th style="padding:8px 10px;border:1px solid #0F2D52;width:50px">#</th>'
+  +       '<th style="padding:8px 10px;border:1px solid #0F2D52;text-align:right">القطعة / Part</th>'
+  +       '<th style="padding:8px 10px;border:1px solid #0F2D52;text-align:right">الوصف / Description</th>'
+  +       '<th style="padding:8px 10px;border:1px solid #0F2D52;width:70px">الكمية</th>'
+  +     '</tr>'
+  +     rows
+  +   '</table>'
+  +   (req.notes ? '<div style="margin-top:14px;font-size:13px"><b>ملاحظات / Notes:</b> '+req.notes+'</div>' : '')
+  +   images
+  +   '<div style="margin-top:20px;padding-top:12px;border-top:1px solid #D9E2EC;font-size:11px;color:#A0AEC0;text-align:center">'
+  +     'HRCO Maintenance Management System'
+  +   '</div>'
+  + '</div></div>';
+}
+
+async function sendToWarehouse(){
+  var req = _whRequest;
+  if(!req){ alert('No request selected'); return; }
+  var to = (document.getElementById('wh-to')||{}).value.trim();
+  if(!to || to.indexOf('@') === -1){ alert('الرجاء إدخال بريد المستودع / Please enter a valid warehouse email'); return; }
+  var subject = (document.getElementById('wh-subject')||{}).value.trim() || ('Spare Parts Request #'+req.id);
+  var extraMsg = (document.getElementById('wh-msg')||{}).value.trim();
+
+  var btn = document.getElementById('wh-send-btn');
+  var st = document.getElementById('wh-status');
+  if(btn){ btn.disabled = true; btn.innerHTML = '<i class="ti ti-loader" style="animation:spin 1s linear infinite;display:inline-block"></i> Sending...'; }
+
+  try{
+    var html = buildWarehouseHtml(req, req._equip, extraMsg);
+    var res = await fetchWithTimeout('https://luuvvbevhdtpzywlrtux.supabase.co/functions/v1/send-email', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + SKEY },
+      body: JSON.stringify({ to: to, subject: subject, html: html })
+    }, 60000);
+    var data = await res.json().catch(function(){ return {}; });
+
+    if(!res.ok || !(data.id || data.success)){
+      throw new Error(data.message || data.error || ('Send failed (HTTP '+res.status+')'));
+    }
+
+    localStorage_set('hrco_warehouse_email', to);
+
+    // Record that it went out
+    if(_initSb()){
+      var upd = await _sb.from('parts_requests')
+        .update({ status:'sent', warehouse_email: to, sent_at: new Date().toISOString() })
+        .eq('id', req.id).select();
+      if(upd.error) console.warn('could not mark as sent:', upd.error.message);
+      else {
+        var local = partsRequests.find(function(x){ return x.id === req.id; });
+        if(local){ local.status='sent'; local.warehouse_email=to; }
+      }
+    }
+
+    if(st){ st.style.cssText='display:block;background:#EAF3DE;color:#2D7D3A;padding:10px 12px;border-radius:8px;margin-bottom:12px;font-size:13px;font-weight:600;text-align:center'; st.textContent='✅ تم الإرسال للمستودع / Sent to warehouse'; }
+    if(btn){ btn.innerHTML='<i class="ti ti-check"></i> Sent'; btn.style.background='#2D7D3A'; }
+    setTimeout(function(){
+      closeMod('warehouseModal');
+      if(btn){ btn.disabled=false; btn.innerHTML='<i class="ti ti-send"></i> Send Email'; btn.style.background=''; }
+      renderPartsRequests();
+    }, 1800);
+
+  }catch(e){
+    console.error('sendToWarehouse:', e);
+    if(st){ st.style.cssText='display:block;background:#FCEBEB;color:#C0392B;padding:10px 12px;border-radius:8px;margin-bottom:12px;font-size:13px;font-weight:600'; st.textContent='تعذّر الإرسال / Send failed: '+e.message; }
+    if(btn){ btn.disabled=false; btn.innerHTML='<i class="ti ti-send"></i> Send Email'; }
+  }
 }
 
 // ── Interactive hotspot placement (Upload Equipment modal) ──
@@ -4719,6 +5045,26 @@ async function showPublicReport(token){
 </div>
 
 <!-- ═══ PARTS REQUEST ═══ -->
+<!-- ═══ PARTS ORDERS (manager inbox) ═══ -->
+<div id="pg-parts-orders" style="display:none">
+  <div class="ph">
+    <div><div class="pt">Parts Orders</div><div class="ps">Requests submitted by technicians</div></div>
+    <button class="btn btn-o" onclick="loadPartsRequests()"><i class="ti ti-refresh"></i> Refresh</button>
+  </div>
+
+  <div class="vtbar">
+    <div class="ftabs">
+      <button class="ftab" id="pof-pending" onclick="setPOFilter('pending',this)" style="background:#1D4E89;color:#fff">Pending</button>
+      <button class="ftab" id="pof-approved" onclick="setPOFilter('approved',this)">Approved</button>
+      <button class="ftab" id="pof-sent" onclick="setPOFilter('sent',this)">Sent to Warehouse</button>
+      <button class="ftab" id="pof-rejected" onclick="setPOFilter('rejected',this)">Rejected</button>
+      <button class="ftab" id="pof-all" onclick="setPOFilter('all',this)">All</button>
+    </div>
+  </div>
+
+  <div id="po-list" style="display:flex;flex-direction:column;gap:10px"></div>
+</div>
+
 <div id="pg-parts-request" style="display:none">
   <div class="ph">
     <div><div class="pt">Parts Request</div><div class="ps">AI-powered equipment diagram search & parts selection</div></div>
@@ -4795,6 +5141,33 @@ async function showPublicReport(token){
           </div>
         </div>
       </div>
+    </div>
+  </div>
+</div>
+
+<!-- WAREHOUSE SEND MODAL -->
+<div id="warehouseModal" class="modal" style="display:none">
+  <div class="mbox" style="max-width:560px">
+    <div class="mh"><div class="mhtitle"><i class="ti ti-truck-delivery"></i> Send to Warehouse</div><button class="mclose" onclick="closeMod('warehouseModal')"><i class="ti ti-x"></i></button></div>
+    <div class="mb">
+      <div id="wh-status" style="display:none"></div>
+      <div class="field"><label>Warehouse Email *</label>
+        <input type="email" id="wh-to" placeholder="warehouse@hrco.com">
+      </div>
+      <div class="field"><label>Subject</label>
+        <input type="text" id="wh-subject">
+      </div>
+      <div class="field"><label>Message (optional)</label>
+        <textarea id="wh-msg" rows="3" placeholder="Any instructions for the warehouse..." style="width:100%;padding:8px 12px;border:1.5px solid #D9E2EC;border-radius:8px;font-size:13px;font-family:inherit;outline:none;resize:vertical"></textarea>
+      </div>
+      <div style="background:#F8FAFC;border:1px solid #D9E2EC;border-radius:8px;padding:12px">
+        <div style="font-size:11px;font-weight:700;color:#718096;margin-bottom:6px">WHAT WILL BE SENT</div>
+        <div id="wh-preview" style="font-size:12px;color:#4A5568;line-height:1.7"></div>
+      </div>
+    </div>
+    <div class="mf">
+      <button onclick="closeMod('warehouseModal')" class="btn btn-o" style="flex:1">Cancel</button>
+      <button onclick="sendToWarehouse()" id="wh-send-btn" class="btn btn-p" style="flex:2"><i class="ti ti-send"></i> Send Email</button>
     </div>
   </div>
 </div>
