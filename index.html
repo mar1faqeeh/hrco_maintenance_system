@@ -2117,28 +2117,37 @@ function renderEquipGrid(){
   var el = document.getElementById('pr-equip-list');
   if(!el) return;
   if(!equipmentData.length){
-    el.innerHTML = '<div style="grid-column:1/-1;padding:40px;text-align:center;color:#A0AEC0"><i class="ti ti-tools" style="font-size:36px;display:block;margin-bottom:8px"></i>No equipment added yet<br><small>Click "Upload Equipment" to add</small></div>';
+    el.innerHTML = '<div style="padding:40px;text-align:center;color:#A0AEC0"><i class="ti ti-tools" style="font-size:36px;display:block;margin-bottom:8px"></i>No equipment added yet<br><small>Click "Upload Equipment" to add</small></div>';
     return;
   }
   el.innerHTML = '';
   equipmentData.forEach(function(eq){
-    var card = document.createElement('div');
-    card.style.cssText = 'border:1.5px solid #D9E2EC;border-radius:12px;overflow:hidden;cursor:pointer;background:#fff;transition:box-shadow .2s';
-    card.onmouseover = function(){ this.style.boxShadow='0 4px 20px rgba(0,0,0,.1)'; };
-    card.onmouseout = function(){ this.style.boxShadow='none'; };
-    card.onclick = function(){ openDiagram(eq.id); };
-    card.innerHTML = '<div style="height:130px;overflow:hidden;background:#F8FAFC">'
-      +(eq.diagramBase64 ? '<img src="'+eq.diagramBase64+'" style="width:100%;height:100%;object-fit:cover">' : '<div style="display:flex;align-items:center;justify-content:center;height:100%;color:#A0AEC0"><i class="ti ti-photo" style="font-size:36px"></i></div>')
+    var row = document.createElement('div');
+    row.style.cssText = 'display:flex;align-items:center;gap:14px;border:1.5px solid #D9E2EC;border-radius:10px;padding:10px 14px;cursor:pointer;background:#fff;transition:box-shadow .2s,border-color .2s';
+    row.onmouseover = function(){ this.style.boxShadow='0 2px 12px rgba(0,0,0,.08)'; this.style.borderColor='#1D4E89'; };
+    row.onmouseout = function(){ this.style.boxShadow='none'; this.style.borderColor='#D9E2EC'; };
+    row.onclick = function(){ openDiagram(eq.id); };
+    row.innerHTML =
+      // thumbnail
+      '<div style="width:70px;height:56px;flex-shrink:0;border-radius:8px;overflow:hidden;background:#F8FAFC;border:1px solid #D9E2EC">'
+      +(eq.diagramBase64
+        ? '<img src="'+eq.diagramBase64+'" style="width:100%;height:100%;object-fit:cover">'
+        : '<div style="display:flex;align-items:center;justify-content:center;height:100%;color:#A0AEC0"><i class="ti ti-photo" style="font-size:22px"></i></div>')
       +'</div>'
-      +'<div style="padding:12px">'
-      +'<div style="font-size:13px;font-weight:700;color:#1a202c;margin-bottom:4px">'+eq.name+'</div>'
-      +'<div style="font-size:11px;color:#718096">'+eq.parts.length+' parts</div>'
+      // name + meta
+      +'<div style="flex:1;min-width:0">'
+      +'<div style="font-size:14px;font-weight:700;color:#1a202c;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+eq.name+'</div>'
+      +'<div style="font-size:11px;color:#718096;margin-top:2px">'
+      + eq.parts.length + ' parts'
+      + ((eq.extraFiles && eq.extraFiles.length) ? ' · ' + eq.extraFiles.length + ' extra file(s)' : '')
+      + '</div>'
       +'</div>'
-      +'<div style="padding:0 12px 12px;display:flex;gap:6px">'
-      +'<button onclick="event.stopPropagation();openDiagram('+eq.id+')" style="flex:1;padding:6px;border-radius:6px;border:none;background:#1D4E89;color:#fff;cursor:pointer;font-size:11px;font-weight:700;font-family:inherit"><i class="ti ti-eye"></i> View</button>'
-      +'<button onclick="event.stopPropagation();deleteEquipment('+eq.id+')" style="padding:6px 8px;border-radius:6px;border:1px solid #FCEBEB;background:#FCEBEB;color:#C0392B;cursor:pointer;font-size:11px;font-family:inherit"><i class="ti ti-trash"></i></button>'
+      // actions
+      +'<div style="display:flex;gap:6px;flex-shrink:0">'
+      +'<button onclick="event.stopPropagation();openDiagram('+eq.id+')" style="padding:7px 16px;border-radius:6px;border:none;background:#1D4E89;color:#fff;cursor:pointer;font-size:11px;font-weight:700;font-family:inherit"><i class="ti ti-eye"></i> View</button>'
+      +'<button onclick="event.stopPropagation();deleteEquipment('+eq.id+')" style="padding:7px 10px;border-radius:6px;border:1px solid #FCEBEB;background:#FCEBEB;color:#C0392B;cursor:pointer;font-size:11px;font-family:inherit"><i class="ti ti-trash"></i></button>'
       +'</div>';
-    el.appendChild(card);
+    el.appendChild(row);
   });
 }
 
@@ -2196,7 +2205,7 @@ function renderExtraFiles(eq){
 }
 
 function closeDiagram(){
-  document.getElementById('pr-equip-list').style.display='grid';
+  document.getElementById('pr-equip-list').style.display='flex';
   document.getElementById('pr-diagram-view').style.display='none';
   prCurrentEquip = null;
   prSelected = {};
@@ -4751,7 +4760,7 @@ async function showPublicReport(token){
   <div style="font-size:13px;font-weight:700;color:#0F2D52;margin-bottom:10px;display:flex;align-items:center;gap:6px">
     <i class="ti ti-archive"></i> Saved Equipment Archive
   </div>
-  <div id="pr-equip-list" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:14px;margin-bottom:16px"></div>
+  <div id="pr-equip-list" style="display:flex;flex-direction:column;gap:8px;margin-bottom:16px"></div>
 
   <!-- Diagram Viewer -->
   <div id="pr-diagram-view" style="display:none">
