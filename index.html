@@ -5317,14 +5317,19 @@ async function showPublicReport(token){
 
 <script>
 // Structural fix: a leftover premature closing tag after the Archive section
-// (from an earlier restructuring) left #pg-settings and #pg-parts-request as
-// direct children of <body> instead of nested inside #main, so they rendered
-// outside the app's scrollable content pane. Move them into #main at load
-// time rather than risk hand-editing the large HTML structure.
+// (from an earlier restructuring) leaves every page defined after that point —
+// currently #pg-settings, #pg-parts-request and #pg-parts-orders — as a direct
+// child of <body> instead of nested inside #main, so they render outside the
+// app's scrollable content pane. Rather than risk hand-editing the large HTML
+// structure, move any stray page back into #main at load time.
+// This walks the PAGES list, so pages added later are rescued automatically.
 (function(){
   var main = document.getElementById('main');
   if(!main) return;
-  ['pg-settings','pg-parts-request'].forEach(function(id){
+  var ids = (typeof PAGES !== 'undefined' && PAGES.length)
+    ? PAGES.map(function(p){ return 'pg-' + p; })
+    : ['pg-settings','pg-parts-request','pg-parts-orders'];
+  ids.forEach(function(id){
     var el = document.getElementById(id);
     if(el && el.parentElement !== main){
       main.appendChild(el);
