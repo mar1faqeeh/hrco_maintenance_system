@@ -331,6 +331,14 @@ html,body{height:100%;overflow:auto;font-family:Tajawal,sans-serif;font-size:14p
       <h3><i class="ti ti-building"></i><span id="t-client-info">Client Information</span></h3>
       <div class="field"><label id="t-lbl-client">Client Name</label><input type="text" id="inp-client" placeholder="Client name..." oninput="acShow('client',this.value)"><div id="dd-client" style="display:none;position:absolute;background:#fff;border:1px solid #D9E2EC;border-radius:8px;box-shadow:0 4px 16px rgba(0,0,0,.1);z-index:50;min-width:200px"></div></div>
       <div class="field"><label id="t-lbl-loc">Location / Branch</label><input type="text" id="inp-location" placeholder="Location..."></div>
+      <div class="field">
+        <label>GPS Location / الموقع الجغرافي</label>
+        <div style="display:flex;gap:6px;flex-wrap:wrap">
+          <button type="button" id="nv-map-btn" onclick="captureCurrentLocation('inp-map','nv-map-status','nv-map-btn')" class="btn btn-p" style="white-space:nowrap"><i class="ti ti-current-location"></i> موقعي الحالي / My location</button>
+          <input type="text" id="inp-map" dir="ltr" oninput="onMapLinkInput('inp-map','nv-map-status')" placeholder="أو الصق رابط موقع / or paste a map link" style="flex:1;min-width:200px;padding:9px 12px;border:1.5px solid #D9E2EC;border-radius:8px;font-size:13px;font-family:inherit;outline:none">
+        </div>
+        <div id="nv-map-status" style="font-size:11px;margin-top:5px;color:#718096"></div>
+      </div>
       <div class="field"><label id="t-lbl-vtype">Visit Type</label>
         <select id="sel-vtype">
           <option value="warranty" id="t-type-warranty">Warranty Visit</option>
@@ -759,6 +767,16 @@ html,body{height:100%;overflow:auto;font-family:Tajawal,sans-serif;font-size:14p
         </div>
 
         <div class="field" style="margin:0;grid-column:1/-1">
+          <label>Location on Map / الموقع على الخريطة</label>
+          <div style="font-size:11px;color:#718096;margin-bottom:6px">الصق رابط الموقع الذي أرسله العميل على واتساب أو من خرائط جوجل / Paste the location link the customer sent on WhatsApp, or from Google Maps.</div>
+          <div style="display:flex;gap:6px;flex-wrap:wrap">
+            <input type="text" id="mr-map" dir="ltr" oninput="onMapLinkInput('mr-map','mr-map-status')" placeholder="https://maps.app.goo.gl/... أو 24.7136, 46.6753" style="flex:1;min-width:220px;padding:9px 12px;border:1.5px solid #D9E2EC;border-radius:8px;font-size:13px;font-family:inherit;outline:none">
+            <button type="button" id="mr-map-btn" onclick="captureCurrentLocation('mr-map','mr-map-status','mr-map-btn')" class="btn btn-o" style="white-space:nowrap"><i class="ti ti-current-location"></i> موقعي الحالي</button>
+          </div>
+          <div id="mr-map-status" style="font-size:11px;margin-top:5px;color:#718096"></div>
+        </div>
+
+        <div class="field" style="margin:0;grid-column:1/-1">
           <label>Notes / ملاحظات إضافية</label>
           <input type="text" id="mr-notes" placeholder="Access times, gate pass, contact preferences...">
         </div>
@@ -781,6 +799,8 @@ html,body{height:100%;overflow:auto;font-family:Tajawal,sans-serif;font-size:14p
     <div class="tbox" id="mr-filters" style="display:flex;gap:4px">
       <button onclick="setMaintFilter('new',this)" class="mrf mrf-active">New</button>
       <button onclick="setMaintFilter('scheduled',this)" class="mrf">Scheduled</button>
+      <button onclick="setMaintFilter('onhold',this)" class="mrf">On Hold</button>
+      <button onclick="setMaintFilter('completed',this)" class="mrf">Completed</button>
       <button onclick="setMaintFilter('rejected',this)" class="mrf">Rejected</button>
       <button onclick="setMaintFilter('all',this)" class="mrf">All</button>
     </div>
@@ -2086,6 +2106,101 @@ async function closeV(){
 
 
 
+
+// ══════════════════════════════════════
+// LOCATION (Google Maps links — no API key, no cost)
+// ══════════════════════════════════════
+
+// Pull coordinates out of whatever Google/WhatsApp link was pasted.
+// Handles ?q=lat,lng · @lat,lng,zoom · !3dlat!4dlng · /place/lat,lng · bare "lat, lng".
+function parseMapLink(text){
+  var t = String(text||'').trim();
+  if(!t) return null;
+  var m;
+  if((m = /[?&]q=(-?\d+\.\d+),\s*(-?\d+\.\d+)/.exec(t))) return { lat:+m[1], lng:+m[2] };
+  if((m = /@(-?\d+\.\d+),(-?\d+\.\d+)/.exec(t)))          return { lat:+m[1], lng:+m[2] };
+  if((m = /!3d(-?\d+\.\d+)!4d(-?\d+\.\d+)/.exec(t)))      return { lat:+m[1], lng:+m[2] };
+  if((m = /\/(-?\d+\.\d+),(-?\d+\.\d+)/.exec(t)))         return { lat:+m[1], lng:+m[2] };
+  if((m = /^(-?\d+\.\d+)\s*,\s*(-?\d+\.\d+)$/.exec(t)))   return { lat:+m[1], lng:+m[2] };
+  return null;
+}
+
+function buildMapsUrl(lat, lng){
+  return 'https://www.google.com/maps?q=' + Number(lat).toFixed(6) + ',' + Number(lng).toFixed(6);
+}
+
+// Short links (maps.app.goo.gl / goo.gl/maps) can't be expanded in the browser,
+// so we keep them as-is — they still open correctly in Google Maps.
+function isShortMapLink(t){
+  return /(maps\.app\.goo\.gl|goo\.gl\/maps)/i.test(String(t||''));
+}
+
+// Reads whatever is in the field and returns a usable maps URL, or ''.
+function readMapField(inputId){
+  var el = document.getElementById(inputId);
+  var raw = el ? el.value.trim() : '';
+  if(!raw) return '';
+  var c = parseMapLink(raw);
+  if(c) return buildMapsUrl(c.lat, c.lng);
+  if(isShortMapLink(raw) || /^https?:\/\//i.test(raw)) return raw;
+  return '';
+}
+
+function setMapStatus(statusId, html, colour){
+  var st = document.getElementById(statusId);
+  if(st){ st.innerHTML = html; st.style.color = colour || '#718096'; }
+}
+
+// "Use my current location" — browser GPS, free, needs HTTPS (Vercel is).
+function captureCurrentLocation(inputId, statusId, btnId){
+  var btn = document.getElementById(btnId);
+  if(!navigator.geolocation){
+    setMapStatus(statusId, 'المتصفح لا يدعم تحديد الموقع / Geolocation not supported', '#C0392B');
+    return;
+  }
+  setMapStatus(statusId, '<i class="ti ti-loader" style="animation:spin 1s linear infinite;display:inline-block"></i> جاري تحديد موقعك... / Getting your location...');
+  if(btn) btn.disabled = true;
+
+  navigator.geolocation.getCurrentPosition(function(pos){
+    var url = buildMapsUrl(pos.coords.latitude, pos.coords.longitude);
+    var el = document.getElementById(inputId);
+    if(el) el.value = url;
+    var acc = Math.round(pos.coords.accuracy || 0);
+    setMapStatus(statusId,
+      '<i class="ti ti-circle-check"></i> تم تحديد الموقع / Location captured'
+      + (acc ? ' (±' + acc + 'm)' : '')
+      + ' — <a href="'+url+'" target="_blank" style="color:#1D4E89">معاينة / Preview</a>', '#2D7D3A');
+    if(btn) btn.disabled = false;
+  }, function(err){
+    var msg = err.code === 1 ? 'تم رفض إذن الموقع — فعّله من إعدادات المتصفح / Location permission denied'
+            : err.code === 2 ? 'تعذّر تحديد الموقع / Position unavailable'
+            : 'انتهت المهلة، حاول مجدداً / Timed out';
+    setMapStatus(statusId, '<i class="ti ti-alert-triangle"></i> ' + msg, '#C0392B');
+    if(btn) btn.disabled = false;
+  }, { enableHighAccuracy:true, timeout:15000, maximumAge:0 });
+}
+
+// Live feedback while a link is pasted.
+function onMapLinkInput(inputId, statusId){
+  var el = document.getElementById(inputId);
+  var raw = el ? el.value.trim() : '';
+  if(!raw){ setMapStatus(statusId, ''); return; }
+  var c = parseMapLink(raw);
+  if(c){
+    var url = buildMapsUrl(c.lat, c.lng);
+    setMapStatus(statusId, '<i class="ti ti-map-pin-check"></i> تم قراءة الإحداثيات / Coordinates read: '
+      + c.lat.toFixed(5) + ', ' + c.lng.toFixed(5)
+      + ' — <a href="'+url+'" target="_blank" style="color:#1D4E89">معاينة / Preview</a>', '#2D7D3A');
+  } else if(isShortMapLink(raw)){
+    setMapStatus(statusId, '<i class="ti ti-map-pin-check"></i> رابط خرائط مختصر — سيُحفظ كما هو / Short maps link — saved as is'
+      + ' — <a href="'+raw+'" target="_blank" style="color:#1D4E89">معاينة / Preview</a>', '#2D7D3A');
+  } else if(/^https?:\/\//i.test(raw)){
+    setMapStatus(statusId, '<i class="ti ti-link"></i> سيُحفظ الرابط كما هو / Link saved as is', '#C4680A');
+  } else {
+    setMapStatus(statusId, '<i class="ti ti-alert-triangle"></i> الصق رابط موقع من الخرائط أو واتساب / Paste a Google Maps or WhatsApp location link', '#C4680A');
+  }
+}
+
 // ══════════════════════════════════════
 // MAINTENANCE REQUESTS (submitted by sales)
 // ══════════════════════════════════════
@@ -2101,12 +2216,15 @@ var MR_PRIO = {
 var MR_STATUS = {
   new:{ label:'New', bg:'#E6F1FB', fg:'#1D4E89' },
   scheduled:{ label:'Scheduled', bg:'#EAF3DE', fg:'#2D7D3A' },
+  onhold:{ label:'On Hold / معلّق', bg:'#FDF0E0', fg:'#C4680A' },
+  completed:{ label:'Completed ✓', bg:'#DFF3E3', fg:'#1E7A34' },
   rejected:{ label:'Rejected', bg:'#FCEBEB', fg:'#C0392B' }
 };
 
 function clearMaintForm(){
-  ['mr-client','mr-city','mr-location','mr-contact','mr-phone','mr-equipment','mr-model','mr-serial','mr-date','mr-problem','mr-notes']
+  ['mr-client','mr-city','mr-location','mr-map','mr-contact','mr-phone','mr-equipment','mr-model','mr-serial','mr-date','mr-problem','mr-notes']
     .forEach(function(id){ var e=document.getElementById(id); if(e) e.value=''; });
+  setMapStatus('mr-map-status','');
   var t=document.getElementById('mr-type'); if(t) t.value='paid';
   var pr=document.getElementById('mr-priority'); if(pr) pr.value='normal';
 }
@@ -2130,6 +2248,7 @@ async function submitMaintRequest(){
     client: client,
     city: val('mr-city'),
     location: val('mr-location'),
+    map_url: readMapField('mr-map'),
     contact_person: val('mr-contact'),
     contact_phone: val('mr-phone'),
     visit_type: val('mr-type') || 'paid',
@@ -2180,7 +2299,7 @@ function setMaintFilter(f, el){
   if(el) el.classList.add('mrf-active');
   else {
     var btns = document.querySelectorAll('#mr-filters .mrf');
-    var idx = ['new','scheduled','rejected','all'].indexOf(f);
+    var idx = ['new','scheduled','onhold','completed','rejected','all'].indexOf(f);
     if(btns[idx]) btns[idx].classList.add('mrf-active');
   }
   renderMaintRequests();
@@ -2227,11 +2346,26 @@ function renderMaintRequests(){
 
     var actions = '';
     if(isManager){
-      if((r.status||'new') === 'new'){
-        actions = '<button onclick="scheduleMaintRequest('+r.id+')" style="padding:7px 14px;border-radius:6px;border:none;background:#2D7D3A;color:#fff;cursor:pointer;font-size:11px;font-weight:700;font-family:inherit"><i class="ti ti-calendar-plus"></i> Schedule Visit</button>'
-                + '<button onclick="rejectMaintRequest('+r.id+')" style="padding:7px 12px;border-radius:6px;border:1px solid #FCEBEB;background:#FCEBEB;color:#C0392B;cursor:pointer;font-size:11px;font-weight:700;font-family:inherit">Reject</button>';
-      } else if((r.status||'new') === 'rejected'){
-        actions = '<button onclick="reopenMaintRequest('+r.id+')" style="padding:7px 14px;border-radius:6px;border:1px solid #D9E2EC;background:#fff;color:#1D4E89;cursor:pointer;font-size:11px;font-weight:700;font-family:inherit">Reopen</button>';
+      var btn = function(fn, label, style, title){
+        return '<button onclick="'+fn+'('+r.id+')" title="'+(title||'')+'" style="padding:7px 12px;border-radius:6px;cursor:pointer;font-size:11px;font-weight:700;font-family:inherit;'+style+'">'+label+'</button>';
+      };
+      var doneBtn = btn('completeMaintRequest', '<i class="ti ti-check"></i> Done',
+                        'border:none;background:#1E7A34;color:#fff', 'إنهاء الطلب / Mark as done');
+      var holdBtn = btn('holdMaintRequest', '<i class="ti ti-player-pause"></i> Hold',
+                        'border:1px solid #F5D5AE;background:#FDF0E0;color:#C4680A', 'تعليق الطلب / Put on hold');
+      var st2 = r.status || 'new';
+      if(st2 === 'new'){
+        actions = btn('scheduleMaintRequest', '<i class="ti ti-calendar-plus"></i> Schedule Visit', 'border:none;background:#2D7D3A;color:#fff')
+                + doneBtn + holdBtn
+                + btn('rejectMaintRequest', 'Reject', 'border:1px solid #FCEBEB;background:#FCEBEB;color:#C0392B');
+      } else if(st2 === 'scheduled'){
+        actions = doneBtn + holdBtn;
+      } else if(st2 === 'onhold'){
+        actions = btn('resumeMaintRequest', '<i class="ti ti-player-play"></i> Resume', 'border:1px solid #D9E2EC;background:#fff;color:#1D4E89')
+                + doneBtn
+                + btn('rejectMaintRequest', 'Reject', 'border:1px solid #FCEBEB;background:#FCEBEB;color:#C0392B');
+      } else if(st2 === 'completed' || st2 === 'rejected'){
+        actions = btn('reopenMaintRequest', 'Reopen', 'border:1px solid #D9E2EC;background:#fff;color:#1D4E89');
       }
     }
 
@@ -2247,6 +2381,7 @@ function renderMaintRequests(){
       +   (meta.length ? '<div style="font-size:11px;color:#718096;margin-top:5px;display:flex;flex-wrap:wrap;gap:10px">'+meta.join('')+'</div>' : '')
       +   '<div style="font-size:12px;color:#1a202c;margin-top:7px;white-space:pre-wrap">'+(r.problem||'')+'</div>'
       +   (r.notes ? '<div style="font-size:11px;color:#A0AEC0;margin-top:4px">'+r.notes+'</div>' : '')
+      +   ((r.status==='onhold' && r.hold_reason) ? '<div style="font-size:11px;color:#C4680A;margin-top:5px;background:#FDF0E0;border-radius:6px;padding:4px 8px;display:inline-block"><i class="ti ti-player-pause"></i> '+r.hold_reason+'</div>' : '')
       +   '<div style="font-size:10px;color:#A0AEC0;margin-top:6px">Requested by '+(r.requested_by||'—')+' · '+(r.date||'')+(r.visit_id?' · visit #'+r.visit_id:'')+'</div>'
       + '</div>'
       + (actions ? '<div style="display:flex;gap:6px;align-items:center">'+actions+'</div>' : '')
@@ -2292,6 +2427,12 @@ function openMaintDetails(id){
     + row('Client / العميل', r.client)
     + row('City / المدينة', r.city)
     + row('Branch / الفرع', r.location)
+    + (r.map_url
+        ? '<div style="display:flex;gap:10px;padding:7px 0;border-bottom:1px solid #F0F4F8">'
+          + '<div style="min-width:150px;font-size:11px;font-weight:700;color:#718096">Map / الموقع</div>'
+          + '<div style="flex:1"><a href="'+r.map_url+'" target="_blank" style="display:inline-flex;align-items:center;gap:6px;background:#E6F1FB;color:#1D4E89;padding:5px 12px;border-radius:8px;font-size:12px;font-weight:700;text-decoration:none"><i class="ti ti-map-pin"></i> فتح بالخرائط / Open in Maps</a></div>'
+          + '</div>'
+        : row('Map / الموقع', ''))
     + row('Contact / الشخص المسؤول', r.contact_person)
     + row('Phone / الجوال', r.contact_phone, {ltr:true})
 
@@ -2306,6 +2447,8 @@ function openMaintDetails(id){
     + row('Preferred Date / التاريخ المفضل', r.preferred_date)
     + row('Requested by / مقدّم الطلب', r.requested_by)
     + row('Submitted / تاريخ الطلب', r.date)
+    + (r.hold_reason ? row('Hold reason / سبب التعليق', r.hold_reason, {pre:true}) : '')
+    + (r.closed_on ? row('Completed on / تاريخ الإنهاء', r.closed_on) : '')
     + (r.visit_id ? row('Linked Visit / الزيارة', '#'+r.visit_id) : '');
 
   var actions = '<button onclick="closeMod(\'maintDetailsModal\')" class="btn btn-o" style="flex:1">Close</button>'
@@ -2313,11 +2456,24 @@ function openMaintDetails(id){
     + '<button onclick="whatsappMaintRequest('+r.id+')" class="btn btn-o" style="flex:1;color:#128C7E;border-color:#A7E1D5" title="Send to the customer contact / إرسال للعميل"><i class="ti ti-brand-whatsapp"></i> Customer</button>'
     + '<button onclick="openTechWhatsApp('+r.id+')" class="btn btn-o" style="flex:1;color:#128C7E;border-color:#A7E1D5" title="Send to a technician / إرسال للفني"><i class="ti ti-brand-whatsapp"></i> Technician</button>';
   if(curUserRole === 'manager'){
-    if((r.status||'new') === 'new'){
-      actions += '<button onclick="closeMod(\'maintDetailsModal\');rejectMaintRequest('+r.id+')" class="btn btn-o" style="flex:1;color:#C0392B;border-color:#F5C6C6">Reject</button>'
-              +  '<button onclick="closeMod(\'maintDetailsModal\');scheduleMaintRequest('+r.id+')" class="btn btn-p" style="flex:2"><i class="ti ti-calendar-plus"></i> Schedule Visit</button>';
-    } else if((r.status||'new') === 'rejected'){
-      actions += '<button onclick="closeMod(\'maintDetailsModal\');reopenMaintRequest('+r.id+')" class="btn btn-p" style="flex:2">Reopen</button>';
+    var mdBtn = function(fn, label, cls, style){
+      return '<button onclick="closeMod(\'maintDetailsModal\');'+fn+'('+r.id+')" class="'+cls+'" style="'+style+'">'+label+'</button>';
+    };
+    var mdSt = r.status || 'new';
+    if(mdSt === 'new'){
+      actions += mdBtn('rejectMaintRequest','Reject','btn btn-o','flex:1;color:#C0392B;border-color:#F5C6C6')
+              +  mdBtn('holdMaintRequest','<i class="ti ti-player-pause"></i> Hold','btn btn-o','flex:1;color:#C4680A;border-color:#F5D5AE')
+              +  mdBtn('completeMaintRequest','<i class="ti ti-check"></i> Done','btn btn-o','flex:1;color:#1E7A34;border-color:#A9D9B6')
+              +  mdBtn('scheduleMaintRequest','<i class="ti ti-calendar-plus"></i> Schedule Visit','btn btn-p','flex:2');
+    } else if(mdSt === 'scheduled'){
+      actions += mdBtn('holdMaintRequest','<i class="ti ti-player-pause"></i> Hold','btn btn-o','flex:1;color:#C4680A;border-color:#F5D5AE')
+              +  mdBtn('completeMaintRequest','<i class="ti ti-check"></i> Done','btn btn-p','flex:2');
+    } else if(mdSt === 'onhold'){
+      actions += mdBtn('rejectMaintRequest','Reject','btn btn-o','flex:1;color:#C0392B;border-color:#F5C6C6')
+              +  mdBtn('resumeMaintRequest','<i class="ti ti-player-play"></i> Resume','btn btn-o','flex:1')
+              +  mdBtn('completeMaintRequest','<i class="ti ti-check"></i> Done','btn btn-p','flex:2');
+    } else if(mdSt === 'completed' || mdSt === 'rejected'){
+      actions += mdBtn('reopenMaintRequest','Reopen','btn btn-p','flex:2');
     }
   }
   document.getElementById('md-actions').innerHTML = actions;
@@ -2344,6 +2500,7 @@ function maintRequestText(r){
     + L('الموديل / Model', r.model)
     + L('الرقم التسلسلي / Serial', r.serial_no)
     + L('التاريخ المفضل / Preferred', r.preferred_date)
+    + (r.map_url ? ('الموقع / Location: ' + r.map_url + '\n') : '')
     + '──────────────\n'
     + L('وصف العطل / Problem', r.problem)
     + L('ملاحظات / Notes', r.notes)
@@ -2463,6 +2620,7 @@ function printMaintRequest(id){
     +   row('العميل / Client', r.client)
     +   row('المدينة / City', r.city)
     +   row('الفرع / Branch', r.location)
+    +   (r.map_url ? '<tr><th>الموقع / Map</th><td><a href="'+esc(r.map_url)+'">'+esc(r.map_url)+'</a></td></tr>' : row('الموقع / Map',''))
     +   row('الشخص المسؤول / Contact', r.contact_person)
     +   row('الجوال / Phone', r.contact_phone)
     + '</table>'
@@ -2500,6 +2658,7 @@ async function scheduleMaintRequest(id){
     var set = function(elId, v){ var e=document.getElementById(elId); if(e && v) e.value = v; };
     set('inp-client', r.client);
     set('inp-location', [r.city, r.location].filter(Boolean).join(' — '));
+    if(r.map_url){ set('inp-map', r.map_url); onMapLinkInput('inp-map','nv-map-status'); }
     // Equipment is a <select>; add the requested one if it isn't listed yet
     if(r.equipment){
       var eqSel = document.getElementById('inp-equipment');
@@ -2543,11 +2702,49 @@ async function rejectMaintRequest(id){
   renderMaintRequests();
 }
 
+
+// ✅ Finished — the job is done.
+async function completeMaintRequest(id){
+  var r = maintRequests.find(function(x){ return x.id == id; });
+  if(!r) return;
+  if(!confirm('تأكيد إنهاء هذا الطلب؟\nMark this request as completed?')) return;
+  r.status = 'completed';
+  r.closed_on = new Date().toISOString().split('T')[0];
+  await dbSave('maintenance_requests', { id: r.id, status: 'completed', closed_on: r.closed_on });
+  updateMaintBadge();
+  renderMaintRequests();
+}
+
+// ⏸ On hold — blocked by something; the reason is recorded.
+async function holdMaintRequest(id){
+  var r = maintRequests.find(function(x){ return x.id == id; });
+  if(!r) return;
+  var why = prompt('سبب التعليق / Reason for putting this on hold:', '');
+  if(why === null) return;                       // cancelled
+  r.status = 'onhold';
+  r.hold_reason = why || '';
+  await dbSave('maintenance_requests', { id: r.id, status: 'onhold', hold_reason: r.hold_reason });
+  updateMaintBadge();
+  renderMaintRequests();
+}
+
+// ▶ Back into the queue.
+async function resumeMaintRequest(id){
+  var r = maintRequests.find(function(x){ return x.id == id; });
+  if(!r) return;
+  r.status = 'new';
+  r.hold_reason = '';
+  await dbSave('maintenance_requests', { id: r.id, status: 'new', hold_reason: '' });
+  updateMaintBadge();
+  renderMaintRequests();
+}
+
 async function reopenMaintRequest(id){
   var r = maintRequests.find(function(x){ return x.id == id; });
   if(!r) return;
   r.status = 'new';
-  await dbSave('maintenance_requests', { id: r.id, status: 'new' });
+  r.hold_reason = '';
+  await dbSave('maintenance_requests', { id: r.id, status: 'new', hold_reason: '' });
   updateMaintBadge();
   renderMaintRequests();
 }
@@ -5106,6 +5303,7 @@ function collectVisitData() {
   return {
     client:        document.getElementById('inp-client').value || 'Unknown',
     location:      document.getElementById('inp-location').value || '',
+    map_url:       (typeof readMapField === 'function') ? readMapField('inp-map') : '',
     equipment:     document.getElementById('inp-equipment').value,
     serial_number: document.getElementById('inp-serial').value,
     model:         document.getElementById('inp-model').value,
