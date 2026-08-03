@@ -2211,7 +2211,10 @@ function renderMaintRequests(){
     var st = MR_STATUS[r.status||'new'] || MR_STATUS['new'];
     var pr = MR_PRIO[r.priority||'normal'] || MR_PRIO['normal'];
     var card = document.createElement('div');
-    card.style.cssText = 'border:1.5px solid #D9E2EC;border-radius:10px;padding:12px 14px;background:#fff';
+    card.style.cssText = 'border:1.5px solid #D9E2EC;border-radius:10px;padding:12px 14px;background:#fff;cursor:pointer;transition:box-shadow .15s,border-color .15s';
+    card.onmouseover = function(){ this.style.boxShadow='0 2px 12px rgba(0,0,0,.08)'; this.style.borderColor='#1D4E89'; };
+    card.onmouseout  = function(){ this.style.boxShadow='none'; this.style.borderColor='#D9E2EC'; };
+    card.onclick = function(ev){ if(ev.target.closest('button')) return; openMaintDetails(r.id); };
 
     var meta = [];
     var place = [r.city, r.location].filter(Boolean).join(' — ');
@@ -2220,6 +2223,7 @@ function renderMaintRequests(){
     if(r.serial_no) meta.push('<i class="ti ti-hash"></i> ' + r.serial_no);
     if(r.contact_person) meta.push('<i class="ti ti-user"></i> ' + r.contact_person + (r.contact_phone ? ' · ' + r.contact_phone : ''));
     if(r.preferred_date) meta.push('<i class="ti ti-calendar"></i> preferred ' + r.preferred_date);
+    meta.push('<span style="color:#1D4E89;font-weight:700"><i class="ti ti-eye"></i> tap for details</span>');
 
     var actions = '';
     if(isManager){
@@ -2249,6 +2253,240 @@ function renderMaintRequests(){
       + '</div>';
     el.appendChild(card);
   });
+}
+
+
+// Full details for one maintenance request, opened by tapping its card.
+var _mdCurrentId = null;
+function openMaintDetails(id){
+  var r = maintRequests.find(function(x){ return x.id == id; });
+  if(!r) return;
+  _mdCurrentId = id;
+
+  var st = MR_STATUS[r.status||'new'] || MR_STATUS['new'];
+  var pr = MR_PRIO[r.priority||'normal'] || MR_PRIO['normal'];
+  var esc = function(v){ return String(v==null?'':v).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); };
+  var dash = '<span style="color:#CBD5E0">—</span>';
+
+  var row = function(label, value, opts){
+    opts = opts || {};
+    var shown = (value===undefined || value===null || value==='') ? dash : esc(value);
+    if(opts.pre) shown = '<span style="white-space:pre-wrap">'+shown+'</span>';
+    if(opts.ltr) shown = '<span dir="ltr" style="display:inline-block">'+shown+'</span>';
+    return '<div style="display:flex;gap:10px;padding:7px 0;border-bottom:1px solid #F0F4F8">'
+         +   '<div style="min-width:150px;font-size:11px;font-weight:700;color:#718096">'+label+'</div>'
+         +   '<div style="flex:1;font-size:13px;color:#1a202c">'+shown+'</div>'
+         + '</div>';
+  };
+
+  document.getElementById('md-title').textContent = r.client || 'Request Details';
+
+  document.getElementById('md-body').innerHTML =
+      '<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px">'
+    +   '<span style="background:'+st.bg+';color:'+st.fg+';font-size:10px;font-weight:700;padding:3px 10px;border-radius:99px">'+st.label+'</span>'
+    +   '<span style="background:'+pr.bg+';color:'+pr.fg+';font-size:10px;font-weight:700;padding:3px 10px;border-radius:99px">'+pr.label+'</span>'
+    +   '<span style="background:#E6F1FB;color:#1D4E89;font-size:10px;font-weight:700;padding:3px 10px;border-radius:99px">'+(MR_TYPE_LABEL[r.visit_type]||r.visit_type||'')+'</span>'
+    + '</div>'
+
+    + '<div style="font-size:11px;font-weight:700;color:#0F2D52;margin:4px 0 2px">Customer / العميل</div>'
+    + row('Client / العميل', r.client)
+    + row('City / المدينة', r.city)
+    + row('Branch / الفرع', r.location)
+    + row('Contact / الشخص المسؤول', r.contact_person)
+    + row('Phone / الجوال', r.contact_phone, {ltr:true})
+
+    + '<div style="font-size:11px;font-weight:700;color:#0F2D52;margin:14px 0 2px">Equipment / المعدة</div>'
+    + row('Equipment / المعدة', r.equipment)
+    + row('Brand &amp; Model / الموديل', r.model)
+    + row('Serial No. / الرقم التسلسلي', r.serial_no, {ltr:true})
+
+    + '<div style="font-size:11px;font-weight:700;color:#0F2D52;margin:14px 0 2px">Request / الطلب</div>'
+    + row('Problem / وصف العطل', r.problem, {pre:true})
+    + row('Notes / ملاحظات', r.notes, {pre:true})
+    + row('Preferred Date / التاريخ المفضل', r.preferred_date)
+    + row('Requested by / مقدّم الطلب', r.requested_by)
+    + row('Submitted / تاريخ الطلب', r.date)
+    + (r.visit_id ? row('Linked Visit / الزيارة', '#'+r.visit_id) : '');
+
+  var actions = '<button onclick="closeMod(\'maintDetailsModal\')" class="btn btn-o" style="flex:1">Close</button>'
+    + '<button onclick="printMaintRequest('+r.id+')" class="btn btn-o" style="flex:1" title="Print / طباعة"><i class="ti ti-printer"></i> Print</button>'
+    + '<button onclick="whatsappMaintRequest('+r.id+')" class="btn btn-o" style="flex:1;color:#128C7E;border-color:#A7E1D5" title="Send to the customer contact / إرسال للعميل"><i class="ti ti-brand-whatsapp"></i> Customer</button>'
+    + '<button onclick="openTechWhatsApp('+r.id+')" class="btn btn-o" style="flex:1;color:#128C7E;border-color:#A7E1D5" title="Send to a technician / إرسال للفني"><i class="ti ti-brand-whatsapp"></i> Technician</button>';
+  if(curUserRole === 'manager'){
+    if((r.status||'new') === 'new'){
+      actions += '<button onclick="closeMod(\'maintDetailsModal\');rejectMaintRequest('+r.id+')" class="btn btn-o" style="flex:1;color:#C0392B;border-color:#F5C6C6">Reject</button>'
+              +  '<button onclick="closeMod(\'maintDetailsModal\');scheduleMaintRequest('+r.id+')" class="btn btn-p" style="flex:2"><i class="ti ti-calendar-plus"></i> Schedule Visit</button>';
+    } else if((r.status||'new') === 'rejected'){
+      actions += '<button onclick="closeMod(\'maintDetailsModal\');reopenMaintRequest('+r.id+')" class="btn btn-p" style="flex:2">Reopen</button>';
+    }
+  }
+  document.getElementById('md-actions').innerHTML = actions;
+
+  openMod('maintDetailsModal');
+}
+
+
+// Plain-text summary of a request, used for WhatsApp.
+function maintRequestText(r){
+  var L = function(label, v){ return v ? (label + ': ' + v + '\n') : ''; };
+  var typeAr = { paid:'مدفوعة', warranty:'ضمان', contract:'عقد صيانة' };
+  var prioAr = { normal:'عادية', urgent:'عاجلة', breakdown:'توقف تام' };
+  return '*طلب صيانة / Maintenance Request*\n'
+    + '──────────────\n'
+    + L('العميل / Client', r.client)
+    + L('المدينة / City', r.city)
+    + L('الفرع / Branch', r.location)
+    + L('المسؤول / Contact', r.contact_person)
+    + L('الجوال / Phone', r.contact_phone)
+    + L('نوع الزيارة / Type', typeAr[r.visit_type] || r.visit_type)
+    + L('الأولوية / Priority', prioAr[r.priority] || r.priority)
+    + L('المعدة / Equipment', r.equipment)
+    + L('الموديل / Model', r.model)
+    + L('الرقم التسلسلي / Serial', r.serial_no)
+    + L('التاريخ المفضل / Preferred', r.preferred_date)
+    + '──────────────\n'
+    + L('وصف العطل / Problem', r.problem)
+    + L('ملاحظات / Notes', r.notes)
+    + '──────────────\n'
+    + L('مقدّم الطلب / Requested by', r.requested_by)
+    + L('التاريخ / Date', r.date);
+}
+
+// Saudi numbers get normalised to international form so wa.me accepts them.
+function waNormalisePhone(v){
+  var d = String(v || '').replace(/[^\d]/g, '');
+  if(!d) return '';
+  if(d.indexOf('00') === 0) d = d.slice(2);
+  if(d.indexOf('966') === 0) return d;
+  if(d.indexOf('0') === 0) return '966' + d.slice(1);
+  if(d.length === 9 && d.indexOf('5') === 0) return '966' + d;
+  return d;
+}
+
+function whatsappMaintRequest(id){
+  var r = maintRequests.find(function(x){ return x.id == id; });
+  if(!r) return;
+  var phone = waNormalisePhone(r.contact_phone);
+  var url = 'https://wa.me/' + (phone ? phone : '') + '?text=' + encodeURIComponent(maintRequestText(r));
+  window.open(url, '_blank');
+}
+
+
+// Send a maintenance request to a technician over WhatsApp.
+var _twRequestId = null;
+
+function openTechWhatsApp(id){
+  var r = maintRequests.find(function(x){ return x.id == id; });
+  if(!r) return;
+  _twRequestId = id;
+
+  var el = document.getElementById('tw-list');
+  var manual = document.getElementById('tw-manual');
+  if(manual) manual.value = '';
+
+  var techs = (typeof techsData !== 'undefined' ? techsData : []).filter(function(t){ return t && t.name; });
+  if(!techs.length){
+    el.innerHTML = '<div style="padding:20px;text-align:center;color:#A0AEC0;font-size:12px">No technicians found — add them under Technicians, or type a number below.</div>';
+  } else {
+    el.innerHTML = '';
+    techs.forEach(function(t){
+      var hasPhone = !!waNormalisePhone(t.phone);
+      var row = document.createElement('div');
+      row.style.cssText = 'display:flex;align-items:center;gap:10px;padding:9px 10px;border:1.5px solid #D9E2EC;border-radius:8px;'
+        + (hasPhone ? 'cursor:pointer;background:#fff' : 'opacity:.55;background:#F8FAFC');
+      if(hasPhone){
+        row.onmouseover = function(){ this.style.borderColor='#128C7E'; };
+        row.onmouseout  = function(){ this.style.borderColor='#D9E2EC'; };
+        row.onclick = function(){ sendReqToNumber(t.phone, t.name); };
+      }
+      row.innerHTML =
+          '<div style="width:32px;height:32px;border-radius:50%;background:'+(t.bg||'#E6F1FB')+';color:'+(t.color||'#1D4E89')+';display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;flex-shrink:0">'+(t.init||(t.name||'?').charAt(0))+'</div>'
+        + '<div style="flex:1;min-width:0">'
+        +   '<div style="font-size:13px;font-weight:600;color:#1a202c">'+t.name+'</div>'
+        +   '<div style="font-size:11px;color:#718096" dir="ltr">'+(t.phone || 'no phone number')+'</div>'
+        + '</div>'
+        + (hasPhone ? '<i class="ti ti-brand-whatsapp" style="color:#128C7E;font-size:18px"></i>' : '');
+      el.appendChild(row);
+    });
+  }
+  openMod('techWaModal');
+}
+
+function sendReqToNumber(phone, techName){
+  var r = maintRequests.find(function(x){ return x.id == _twRequestId; });
+  if(!r) return;
+  var num = waNormalisePhone(phone);
+  if(!num){
+    alert('الرجاء إدخال رقم جوال صحيح\nPlease enter a valid mobile number');
+    return;
+  }
+  var msg = (techName ? ('مرحباً ' + techName + '،\nيرجى تنفيذ طلب الصيانة التالي:\n\n') : 'يرجى تنفيذ طلب الصيانة التالي:\n\n')
+          + maintRequestText(r);
+  window.open('https://wa.me/' + num + '?text=' + encodeURIComponent(msg), '_blank');
+  closeMod('techWaModal');
+}
+
+function printMaintRequest(id){
+  var r = maintRequests.find(function(x){ return x.id == id; });
+  if(!r) return;
+  var esc = function(v){ return String(v==null?'':v).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); };
+  var typeLbl = { paid:'مدفوعة / Paid', warranty:'ضمان / Warranty', contract:'عقد صيانة / Contract' };
+  var prioLbl = { normal:'عادية / Normal', urgent:'عاجلة / Urgent', breakdown:'توقف تام / Breakdown' };
+
+  var row = function(label, v){
+    return '<tr><th>'+label+'</th><td>'+(v ? esc(v) : '—')+'</td></tr>';
+  };
+
+  var html = '<!DOCTYPE html><html dir="rtl"><head><meta charset="UTF-8">'
+    + '<title>Maintenance Request — ' + esc(r.client||'') + '</title>'
+    + '<style>'
+    + 'body{font-family:Tajawal,Arial,sans-serif;padding:28px;color:#1a202c}'
+    + 'h1{font-size:19px;color:#0F2D52;margin:0 0 2px}'
+    + '.sub{font-size:12px;color:#718096;margin-bottom:16px}'
+    + '.badges{margin-bottom:14px}'
+    + '.badge{display:inline-block;border:1px solid #D9E2EC;border-radius:99px;padding:3px 11px;font-size:11px;font-weight:700;margin-inline-end:6px}'
+    + 'table{width:100%;border-collapse:collapse;margin-bottom:14px}'
+    + 'th,td{border:1px solid #D9E2EC;padding:7px 10px;font-size:12px;text-align:start;vertical-align:top}'
+    + 'th{background:#F8FAFC;color:#4A5568;font-weight:700;width:190px}'
+    + '.sec{font-size:12px;font-weight:700;color:#0F2D52;margin:16px 0 6px}'
+    + '.foot{margin-top:22px;font-size:10px;color:#A0AEC0;border-top:1px solid #D9E2EC;padding-top:8px}'
+    + '@media print{body{padding:0}}'
+    + '</style></head><body>'
+    + '<h1>طلب صيانة / Maintenance Request</h1>'
+    + '<div class="sub">HRCO — Maintenance Management System &nbsp;|&nbsp; #' + esc(r.id) + '</div>'
+    + '<div class="badges">'
+    +   '<span class="badge">' + esc((MR_STATUS[r.status||'new']||{}).label || r.status || '') + '</span>'
+    +   '<span class="badge">' + esc(prioLbl[r.priority] || r.priority || '') + '</span>'
+    +   '<span class="badge">' + esc(typeLbl[r.visit_type] || r.visit_type || '') + '</span>'
+    + '</div>'
+    + '<div class="sec">بيانات العميل / Customer</div><table>'
+    +   row('العميل / Client', r.client)
+    +   row('المدينة / City', r.city)
+    +   row('الفرع / Branch', r.location)
+    +   row('الشخص المسؤول / Contact', r.contact_person)
+    +   row('الجوال / Phone', r.contact_phone)
+    + '</table>'
+    + '<div class="sec">المعدة / Equipment</div><table>'
+    +   row('المعدة / Equipment', r.equipment)
+    +   row('الماركة والموديل / Model', r.model)
+    +   row('الرقم التسلسلي / Serial No.', r.serial_no)
+    + '</table>'
+    + '<div class="sec">تفاصيل الطلب / Request</div><table>'
+    +   row('وصف العطل / Problem', r.problem)
+    +   row('ملاحظات / Notes', r.notes)
+    +   row('التاريخ المفضل / Preferred Date', r.preferred_date)
+    +   row('مقدّم الطلب / Requested by', r.requested_by)
+    +   row('تاريخ الطلب / Submitted', r.date)
+    +   (r.visit_id ? row('الزيارة المرتبطة / Linked Visit', '#'+r.visit_id) : '')
+    + '</table>'
+    + '<div class="foot">Printed ' + new Date().toLocaleString() + '</div>'
+    + '</body></html>';
+
+  var w = window.open('', '_blank');
+  if(!w){ alert('الرجاء السماح بالنوافذ المنبثقة للطباعة\nPlease allow pop-ups to print'); return; }
+  w.document.write(html);
+  w.document.close();
+  setTimeout(function(){ try{ w.focus(); w.print(); }catch(e){} }, 400);
 }
 
 // Manager turns an approved request into a real visit, pre-filled.
@@ -5868,6 +6106,41 @@ async function showPublicReport(token){
   <button onclick="closePhotoLightbox()" style="position:absolute;top:18px;right:22px;width:38px;height:38px;border-radius:99px;border:none;background:rgba(255,255,255,.15);color:#fff;font-size:20px;cursor:pointer;display:flex;align-items:center;justify-content:center">
     <i class="ti ti-x"></i>
   </button>
+</div>
+
+
+<!-- MAINTENANCE REQUEST DETAILS -->
+<div id="maintDetailsModal" class="modal" style="display:none">
+  <div class="mbox" style="max-width:620px">
+    <div class="mh">
+      <div class="mhtitle"><i class="ti ti-file-description"></i> <span id="md-title">Request Details</span></div>
+      <button class="mclose" onclick="closeMod('maintDetailsModal')"><i class="ti ti-x"></i></button>
+    </div>
+    <div class="mb" id="md-body"></div>
+    <div class="mf" id="md-actions"></div>
+  </div>
+</div>
+
+
+<!-- SEND REQUEST TO A TECHNICIAN ON WHATSAPP -->
+<div id="techWaModal" class="modal" style="display:none">
+  <div class="mbox" style="max-width:460px">
+    <div class="mh">
+      <div class="mhtitle"><i class="ti ti-brand-whatsapp"></i> Send to Technician / إرسال للفني</div>
+      <button class="mclose" onclick="closeMod('techWaModal')"><i class="ti ti-x"></i></button>
+    </div>
+    <div class="mb">
+      <div style="font-size:11px;color:#718096;margin-bottom:10px">اختر الفني لإرسال الطلب له عبر واتساب / Pick the technician to send this request to.</div>
+      <div id="tw-list" style="display:flex;flex-direction:column;gap:6px;max-height:320px;overflow-y:auto"></div>
+      <div style="border-top:1px solid #F0F4F8;margin-top:12px;padding-top:12px">
+        <label style="font-size:11px;font-weight:700;color:#718096;display:block;margin-bottom:4px">Or another number / أو رقم آخر</label>
+        <div style="display:flex;gap:6px">
+          <input type="tel" id="tw-manual" placeholder="05xxxxxxxx" dir="ltr" style="flex:1;padding:9px 12px;border:1.5px solid #D9E2EC;border-radius:8px;font-size:13px;font-family:inherit;outline:none">
+          <button onclick="sendReqToNumber(document.getElementById('tw-manual').value)" class="btn btn-p" style="padding:9px 16px">Send</button>
+        </div>
+      </div>
+    </div>
+  </div>
 </div>
 
 <div id="loginScreen" style="position:fixed;inset:0;background:#0F2D52;z-index:9999;display:flex;align-items:center;justify-content:center;padding:16px;font-family:Tajawal,sans-serif">
