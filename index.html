@@ -185,6 +185,8 @@ html,body{height:100%;overflow:auto;font-family:Tajawal,sans-serif;font-size:14p
   #body{overflow:visible!important}
   #app{height:auto!important}
 }
+.mrf{padding:5px 12px;border-radius:99px;border:1px solid #D9E2EC;background:#fff;color:#718096;cursor:pointer;font-size:11px;font-weight:700;font-family:inherit}
+.mrf-active{background:#1D4E89;color:#fff;border-color:#1D4E89}
 @keyframes pulse{0%,100%{opacity:1}50%{opacity:.3}}
 @keyframes spin{to{transform:rotate(360deg)}}
 </style><script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
@@ -228,6 +230,7 @@ html,body{height:100%;overflow:auto;font-family:Tajawal,sans-serif;font-size:14p
         <div class="nav-item" onclick="go('parts')" id="nav-parts"><i class="ti ti-tool"></i><span id="t-parts">Spare Parts</span></div>
         <div class="nav-item" onclick="go('parts-request')" id="nav-parts-request"><i class="ti ti-zoom-question"></i><span>Parts Request</span></div>
         <div class="nav-item" onclick="go('parts-orders')" id="nav-parts-orders"><i class="ti ti-clipboard-list"></i><span>Parts Orders</span><span class="nbadge" id="po-badge" style="display:none">0</span></div>
+        <div class="nav-item" onclick="go('maint-requests')" id="nav-maint-requests"><i class="ti ti-headset"></i><span>Maintenance Requests</span><span class="nbadge" id="mr-badge" style="display:none">0</span></div>
         <div class="nav-item" onclick="go('clients')" id="nav-clients"><i class="ti ti-building"></i><span id="t-clients">Clients</span></div>
         <div class="sb-sec" id="sb-rep">Reports</div>
         <div class="nav-item" onclick="go('reports')" id="nav-reports"><i class="ti ti-chart-bar"></i><span id="t-reports">Reports</span></div>
@@ -660,6 +663,131 @@ html,body{height:100%;overflow:auto;font-family:Tajawal,sans-serif;font-size:14p
 
 </div><!-- end #app -->
 
+
+<!-- ═══ MAINTENANCE REQUESTS (from Sales) ═══ -->
+<div id="pg-maint-requests" style="display:none">
+  <div class="ph">
+    <div>
+      <div class="pt">Maintenance Requests</div>
+      <div class="ps">طلبات صيانة — submitted by the sales team</div>
+    </div>
+    <button class="btn btn-o" onclick="loadMaintRequests().then(renderMaintRequests)"><i class="ti ti-refresh"></i> Refresh</button>
+  </div>
+
+  <!-- Request form -->
+  <div class="card" id="mr-form-card" style="margin-bottom:16px">
+    <div class="ch"><div class="ct"><i class="ti ti-file-plus" style="color:#1D4E89"></i> New Maintenance Request / طلب صيانة جديد</div></div>
+    <div style="padding:16px">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+
+        <div class="field" style="margin:0">
+          <label>Client Name / اسم العميل *</label>
+          <input type="text" id="mr-client" list="mr-client-list" placeholder="e.g. Hilton Hotel">
+          <datalist id="mr-client-list"></datalist>
+        </div>
+
+        <div class="field" style="margin:0">
+          <label>City / المدينة</label>
+          <input type="text" id="mr-city" list="mr-city-list" placeholder="e.g. Riyadh / الرياض">
+          <datalist id="mr-city-list">
+            <option value="Riyadh / الرياض"><option value="Jeddah / جدة"><option value="Makkah / مكة المكرمة">
+            <option value="Madinah / المدينة المنورة"><option value="Dammam / الدمام"><option value="Khobar / الخبر">
+            <option value="Dhahran / الظهران"><option value="Jubail / الجبيل"><option value="Taif / الطائف">
+            <option value="Buraidah / بريدة"><option value="Tabuk / تبوك"><option value="Abha / أبها">
+            <option value="Khamis Mushait / خميس مشيط"><option value="Hail / حائل"><option value="Najran / نجران">
+            <option value="Jazan / جازان"><option value="Yanbu / ينبع"><option value="Al Ahsa / الأحساء">
+            <option value="Qatif / القطيف"><option value="Kharj / الخرج">
+          </datalist>
+        </div>
+
+        <div class="field" style="margin:0">
+          <label>Branch / Location — الفرع / الموقع</label>
+          <input type="text" id="mr-location" placeholder="e.g. Main kitchen, 2nd floor">
+        </div>
+
+        <div class="field" style="margin:0">
+          <label>Contact Person / الشخص المسؤول</label>
+          <input type="text" id="mr-contact" placeholder="e.g. Chef Ahmed">
+        </div>
+
+        <div class="field" style="margin:0">
+          <label>Contact Phone / رقم التواصل</label>
+          <input type="tel" id="mr-phone" placeholder="05xxxxxxxx" dir="ltr">
+        </div>
+
+        <div class="field" style="margin:0">
+          <label>Visit Type / نوع الزيارة *</label>
+          <select id="mr-type">
+            <option value="paid">Paid / مدفوعة</option>
+            <option value="warranty">Under Warranty / تحت الضمان</option>
+            <option value="contract">Maintenance Contract / عقد صيانة</option>
+          </select>
+        </div>
+
+        <div class="field" style="margin:0">
+          <label>Priority / الأولوية</label>
+          <select id="mr-priority">
+            <option value="normal">Normal / عادية</option>
+            <option value="urgent">Urgent / عاجلة</option>
+            <option value="breakdown">Breakdown — machine stopped / توقف تام</option>
+          </select>
+        </div>
+
+        <div class="field" style="margin:0">
+          <label>Equipment / المعدة</label>
+          <input type="text" id="mr-equipment" placeholder="e.g. Combi Oven, Ice Maker">
+        </div>
+
+        <div class="field" style="margin:0">
+          <label>Brand &amp; Model / الماركة والموديل</label>
+          <input type="text" id="mr-model" placeholder="e.g. Rational SCC 61">
+        </div>
+
+        <div class="field" style="margin:0">
+          <label>Serial No. / الرقم التسلسلي</label>
+          <input type="text" id="mr-serial" placeholder="From the rating plate" dir="ltr">
+        </div>
+
+        <div class="field" style="margin:0">
+          <label>Preferred Date / التاريخ المفضل</label>
+          <input type="date" id="mr-date">
+        </div>
+
+        <div class="field" style="margin:0;grid-column:1/-1">
+          <label>Problem Description / وصف العطل *</label>
+          <textarea id="mr-problem" rows="3" placeholder="What is the customer reporting? / ما الذي يشتكي منه العميل؟" style="width:100%;padding:9px 12px;border:1.5px solid #D9E2EC;border-radius:8px;font-size:13px;font-family:inherit;outline:none;resize:vertical"></textarea>
+        </div>
+
+        <div class="field" style="margin:0;grid-column:1/-1">
+          <label>Notes / ملاحظات إضافية</label>
+          <input type="text" id="mr-notes" placeholder="Access times, gate pass, contact preferences...">
+        </div>
+
+      </div>
+      <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:14px">
+        <button class="btn btn-o" onclick="clearMaintForm()"><i class="ti ti-eraser"></i> Clear</button>
+        <button class="btn btn-p" onclick="submitMaintRequest()"><i class="ti ti-send"></i> Submit Request</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Requests list -->
+  <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px;flex-wrap:wrap">
+    <div style="font-size:13px;font-weight:700;color:#0F2D52;display:flex;align-items:center;gap:6px">
+      <i class="ti ti-list-check"></i> <span id="mr-list-title">Requests</span>
+      <span id="mr-count" style="font-weight:600;color:#718096;font-size:11px"></span>
+    </div>
+    <div style="flex:1"></div>
+    <div class="tbox" id="mr-filters" style="display:flex;gap:4px">
+      <button onclick="setMaintFilter('new',this)" class="mrf mrf-active">New</button>
+      <button onclick="setMaintFilter('scheduled',this)" class="mrf">Scheduled</button>
+      <button onclick="setMaintFilter('rejected',this)" class="mrf">Rejected</button>
+      <button onclick="setMaintFilter('all',this)" class="mrf">All</button>
+    </div>
+  </div>
+  <div id="mr-list" style="display:flex;flex-direction:column;gap:8px;margin-bottom:20px"></div>
+</div>
+
 <!-- MODALS -->
 <div id="techModal" style="display:none" class="modal">
   <div class="mbox">
@@ -764,7 +892,7 @@ html,body{height:100%;overflow:auto;font-family:Tajawal,sans-serif;font-size:14p
       <div class="field"><label>Username</label><input type="text" id="au-user" placeholder="username (no spaces)"></div>
       <div class="field"><label>Full Name</label><input type="text" id="au-name" placeholder="Full Name"></div>
       <div class="field"><label>Password</label><input type="password" id="au-pass" placeholder="Password"></div>
-      <div class="field"><label>Role</label><select id="au-role"><option value="manager">Manager</option><option value="technician">Technician</option></select></div>
+      <div class="field"><label>Role</label><select id="au-role"><option value="manager">Manager</option><option value="technician">Technician</option><option value="salesman">Salesman / مبيعات</option></select></div>
       <div style="display:flex;gap:8px;margin-top:16px">
         <button class="btn btn-o" onclick="closeMod('addUserModal')" style="flex:1">Cancel</button>
         <button class="btn btn-p" onclick="addNewUser()" style="flex:2"><i class="ti ti-device-floppy"></i> Save User</button>
@@ -929,7 +1057,7 @@ function setLang(l){
   Object.keys(map).forEach(function(id){var el=document.getElementById(id);if(el)el.textContent=t(map[id]);});
   // Account name/role reflect the actual logged-in user, never the static translation dictionary
   var _un=document.getElementById('t-uname'); if(_un && curUser) _un.textContent=curUser;
-  var _ur=document.getElementById('t-urole'); if(_ur) _ur.textContent=curUserRole==='manager'?'Maintenance Manager':'Technician';
+  var _ur=document.getElementById('t-urole'); if(_ur) _ur.textContent=roleLabel(curUserRole);
   // Safely call render functions (may not be defined yet on first load)
   try{ if(typeof renderTechGrid==='function') renderTechGrid(); }catch(e){}
   try{ if(typeof renderInvList==='function') renderInvList(); }catch(e){}
@@ -946,6 +1074,11 @@ function setLang(l){
 var LG_ROLE='manager';
 var USERS={'manager':{pass:'hrco2026',role:'manager',name:'Manager',init:'M'}};
 var curUser='', curUserLogin='', curUserRole='';
+function roleLabel(r){
+  return r==='manager' ? 'Maintenance Manager'
+       : r==='salesman' ? 'Sales'
+       : 'Technician';
+}
 
 async function loadSystemUsers(){
   if(!_sb) return;
@@ -1103,7 +1236,7 @@ function lgSuccess(u, restoring){
   }
   var ua=document.getElementById('uAv'); if(ua) ua.textContent=(curUser[0]||'M').toUpperCase();
   var un=document.getElementById('t-uname'); if(un) un.textContent=curUser;
-  var ur=document.getElementById('t-urole'); if(ur) ur.textContent=curUserRole==='manager'?'Maintenance Manager':'Technician';
+  var ur=document.getElementById('t-urole'); if(ur) ur.textContent=roleLabel(curUserRole);
 
   // Load users from DB then all data
   loadSystemUsers().then(function(){
@@ -1117,7 +1250,9 @@ function lgSuccess(u, restoring){
     renderDashRecent();
     renderDashPending();
     renderPending();
-    go('dashboard');
+    try{ applyRolePermissions(); }catch(e){}
+    try{ loadMaintRequests().then(function(){ updateMaintBadge(); }); }catch(e){}
+    go(curUserRole === 'salesman' ? 'maint-requests' : 'dashboard');
     try{initChart();}catch(e){}
   });
 }
@@ -1239,6 +1374,7 @@ async function refreshAll(){
     await loadAllFromDB();
     try{ await loadEquipmentData(); }catch(e){}
     try{ await loadPartsRequests(); }catch(e){}
+    try{ await loadMaintRequests(); }catch(e){}
     updatePendingBadge();
     // repaint the page currently on screen
     var current = 'dashboard';
@@ -1270,7 +1406,7 @@ function logout(){
 // ══════════════════════════════════════
 // NAVIGATION
 // ══════════════════════════════════════
-var PAGES=['dashboard','visits','pending','newvisit','signature','technicians','parts','parts-request','parts-orders','clients','reports','archive','settings'];
+var PAGES=['dashboard','visits','pending','newvisit','signature','technicians','parts','parts-request','parts-orders','maint-requests','clients','reports','archive','settings'];
 function go(pg){
   try{
   PAGES.forEach(function(p){var el=document.getElementById('pg-'+p);if(el){el.style.cssText='display:none';}});
@@ -1315,6 +1451,7 @@ function go(pg){
   if(pg==='reports') runReport();
   if(pg==='visits') renderVisits('all','');
   if(pg==='archive') loadArchive();
+  if(pg==='maint-requests'){ fillMaintClientList(); loadMaintRequests().then(renderMaintRequests); }
   if(pg==='settings'){renderUsersList();try{checkDBStatus();}catch(e){}}
 }
 function setBn(b){document.querySelectorAll('.bn').forEach(function(x){x.style.color='#A0AEC0';});b.style.color='#1D4E89';}
@@ -1947,6 +2084,256 @@ async function closeV(){
   if(closedOk && ab) ab.innerHTML='<div style="padding:10px;color:#2D7D3A;font-size:13px;font-weight:700;display:flex;align-items:center;gap:8px"><i class="ti ti-circle-check" style="font-size:18px"></i>'+t('closed')+'</div>';
 }
 
+
+
+// ══════════════════════════════════════
+// MAINTENANCE REQUESTS (submitted by sales)
+// ══════════════════════════════════════
+var maintRequests = [];
+var maintFilter = 'new';
+
+var MR_TYPE_LABEL = { paid:'Paid / مدفوعة', warranty:'Warranty / ضمان', contract:'Contract / عقد' };
+var MR_PRIO = {
+  normal:{ label:'Normal', bg:'#F1F5F9', fg:'#64748B' },
+  urgent:{ label:'Urgent', bg:'#FDF0E0', fg:'#C4680A' },
+  breakdown:{ label:'Breakdown', bg:'#FCEBEB', fg:'#C0392B' }
+};
+var MR_STATUS = {
+  new:{ label:'New', bg:'#E6F1FB', fg:'#1D4E89' },
+  scheduled:{ label:'Scheduled', bg:'#EAF3DE', fg:'#2D7D3A' },
+  rejected:{ label:'Rejected', bg:'#FCEBEB', fg:'#C0392B' }
+};
+
+function clearMaintForm(){
+  ['mr-client','mr-city','mr-location','mr-contact','mr-phone','mr-equipment','mr-model','mr-serial','mr-date','mr-problem','mr-notes']
+    .forEach(function(id){ var e=document.getElementById(id); if(e) e.value=''; });
+  var t=document.getElementById('mr-type'); if(t) t.value='paid';
+  var pr=document.getElementById('mr-priority'); if(pr) pr.value='normal';
+}
+
+function fillMaintClientList(){
+  var dl = document.getElementById('mr-client-list');
+  if(!dl || typeof clientsData === 'undefined') return;
+  dl.innerHTML = (clientsData||[]).map(function(c){
+    return '<option value="'+String(c.name||'').replace(/"/g,'&quot;')+'">';
+  }).join('');
+}
+
+async function submitMaintRequest(){
+  var val = function(id){ var e=document.getElementById(id); return e ? e.value.trim() : ''; };
+  var client = val('mr-client');
+  var problem = val('mr-problem');
+  if(!client){ alert('الرجاء إدخال اسم العميل\nPlease enter the client name'); return; }
+  if(!problem){ alert('الرجاء وصف العطل\nPlease describe the problem'); return; }
+
+  var req = {
+    client: client,
+    city: val('mr-city'),
+    location: val('mr-location'),
+    contact_person: val('mr-contact'),
+    contact_phone: val('mr-phone'),
+    visit_type: val('mr-type') || 'paid',
+    priority: val('mr-priority') || 'normal',
+    equipment: val('mr-equipment'),
+    model: val('mr-model'),
+    serial_no: val('mr-serial'),
+    preferred_date: val('mr-date') || null,
+    problem: problem,
+    notes: val('mr-notes'),
+    requested_by: curUser || 'Sales',
+    status: 'new',
+    date: new Date().toISOString().split('T')[0]
+  };
+
+  var saved = await dbSave('maintenance_requests', req);
+  if(saved === null) return;                       // dbSave already explained why
+  if(saved && saved[0]) req.id = saved[0].id; else req.id = Date.now();
+
+  maintRequests.unshift(req);
+  clearMaintForm();
+  setMaintFilter('new');
+  updateMaintBadge();
+  alert('✅ تم إرسال طلب الصيانة بنجاح\nMaintenance request submitted successfully!');
+}
+
+async function loadMaintRequests(){
+  if(!_initSb()) return;
+  try{
+    var r = await _sb.from('maintenance_requests').select('*').order('id',{ascending:false}).limit(300);
+    if(r.error){ console.log('loadMaintRequests:', r.error.message); return; }
+    maintRequests = r.data || [];
+    updateMaintBadge();
+  }catch(e){ console.log('loadMaintRequests error:', e); }
+}
+
+function updateMaintBadge(){
+  var b = document.getElementById('mr-badge');
+  if(!b) return;
+  var n = maintRequests.filter(function(r){ return (r.status||'new')==='new'; }).length;
+  b.textContent = n;
+  b.style.display = n ? '' : 'none';
+}
+
+function setMaintFilter(f, el){
+  maintFilter = f;
+  document.querySelectorAll('#mr-filters .mrf').forEach(function(b){ b.classList.remove('mrf-active'); });
+  if(el) el.classList.add('mrf-active');
+  else {
+    var btns = document.querySelectorAll('#mr-filters .mrf');
+    var idx = ['new','scheduled','rejected','all'].indexOf(f);
+    if(btns[idx]) btns[idx].classList.add('mrf-active');
+  }
+  renderMaintRequests();
+}
+
+function renderMaintRequests(){
+  var el = document.getElementById('mr-list');
+  if(!el) return;
+  var isManager = curUserRole === 'manager';
+
+  // Sales staff only ever see their own requests
+  var list = maintRequests.filter(function(r){
+    if(!isManager && curUserRole === 'salesman' && (r.requested_by||'') !== curUser) return false;
+    if(maintFilter === 'all') return true;
+    return (r.status||'new') === maintFilter;
+  });
+
+  var counter = document.getElementById('mr-count');
+  if(counter) counter.textContent = '(' + list.length + ')';
+
+  if(!list.length){
+    el.innerHTML = '<div style="padding:34px;text-align:center;color:#A0AEC0"><i class="ti ti-inbox" style="font-size:32px;display:block;margin-bottom:8px"></i>No requests here yet</div>';
+    return;
+  }
+
+  el.innerHTML = '';
+  list.forEach(function(r){
+    var st = MR_STATUS[r.status||'new'] || MR_STATUS['new'];
+    var pr = MR_PRIO[r.priority||'normal'] || MR_PRIO['normal'];
+    var card = document.createElement('div');
+    card.style.cssText = 'border:1.5px solid #D9E2EC;border-radius:10px;padding:12px 14px;background:#fff';
+
+    var meta = [];
+    var place = [r.city, r.location].filter(Boolean).join(' — ');
+  if(place) meta.push('<i class="ti ti-map-pin"></i> ' + place);
+    if(r.equipment) meta.push('<i class="ti ti-tool"></i> ' + r.equipment + (r.model ? ' — ' + r.model : ''));
+    if(r.serial_no) meta.push('<i class="ti ti-hash"></i> ' + r.serial_no);
+    if(r.contact_person) meta.push('<i class="ti ti-user"></i> ' + r.contact_person + (r.contact_phone ? ' · ' + r.contact_phone : ''));
+    if(r.preferred_date) meta.push('<i class="ti ti-calendar"></i> preferred ' + r.preferred_date);
+
+    var actions = '';
+    if(isManager){
+      if((r.status||'new') === 'new'){
+        actions = '<button onclick="scheduleMaintRequest('+r.id+')" style="padding:7px 14px;border-radius:6px;border:none;background:#2D7D3A;color:#fff;cursor:pointer;font-size:11px;font-weight:700;font-family:inherit"><i class="ti ti-calendar-plus"></i> Schedule Visit</button>'
+                + '<button onclick="rejectMaintRequest('+r.id+')" style="padding:7px 12px;border-radius:6px;border:1px solid #FCEBEB;background:#FCEBEB;color:#C0392B;cursor:pointer;font-size:11px;font-weight:700;font-family:inherit">Reject</button>';
+      } else if((r.status||'new') === 'rejected'){
+        actions = '<button onclick="reopenMaintRequest('+r.id+')" style="padding:7px 14px;border-radius:6px;border:1px solid #D9E2EC;background:#fff;color:#1D4E89;cursor:pointer;font-size:11px;font-weight:700;font-family:inherit">Reopen</button>';
+      }
+    }
+
+    card.innerHTML =
+      '<div style="display:flex;align-items:start;gap:10px;flex-wrap:wrap">'
+      + '<div style="flex:1;min-width:220px">'
+      +   '<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">'
+      +     '<span style="font-size:14px;font-weight:700;color:#1a202c">'+(r.client||'—')+'</span>'
+      +     '<span style="background:'+st.bg+';color:'+st.fg+';font-size:10px;font-weight:700;padding:2px 8px;border-radius:99px">'+st.label+'</span>'
+      +     '<span style="background:'+pr.bg+';color:'+pr.fg+';font-size:10px;font-weight:700;padding:2px 8px;border-radius:99px">'+pr.label+'</span>'
+      +     '<span style="background:#E6F1FB;color:#1D4E89;font-size:10px;font-weight:700;padding:2px 8px;border-radius:99px">'+(MR_TYPE_LABEL[r.visit_type]||r.visit_type||'')+'</span>'
+      +   '</div>'
+      +   (meta.length ? '<div style="font-size:11px;color:#718096;margin-top:5px;display:flex;flex-wrap:wrap;gap:10px">'+meta.join('')+'</div>' : '')
+      +   '<div style="font-size:12px;color:#1a202c;margin-top:7px;white-space:pre-wrap">'+(r.problem||'')+'</div>'
+      +   (r.notes ? '<div style="font-size:11px;color:#A0AEC0;margin-top:4px">'+r.notes+'</div>' : '')
+      +   '<div style="font-size:10px;color:#A0AEC0;margin-top:6px">Requested by '+(r.requested_by||'—')+' · '+(r.date||'')+(r.visit_id?' · visit #'+r.visit_id:'')+'</div>'
+      + '</div>'
+      + (actions ? '<div style="display:flex;gap:6px;align-items:center">'+actions+'</div>' : '')
+      + '</div>';
+    el.appendChild(card);
+  });
+}
+
+// Manager turns an approved request into a real visit, pre-filled.
+async function scheduleMaintRequest(id){
+  var r = maintRequests.find(function(x){ return x.id == id; });
+  if(!r) return;
+  if(!confirm('إنشاء زيارة من هذا الطلب؟\nCreate a visit from this request?')) return;
+
+  go('newvisit');
+  setTimeout(function(){
+    var set = function(elId, v){ var e=document.getElementById(elId); if(e && v) e.value = v; };
+    set('inp-client', r.client);
+    set('inp-location', [r.city, r.location].filter(Boolean).join(' — '));
+    // Equipment is a <select>; add the requested one if it isn't listed yet
+    if(r.equipment){
+      var eqSel = document.getElementById('inp-equipment');
+      if(eqSel){
+        var found = Array.prototype.slice.call(eqSel.options).some(function(o){
+          return o.value.toLowerCase() === r.equipment.toLowerCase()
+              || o.text.toLowerCase() === r.equipment.toLowerCase();
+        });
+        if(!found){
+          var opt = document.createElement('option');
+          opt.value = r.equipment; opt.text = r.equipment;
+          eqSel.appendChild(opt);
+        }
+        eqSel.value = r.equipment;
+      }
+    }
+    set('inp-model', r.model);
+    set('inp-serial', r.serial_no);
+    set('inp-fault', r.problem);
+    var tabs = document.querySelectorAll('#pg-newvisit .tbox button');
+    var order = { warranty:0, paid:1, contract:2 };
+    var idx = order[r.visit_type];
+    if(tabs.length && typeof idx === 'number' && tabs[idx]) tabs[idx].click();
+  }, 250);
+
+  r.status = 'scheduled';
+  await dbSave('maintenance_requests', { id: r.id, status: 'scheduled' });
+  updateMaintBadge();
+  renderMaintRequests();
+}
+
+async function rejectMaintRequest(id){
+  var r = maintRequests.find(function(x){ return x.id == id; });
+  if(!r) return;
+  var why = prompt('سبب الرفض (اختياري) / Reason for rejecting (optional):', '');
+  if(why === null) return;
+  r.status = 'rejected';
+  if(why) r.notes = (r.notes ? r.notes + ' | ' : '') + 'Rejected: ' + why;
+  await dbSave('maintenance_requests', { id: r.id, status: 'rejected', notes: r.notes });
+  updateMaintBadge();
+  renderMaintRequests();
+}
+
+async function reopenMaintRequest(id){
+  var r = maintRequests.find(function(x){ return x.id == id; });
+  if(!r) return;
+  r.status = 'new';
+  await dbSave('maintenance_requests', { id: r.id, status: 'new' });
+  updateMaintBadge();
+  renderMaintRequests();
+}
+
+// Sales users may only use this one section.
+function applyRolePermissions(){
+  var salesOnly = (curUserRole === 'salesman');
+  document.querySelectorAll('.nav-item').forEach(function(n){
+    if(!n.id) return;
+    var allowed = (n.id === 'nav-maint-requests');
+    n.style.display = (salesOnly && !allowed) ? 'none' : '';
+  });
+  ['sb-main','sb-mgmt','sb-rep'].forEach(function(id){
+    var e = document.getElementById(id);
+    if(e) e.style.display = salesOnly ? 'none' : '';
+  });
+  var acc = document.getElementById('sb-acc');
+  if(acc) acc.style.display = salesOnly ? 'none' : '';
+  // Managers don't need the submission form cluttering their review screen
+  var formCard = document.getElementById('mr-form-card');
+  if(formCard) formCard.style.display = (curUserRole === 'manager') ? 'none' : '';
+  var title = document.getElementById('mr-list-title');
+  if(title) title.textContent = (curUserRole === 'salesman') ? 'My Requests' : 'Requests';
+}
 
 // ══════════════════════════════════════
 // MODALS
@@ -4833,7 +5220,7 @@ function saveMyAccount(){
   // Update ALL sidebar elements
   var ua=document.getElementById('uAv'); if(ua) ua.textContent=(name[0]||'M').toUpperCase();
   var un=document.getElementById('t-uname'); if(un) un.textContent=name;
-  var ur=document.getElementById('t-urole'); if(ur) ur.textContent=curUserRole==='manager'?'Maintenance Manager':'Technician';
+  var ur=document.getElementById('t-urole'); if(ur) ur.textContent=roleLabel(curUserRole);
   saveUserToDB(curUserLogin,USERS[curUserLogin]).then(function(){
     var p1=document.getElementById('my-pass'); if(p1) p1.value='';
     var p2=document.getElementById('my-pass2'); if(p2) p2.value='';
