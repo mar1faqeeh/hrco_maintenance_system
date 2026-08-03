@@ -805,6 +805,7 @@ html,body{height:100%;overflow:auto;font-family:Tajawal,sans-serif;font-size:14p
       <button onclick="setMaintFilter('all',this)" class="mrf">All</button>
     </div>
   </div>
+  <div id="mr-summary" style="display:none;gap:8px;flex-wrap:wrap;margin-bottom:12px"></div>
   <div id="mr-list" style="display:flex;flex-direction:column;gap:8px;margin-bottom:20px"></div>
 </div>
 
@@ -2260,6 +2261,7 @@ async function submitMaintRequest(){
     problem: problem,
     notes: val('mr-notes'),
     requested_by: curUser || 'Sales',
+    requested_by_login: curUserLogin || '',
     status: 'new',
     date: new Date().toISOString().split('T')[0]
   };
@@ -2310,12 +2312,39 @@ function renderMaintRequests(){
   if(!el) return;
   var isManager = curUserRole === 'manager';
 
-  // Sales staff only ever see their own requests
-  var list = maintRequests.filter(function(r){
-    if(!isManager && curUserRole === 'salesman' && (r.requested_by||'') !== curUser) return false;
+  // Sales staff only ever see their own requests. Match on the stable login
+  // first, falling back to the display name for rows saved before that existed.
+  var mine = function(r){
+    var norm = function(v){ return String(v||'').trim().toLowerCase(); };
+    if(r.requested_by_login && curUserLogin) return norm(r.requested_by_login) === norm(curUserLogin);
+    return norm(r.requested_by) === norm(curUser);
+  };
+  var visible = maintRequests.filter(function(r){
+    return isManager || curUserRole !== 'salesman' || mine(r);
+  });
+  var list = visible.filter(function(r){
     if(maintFilter === 'all') return true;
     return (r.status||'new') === maintFilter;
   });
+
+  // A quick status summary so the salesperson can see where everything stands
+  var sumEl = document.getElementById('mr-summary');
+  if(sumEl){
+    if(curUserRole === 'salesman' && visible.length){
+      var counts = {};
+      visible.forEach(function(r){ var k=r.status||'new'; counts[k]=(counts[k]||0)+1; });
+      sumEl.style.display = 'flex';
+      sumEl.innerHTML = ['new','scheduled','onhold','completed','rejected'].filter(function(k){ return counts[k]; })
+        .map(function(k){
+          var st = MR_STATUS[k];
+          return '<div style="display:flex;align-items:center;gap:6px;background:'+st.bg+';color:'+st.fg+';padding:6px 12px;border-radius:8px;font-size:12px;font-weight:700">'
+               + '<span style="font-size:15px">'+counts[k]+'</span><span style="font-weight:600">'+st.label+'</span></div>';
+        }).join('');
+    } else {
+      sumEl.style.display = 'none';
+      sumEl.innerHTML = '';
+    }
+  }
 
   var counter = document.getElementById('mr-count');
   if(counter) counter.textContent = '(' + list.length + ')';
@@ -2452,9 +2481,12 @@ function openMaintDetails(id){
     + (r.visit_id ? row('Linked Visit / الزيارة', '#'+r.visit_id) : '');
 
   var actions = '<button onclick="closeMod(\'maintDetailsModal\')" class="btn btn-o" style="flex:1">Close</button>'
-    + '<button onclick="printMaintRequest('+r.id+')" class="btn btn-o" style="flex:1" title="Print / طباعة"><i class="ti ti-printer"></i> Print</button>'
-    + '<button onclick="whatsappMaintRequest('+r.id+')" class="btn btn-o" style="flex:1;color:#128C7E;border-color:#A7E1D5" title="Send to the customer contact / إرسال للعميل"><i class="ti ti-brand-whatsapp"></i> Customer</button>'
-    + '<button onclick="openTechWhatsApp('+r.id+')" class="btn btn-o" style="flex:1;color:#128C7E;border-color:#A7E1D5" title="Send to a technician / إرسال للفني"><i class="ti ti-brand-whatsapp"></i> Technician</button>';
+    + '<button onclick="printMaintRequest('+r.id+')" class="btn btn-o" style="flex:1" title="Print / طباعة"><i class="ti ti-printer"></i> Print</button>';
+  // Dispatching a job is a manager action — sales staff only track status.
+  if(curUserRole !== 'salesman'){
+    actions += '<button onclick="whatsappMaintRequest('+r.id+')" class="btn btn-o" style="flex:1;color:#128C7E;border-color:#A7E1D5" title="Send to the customer contact / إرسال للعميل"><i class="ti ti-brand-whatsapp"></i> Customer</button>'
+            +  '<button onclick="openTechWhatsApp('+r.id+')" class="btn btn-o" style="flex:1;color:#128C7E;border-color:#A7E1D5" title="Send to a technician / إرسال للفني"><i class="ti ti-brand-whatsapp"></i> Technician</button>';
+  }
   if(curUserRole === 'manager'){
     var mdBtn = function(fn, label, cls, style){
       return '<button onclick="closeMod(\'maintDetailsModal\');'+fn+'('+r.id+')" class="'+cls+'" style="'+style+'">'+label+'</button>';
@@ -2752,6 +2784,13 @@ async function reopenMaintRequest(id){
 // Sales users may only use this one section.
 function applyRolePermissions(){
   var salesOnly = (curUserRole === 'salesman');
+  // Sales staff track their requests across every stage, so default to All.
+  if(salesOnly && maintFilter === 'new'){
+    maintFilter = 'all';
+    var tabs = document.querySelectorAll('#mr-filters .mrf');
+    tabs.forEach(function(b){ b.classList.remove('mrf-active'); });
+    if(tabs.length) tabs[tabs.length-1].classList.add('mrf-active');
+  }
   document.querySelectorAll('.nav-item').forEach(function(n){
     if(!n.id) return;
     var allowed = (n.id === 'nav-maint-requests');
