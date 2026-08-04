@@ -332,10 +332,10 @@ html,body{height:100%;overflow:auto;font-family:Tajawal,sans-serif;font-size:14p
       <div class="field"><label id="t-lbl-client">Client Name</label><input type="text" id="inp-client" placeholder="Client name..." oninput="acShow('client',this.value)"><div id="dd-client" style="display:none;position:absolute;background:#fff;border:1px solid #D9E2EC;border-radius:8px;box-shadow:0 4px 16px rgba(0,0,0,.1);z-index:50;min-width:200px"></div></div>
       <div class="field"><label id="t-lbl-loc">Location / Branch</label><input type="text" id="inp-location" placeholder="Location..."></div>
       <div class="field">
-        <label>GPS Location / الموقع الجغرافي</label>
+        <label id="t-lbl-gps">GPS Location</label>
         <div style="display:flex;gap:6px;flex-wrap:wrap">
-          <button type="button" id="nv-map-btn" onclick="captureCurrentLocation('inp-map','nv-map-status','nv-map-btn')" class="btn btn-p" style="white-space:nowrap"><i class="ti ti-current-location"></i> موقعي الحالي / My location</button>
-          <input type="text" id="inp-map" dir="ltr" oninput="onMapLinkInput('inp-map','nv-map-status')" placeholder="أو الصق رابط موقع / or paste a map link" style="flex:1;min-width:200px;padding:9px 12px;border:1.5px solid #D9E2EC;border-radius:8px;font-size:13px;font-family:inherit;outline:none">
+          <button type="button" id="nv-map-btn" onclick="captureCurrentLocation('inp-map','nv-map-status','nv-map-btn')" class="btn btn-p" style="white-space:nowrap"><i class="ti ti-current-location"></i> <span id="t-mybtn">My location</span></button>
+          <input type="text" id="inp-map" dir="ltr" oninput="onMapLinkInput('inp-map','nv-map-status')" placeholder="or paste a map link" style="flex:1;min-width:200px;padding:9px 12px;border:1.5px solid #D9E2EC;border-radius:8px;font-size:13px;font-family:inherit;outline:none">
         </div>
         <div id="nv-map-status" style="font-size:11px;margin-top:5px;color:#718096"></div>
       </div>
@@ -398,7 +398,7 @@ html,body{height:100%;overflow:auto;font-family:Tajawal,sans-serif;font-size:14p
     </div>
     <div class="fcard">
       <h3><i class="ti ti-checklist"></i><span id="t-tasks">Tasks Performed</span></h3>
-      <div style="font-size:11px;color:#718096;margin-bottom:6px">اختر نوع المعدة لعرض مهامها / Pick the equipment type to load its checklist</div>
+      <div id="t-taskhint" style="font-size:11px;color:#718096;margin-bottom:6px">Pick the equipment type to load its checklist</div>
       <div id="taskcats" style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px"></div>
       <div id="tasklist" style="display:flex;flex-direction:column;gap:6px"></div>
       <button class="btn btn-o" style="margin-top:8px;font-size:12px" onclick="addTask()"><i class="ti ti-plus"></i><span id="t-add-task">Add Task</span></button>
@@ -899,7 +899,8 @@ html,body{height:100%;overflow:auto;font-family:Tajawal,sans-serif;font-size:14p
         <div id="tt-cats" style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px"></div>
         <div id="tt-list" style="display:flex;flex-direction:column;gap:6px;margin-bottom:10px"></div>
         <div style="display:flex;gap:6px;flex-wrap:wrap">
-          <input type="text" id="tt-new" placeholder="مهمة جديدة / New task…" onkeydown="if(event.key==='Enter')ttAddTask()" style="flex:1;min-width:220px;padding:9px 12px;border:1.5px solid #D9E2EC;border-radius:8px;font-size:13px;font-family:inherit;outline:none">
+          <input type="text" id="tt-new-ar" placeholder="المهمة بالعربية…" onkeydown="if(event.key==='Enter')ttAddTask()" style="flex:1;min-width:190px;padding:9px 12px;border:1.5px solid #D9E2EC;border-radius:8px;font-size:13px;font-family:inherit;outline:none">
+          <input type="text" id="tt-new-en" dir="ltr" placeholder="Task in English…" onkeydown="if(event.key==='Enter')ttAddTask()" style="flex:1;min-width:190px;padding:9px 12px;border:1.5px solid #D9E2EC;border-radius:8px;font-size:13px;font-family:inherit;outline:none">
           <button class="btn btn-o" onclick="ttAddTask()"><i class="ti ti-plus"></i> Add</button>
           <button class="btn btn-o" onclick="ttResetCat()" title="Restore the built-in list"><i class="ti ti-rotate"></i> Reset</button>
           <button class="btn btn-p" onclick="ttSave()"><i class="ti ti-device-floppy"></i> Save Checklists</button>
@@ -1091,6 +1092,16 @@ function setLang(l){
     't-new-visit-btn':'newvisit'
   };
   Object.keys(map).forEach(function(id){var el=document.getElementById(id);if(el)el.textContent=t(map[id]);});
+  // Task checklists are stored per language — repaint them on a language switch
+  var _ar = (LNG === 'ar');
+  var _set = function(id, ar, en){ var e=document.getElementById(id); if(e) e.textContent = _ar ? ar : en; };
+  _set('t-taskhint', 'اختر نوع المعدة لعرض مهامها', 'Pick the equipment type to load its checklist');
+  _set('t-lbl-gps', 'الموقع الجغرافي', 'GPS Location');
+  _set('t-mybtn', 'موقعي الحالي', 'My location');
+  var _mapInp = document.getElementById('inp-map');
+  if(_mapInp) _mapInp.placeholder = _ar ? 'أو الصق رابط موقع' : 'or paste a map link';
+  try{ if(typeof renderTaskCats === 'function'){ renderTaskCats(); renderTaskList(true); } }catch(e){}
+  try{ if(typeof renderTaskEditor === 'function' && document.getElementById('tt-cats')) renderTaskEditor(); }catch(e){}
   // Account name/role reflect the actual logged-in user, never the static translation dictionary
   var _un=document.getElementById('t-uname'); if(_un && curUser) _un.textContent=curUser;
   var _ur=document.getElementById('t-urole'); if(_ur) _ur.textContent=roleLabel(curUserRole);
@@ -1998,54 +2009,80 @@ var TASK_CATEGORIES = [
 
 var DEFAULT_TASKS = {
   kitchen: [
-    'فحص ضغط الغاز / Check gas pressure',
-    'فحص وتنظيف الشعلات / Inspect & clean burners',
-    'فحص صمام الأمان والثرموكبل / Check safety valve & thermocouple',
-    'معايرة الثرموستات ودرجة الحرارة / Calibrate thermostat & temperature',
-    'فحص لوحة التحكم والمفاتيح / Check control panel & switches',
-    'فحص تسريب الغاز / Gas leak test',
-    'فحص عناصر التسخين الكهربائية / Check electric heating elements',
-    'تنظيف الفلاتر والشفاط / Clean filters & extraction hood',
-    'فحص الأبواب والحشوات / Check doors & gaskets',
-    'فحص التوصيلات الكهربائية والتأريض / Check wiring & earthing'
+    { ar:'فحص ضغط الغاز', en:'Check gas pressure' },
+    { ar:'فحص وتنظيف الشعلات', en:'Inspect & clean burners' },
+    { ar:'فحص صمام الأمان والثرموكبل', en:'Check safety valve & thermocouple' },
+    { ar:'معايرة الثرموستات ودرجة الحرارة', en:'Calibrate thermostat & temperature' },
+    { ar:'فحص لوحة التحكم والمفاتيح', en:'Check control panel & switches' },
+    { ar:'فحص تسريب الغاز', en:'Gas leak test' },
+    { ar:'فحص عناصر التسخين الكهربائية', en:'Check electric heating elements' },
+    { ar:'تنظيف الفلاتر والشفاط', en:'Clean filters & extraction hood' },
+    { ar:'فحص الأبواب والحشوات', en:'Check doors & gaskets' },
+    { ar:'فحص التوصيلات الكهربائية والتأريض', en:'Check wiring & earthing' }
   ],
   fridges: [
-    'قياس ضغط غاز التبريد / Check refrigerant pressure',
-    'تنظيف المكثف / Clean condenser',
-    'فحص المروحة والمحرك / Check fan & motor',
-    'فحص الكمبروسر وسحب التيار / Check compressor & current draw',
-    'إزالة الثلج من المبخر / Defrost evaporator',
-    'فحص تصريف المياه / Check water drainage',
-    'معايرة الثرموستات / Calibrate thermostat',
-    'فحص حشوات الأبواب / Check door gaskets',
-    'تسجيل درجة حرارة التشغيل / Record operating temperature',
-    'فحص الإنارة الداخلية / Check interior lighting'
+    { ar:'قياس ضغط غاز التبريد', en:'Check refrigerant pressure' },
+    { ar:'تنظيف المكثف', en:'Clean condenser' },
+    { ar:'فحص المروحة والمحرك', en:'Check fan & motor' },
+    { ar:'فحص الكمبروسر وسحب التيار', en:'Check compressor & current draw' },
+    { ar:'إزالة الثلج من المبخر', en:'Defrost evaporator' },
+    { ar:'فحص تصريف المياه', en:'Check water drainage' },
+    { ar:'معايرة الثرموستات', en:'Calibrate thermostat' },
+    { ar:'فحص حشوات الأبواب', en:'Check door gaskets' },
+    { ar:'تسجيل درجة حرارة التشغيل', en:'Record operating temperature' },
+    { ar:'فحص الإنارة الداخلية', en:'Check interior lighting' }
   ],
   coldroom: [
-    'قياس ضغوط التشغيل العالي والمنخفض / Check high & low pressures',
-    'فحص وحدة التكثيف الخارجية / Inspect outdoor condensing unit',
-    'تنظيف المبخر والمراوح / Clean evaporator & fans',
-    'فحص دورة إزالة الثلج / Check defrost cycle',
-    'فحص العزل والأبواب والستائر / Check insulation, doors & curtains',
-    'فحص جهاز الإنذار ومراقبة الحرارة / Check alarm & temperature monitoring',
-    'فحص تصريف المياه والسخان / Check drain line & heater',
-    'فحص مستوى الزيت بالكمبروسر / Check compressor oil level',
-    'تسجيل درجات الحرارة عند نقاط مختلفة / Log temperatures at several points',
-    'فحص لوحة التحكم والكونتاكتورات / Check control panel & contactors'
+    { ar:'قياس ضغوط التشغيل العالي والمنخفض', en:'Check high & low pressures' },
+    { ar:'فحص وحدة التكثيف الخارجية', en:'Inspect outdoor condensing unit' },
+    { ar:'تنظيف المبخر والمراوح', en:'Clean evaporator & fans' },
+    { ar:'فحص دورة إزالة الثلج', en:'Check defrost cycle' },
+    { ar:'فحص العزل والأبواب والستائر', en:'Check insulation, doors & curtains' },
+    { ar:'فحص جهاز الإنذار ومراقبة الحرارة', en:'Check alarm & temperature monitoring' },
+    { ar:'فحص تصريف المياه والسخان', en:'Check drain line & heater' },
+    { ar:'فحص مستوى الزيت بالكمبروسر', en:'Check compressor oil level' },
+    { ar:'تسجيل درجات الحرارة عند نقاط مختلفة', en:'Log temperatures at several points' },
+    { ar:'فحص لوحة التحكم والكونتاكتورات', en:'Check control panel & contactors' }
   ],
   washing: [
-    'فحص مضخة المياه / Check water pump',
-    'تنظيف فلاتر ومرشحات المياه / Clean water filters & strainers',
-    'فحص وتنظيف أذرع الرش / Inspect & clean spray arms',
-    'فحص سخان المياه ودرجة الحرارة / Check water heater & temperature',
-    'فحص جرعات المنظف والملمع / Check detergent & rinse-aid dosing',
-    'فحص التسريبات والخراطيم / Check for leaks & hoses',
-    'فحص مضخة التصريف / Check drain pump',
-    'فحص حشوة الباب والقفل / Check door seal & latch',
-    'فحص دورة الغسيل الكاملة / Run a full wash cycle test',
-    'إزالة الترسبات الجيرية / Descale the machine'
+    { ar:'فحص مضخة المياه', en:'Check water pump' },
+    { ar:'تنظيف فلاتر ومرشحات المياه', en:'Clean water filters & strainers' },
+    { ar:'فحص وتنظيف أذرع الرش', en:'Inspect & clean spray arms' },
+    { ar:'فحص سخان المياه ودرجة الحرارة', en:'Check water heater & temperature' },
+    { ar:'فحص جرعات المنظف والملمع', en:'Check detergent & rinse-aid dosing' },
+    { ar:'فحص التسريبات والخراطيم', en:'Check for leaks & hoses' },
+    { ar:'فحص مضخة التصريف', en:'Check drain pump' },
+    { ar:'فحص حشوة الباب والقفل', en:'Check door seal & latch' },
+    { ar:'فحص دورة الغسيل الكاملة', en:'Run a full wash cycle test' },
+    { ar:'إزالة الترسبات الجيرية', en:'Descale the machine' }
   ]
 };
+
+// Tasks are stored as { ar, en }; show the one matching the interface
+// language. Older rows saved as a single "عربي / English" string still work.
+function taskText(item){
+  if(item && typeof item === 'object'){
+    var ar = item.ar || '', en = item.en || '';
+    return (LNG === 'ar') ? (ar || en) : (en || ar);
+  }
+  var str = String(item||'');
+  if(str.indexOf(' / ') !== -1){
+    var parts = str.split(' / ');
+    return (LNG === 'ar') ? parts[0].trim() : parts.slice(1).join(' / ').trim();
+  }
+  return str;
+}
+
+// Normalise anything (string or object) into { ar, en }.
+function taskObj(item){
+  if(item && typeof item === 'object') return { ar: item.ar||'', en: item.en||'' };
+  var str = String(item||'');
+  if(str.indexOf(' / ') !== -1){
+    var p2 = str.split(' / ');
+    return { ar: p2[0].trim(), en: p2.slice(1).join(' / ').trim() };
+  }
+  return { ar: str, en: str };
+}
 
 var taskTemplates = JSON.parse(JSON.stringify(DEFAULT_TASKS));
 var currentTaskCat = 'kitchen';
@@ -2061,7 +2098,7 @@ function renderTaskCats(){
     b.style.cssText = 'display:flex;align-items:center;gap:6px;padding:7px 12px;border-radius:8px;font-size:11px;font-weight:700;cursor:pointer;font-family:inherit;'
       + (active ? 'background:#1D4E89;color:#fff;border:1.5px solid #1D4E89'
                 : 'background:#fff;color:#718096;border:1.5px solid #D9E2EC');
-    b.innerHTML = '<i class="ti ' + c.icon + '"></i> ' + c.label.split(' / ')[0];
+    b.innerHTML = '<i class="ti ' + c.icon + '"></i> ' + (LNG==='ar' ? c.label.split(' / ')[0] : c.label.split(' / ')[1]);
     b.title = c.label;
     b.onclick = function(){ selectTaskCat(c.key); };
     el.appendChild(b);
@@ -2079,8 +2116,10 @@ function renderTaskList(keepChecks){
   if(!el) return;
   var checked = {};
   if(keepChecks){
+    // Key on the stable task id, not the visible label — the label changes
+    // when the interface language is switched.
     el.querySelectorAll('input[type=checkbox]').forEach(function(cb){
-      if(cb.checked) checked[(cb.nextElementSibling||{}).textContent] = true;
+      if(cb.checked) checked[cb.getAttribute('data-task-key') || (cb.nextElementSibling||{}).textContent] = true;
     });
   }
   var tasks = taskTemplates[currentTaskCat] || [];
@@ -2089,12 +2128,16 @@ function renderTaskList(keepChecks){
     el.innerHTML = '<div style="padding:14px;text-align:center;color:#A0AEC0;font-size:12px">لا توجد مهام لهذا النوع — أضفها من الإعدادات / No tasks for this type — add them in Settings</div>';
     return;
   }
-  tasks.forEach(function(txt){
+  tasks.forEach(function(item, idx){
+    var txt = taskText(item);
+    var o = taskObj(item);
+    var key = currentTaskCat + '#' + (o.en || o.ar || idx);
     var d = document.createElement('div');
     d.style.cssText = 'display:flex;align-items:center;gap:10px;padding:8px 12px;background:#F8FAFC;border:1px solid #D9E2EC;border-radius:8px';
     var cb = document.createElement('input');
     cb.type = 'checkbox';
-    if(checked[txt]) cb.checked = true;
+    cb.setAttribute('data-task-key', key);
+    if(checked[key] || checked[txt]) cb.checked = true;
     var sp = document.createElement('span');
     sp.textContent = txt;
     sp.style.fontSize = '13px';
@@ -2121,7 +2164,7 @@ function renderTaskEditor(){
     b.style.cssText = 'display:flex;align-items:center;gap:6px;padding:7px 12px;border-radius:8px;font-size:11px;font-weight:700;cursor:pointer;font-family:inherit;'
       + (active ? 'background:#1D4E89;color:#fff;border:1.5px solid #1D4E89'
                 : 'background:#fff;color:#718096;border:1.5px solid #D9E2EC');
-    b.innerHTML = '<i class="ti '+c.icon+'"></i> '+c.label.split(' / ')[0]
+    b.innerHTML = '<i class="ti '+c.icon+'"></i> '+(LNG==='ar' ? c.label.split(' / ')[0] : c.label.split(' / ')[1])
                 + ' <span style="opacity:.75">('+((taskTemplates[c.key]||[]).length)+')</span>';
     b.onclick = function(){ ttCat = c.key; renderTaskEditor(); };
     cats.appendChild(b);
@@ -2133,11 +2176,16 @@ function renderTaskEditor(){
     list.innerHTML = '<div style="padding:14px;text-align:center;color:#A0AEC0;font-size:12px">No tasks yet — add one below.</div>';
     return;
   }
-  tasks.forEach(function(txt, i){
+  tasks.forEach(function(item, i){
+    var o = taskObj(item);
+    var esc = function(v){ return String(v||'').replace(/</g,'&lt;'); };
     var row = document.createElement('div');
     row.style.cssText = 'display:flex;align-items:center;gap:8px;padding:8px 10px;background:#F8FAFC;border:1px solid #D9E2EC;border-radius:8px';
     row.innerHTML = '<span style="font-size:11px;color:#A0AEC0;min-width:20px">'+(i+1)+'</span>'
-      + '<span style="flex:1;font-size:13px">'+txt.replace(/</g,'&lt;')+'</span>'
+      + '<span style="flex:1;font-size:13px">'
+      +   '<span style="display:block">'+esc(o.ar || '—')+'</span>'
+      +   '<span style="display:block;color:#718096;font-size:11px" dir="ltr">'+esc(o.en || '—')+'</span>'
+      + '</span>'
       + '<button onclick="ttMove('+i+',-1)" title="Move up" style="border:none;background:none;color:#A0AEC0;cursor:pointer"><i class="ti ti-arrow-up"></i></button>'
       + '<button onclick="ttMove('+i+',1)" title="Move down" style="border:none;background:none;color:#A0AEC0;cursor:pointer"><i class="ti ti-arrow-down"></i></button>'
       + '<button onclick="ttRemove('+i+')" title="Remove" style="border:none;background:none;color:#C0392B;cursor:pointer"><i class="ti ti-trash"></i></button>';
@@ -2146,12 +2194,15 @@ function renderTaskEditor(){
 }
 
 function ttAddTask(){
-  var el = document.getElementById('tt-new');
-  var v = el ? el.value.trim() : '';
-  if(!v) return;
+  var arEl = document.getElementById('tt-new-ar');
+  var enEl = document.getElementById('tt-new-en');
+  var ar = arEl ? arEl.value.trim() : '';
+  var en = enEl ? enEl.value.trim() : '';
+  if(!ar && !en) return;
   if(!taskTemplates[ttCat]) taskTemplates[ttCat] = [];
-  taskTemplates[ttCat].push(v);
-  el.value = '';
+  // Either language alone is fine — the other falls back to it when displayed.
+  taskTemplates[ttCat].push({ ar: ar || en, en: en || ar });
+  arEl.value = ''; enEl.value = '';
   renderTaskEditor();
   ttMark('غير محفوظ — اضغط "Save Checklists" / Unsaved — press "Save Checklists"', '#C4680A');
 }
@@ -2188,7 +2239,9 @@ async function ttSave(){
   ttMark('جاري الحفظ... / Saving...');
   try{
     var rows = TASK_CATEGORIES.map(function(c){
-      return { category: c.key, tasks: JSON.stringify(taskTemplates[c.key]||[]) };
+      var norm = (taskTemplates[c.key]||[]).map(taskObj);
+      taskTemplates[c.key] = norm;
+      return { category: c.key, tasks: JSON.stringify(norm) };
     });
     var r = await _sb.from('task_templates').upsert(rows, { onConflict: 'category' }).select();
     if(r.error){
