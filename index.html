@@ -329,7 +329,18 @@ html,body{height:100%;overflow:auto;font-family:Tajawal,sans-serif;font-size:14p
   <div class="fg">
     <div class="fcard">
       <h3><i class="ti ti-building"></i><span id="t-client-info">Client Information</span></h3>
-      <div class="field"><label id="t-lbl-client">Client Name</label><input type="text" id="inp-client" placeholder="Client name..." oninput="acShow('client',this.value)"><div id="dd-client" style="display:none;position:absolute;background:#fff;border:1px solid #D9E2EC;border-radius:8px;box-shadow:0 4px 16px rgba(0,0,0,.1);z-index:50;min-width:200px"></div></div>
+      <div class="field">
+        <label id="t-lbl-client">Client Name</label>
+        <select id="inp-client" onchange="onVisitClientChange()"></select>
+        <div id="nv-noclients" style="font-size:11px;color:#C4680A;margin-top:5px;display:none">
+          <i class="ti ti-alert-triangle"></i> <span id="t-noclients">No clients yet — add one in the Clients page first.</span>
+        </div>
+      </div>
+      <div class="field">
+        <label id="t-lbl-order">Order / Project — الأوردر أو المشروع</label>
+        <select id="inp-order" onchange="onVisitOrderChange()"></select>
+        <div id="nv-coverage" style="font-size:11px;font-weight:700;margin-top:5px"></div>
+      </div>
       <div class="field"><label id="t-lbl-loc">Location / Branch</label><input type="text" id="inp-location" placeholder="Location..."></div>
       <div class="field">
         <label id="t-lbl-gps">GPS Location</label>
@@ -1300,6 +1311,7 @@ function lgSuccess(u, restoring){
     try{ applyRolePermissions(); }catch(e){}
     try{ loadMaintRequests().then(function(){ updateMaintBadge(); }); }catch(e){}
     try{ loadTaskTemplates(); }catch(e){}
+    try{ loadClientOrders().then(function(){ if(typeof renderClientGrid==='function') renderClientGrid(); }); }catch(e){}
     go(curUserRole === 'salesman' ? 'maint-requests' : 'dashboard');
     try{initChart();}catch(e){}
   });
@@ -1424,6 +1436,7 @@ async function refreshAll(){
     try{ await loadPartsRequests(); }catch(e){}
     try{ await loadMaintRequests(); }catch(e){}
     try{ await loadTaskTemplates(); }catch(e){}
+    try{ await loadClientOrders(); }catch(e){}
     updatePendingBadge();
     // repaint the page currently on screen
     var current = 'dashboard';
@@ -1487,7 +1500,7 @@ function go(pg){
   }catch(e){console.log('go() error:',e);}
   if(pg==='dashboard'){updateDashStats();renderDashTechs();renderDashRecent();renderDashPending();renderPending();}
   if(pg==='signature') setTimeout(function(){initSig('tech');initSig('client');},80);
-  if(pg==='newvisit'){ if(!document.querySelector('#taskcats button')) { renderTaskCats(); renderTaskList(); }
+  if(pg==='newvisit'){ fillVisitClientSelect(); if(!document.querySelector('#taskcats button')) { renderTaskCats(); renderTaskList(); }
     window._visitStartTime = Date.now();
     populateTechSelect();
     resetNewVisitForm();
@@ -2516,6 +2529,252 @@ function onMapLinkInput(inputId, statusId){
   }
 }
 
+
+// ══════════════════════════════════════
+// CLIENT ORDERS / PROJECTS  (اوردرات ومشاريع العملاء)
+// Each client can have several orders; every order has its own handover date
+// and its own coverage, which is what decides a visit's type.
+// ══════════════════════════════════════
+var clientOrders = [];
+
+var COVERAGE = {
+  warranty: { label:{ar:'ضمان', en:'Warranty'},          bg:'#E6F1FB', fg:'#1D4E89' },
+  contract: { label:{ar:'عقد صيانة', en:'Contract'},      bg:'#EAF3DE', fg:'#2D7D3A' },
+  none:     { label:{ar:'خارج الضمان', en:'Out of warranty'}, bg:'#FCEBEB', fg:'#C0392B' }
+};
+
+function covLabel(k){
+  var c = COVERAGE[k] || COVERAGE.none;
+  return (LNG === 'ar') ? c.label.ar : c.label.en;
+}
+
+function addMonths(dateStr, months){
+  if(!dateStr) return null;
+  var d = new Date(dateStr);
+  if(isNaN(d)) return null;
+  d.setMonth(d.getMonth() + (parseInt(months,10) || 0));
+  return d;
+}
+
+// Works out where an order stands TODAY: still covered, or expired.
+function orderCoverage(o){
+  if(!o) return { type:'none', active:false, endDate:null, daysLeft:null };
+  var today = new Date(); today.setHours(0,0,0,0);
+
+  if(o.coverage_type === 'warranty'){
+    var end = addMonths(o.handover_date, o.warranty_months || 12);
+    if(!end) return { type:'warranty', active:false, endDate:null, daysLeft:null };
+    var active = end >= today;
+    return { type:'warranty', active:active, endDate:end,
+             daysLeft: Math.round((end - today)/86400000) };
+  }
+  if(o.coverage_type === 'contract'){
+    var cs = o.contract_start ? new Date(o.contract_start) : null;
+    var ce = o.contract_end ? new Date(o.contract_end) : null;
+    if(!ce) return { type:'contract', active:false, endDate:null, daysLeft:null };
+    var started = !cs || cs <= today;
+    var act = started && ce >= today;
+    return { type:'contract', active:act, endDate:ce,
+             daysLeft: Math.round((ce - today)/86400000) };
+  }
+  return { type:'none', active:false, endDate:null, daysLeft:null };
+}
+
+// The visit type this order implies right now.
+function coverageVisitType(o){
+  var c = orderCoverage(o);
+  if(c.type === 'warranty' && c.active) return 'warranty';
+  if(c.type === 'contract' && c.active) return 'contract';
+  return 'paid';
+}
+
+function fmtDate(d){
+  if(!d) return '';
+  var dt = (d instanceof Date) ? d : new Date(d);
+  if(isNaN(dt)) return '';
+  return dt.toISOString().split('T')[0];
+}
+
+function ordersOfClient(clientId){
+  return clientOrders.filter(function(o){ return String(o.client_id) === String(clientId); });
+}
+
+async function loadClientOrders(){
+  if(!_initSb()) return;
+  try{
+    var r = await _sb.from('client_orders').select('*').order('id',{ascending:false});
+    if(r.error){ console.log('loadClientOrders:', r.error.message); return; }
+    clientOrders = r.data || [];
+  }catch(e){ console.log('loadClientOrders error:', e); }
+}
+
+// ── Orders modal for one client ──────────────────────────────────────────
+var _ordersClientId = null;
+
+function openClientOrders(clientId){
+  var cl = clientsData.find(function(c){ return String(c.id) === String(clientId); });
+  if(!cl) return;
+  _ordersClientId = clientId;
+  document.getElementById('co-client-name').textContent = cl.name;
+  resetOrderForm();
+  renderClientOrders();
+  openMod('clientOrdersModal');
+}
+
+function resetOrderForm(){
+  ['co-name','co-handover','co-contract-start','co-contract-end','co-notes','co-po'].forEach(function(id){
+    var e = document.getElementById(id); if(e) e.value = '';
+  });
+  var ct = document.getElementById('co-coverage'); if(ct) ct.value = 'warranty';
+  var wm = document.getElementById('co-warranty-months'); if(wm) wm.value = '12';
+  document.getElementById('co-edit-id').value = '';
+  document.getElementById('co-save-label').textContent = 'Add Order';
+  onCoverageTypeChange();
+}
+
+// Show only the fields that matter for the chosen coverage.
+function onCoverageTypeChange(){
+  var type = (document.getElementById('co-coverage')||{}).value || 'warranty';
+  var w = document.getElementById('co-warranty-fields');
+  var c = document.getElementById('co-contract-fields');
+  if(w) w.style.display = (type === 'warranty') ? '' : 'none';
+  if(c) c.style.display = (type === 'contract') ? '' : 'none';
+  updateOrderPreview();
+}
+
+function updateOrderPreview(){
+  var el = document.getElementById('co-preview');
+  if(!el) return;
+  var o = readOrderForm();
+  if(!o.handover_date && o.coverage_type === 'warranty'){ el.innerHTML = ''; return; }
+  var c = orderCoverage(o);
+  if(!c.endDate){ el.innerHTML = ''; return; }
+  var ends = fmtDate(c.endDate);
+  el.innerHTML = c.active
+    ? '<i class="ti ti-shield-check"></i> ' + (LNG==='ar'
+        ? ('التغطية سارية حتى ' + ends + ' (' + c.daysLeft + ' يوم متبقٍ)')
+        : ('Covered until ' + ends + ' (' + c.daysLeft + ' days left)'))
+    : '<i class="ti ti-shield-off"></i> ' + (LNG==='ar'
+        ? ('انتهت التغطية في ' + ends)
+        : ('Coverage ended on ' + ends));
+  el.style.color = c.active ? '#2D7D3A' : '#C0392B';
+}
+
+function readOrderForm(){
+  var v = function(id){ var e=document.getElementById(id); return e ? e.value.trim() : ''; };
+  return {
+    client_id: _ordersClientId,
+    name: v('co-name'),
+    po_number: v('co-po'),
+    handover_date: v('co-handover') || null,
+    coverage_type: v('co-coverage') || 'warranty',
+    warranty_months: parseInt(v('co-warranty-months'),10) || 12,
+    contract_start: v('co-contract-start') || null,
+    contract_end: v('co-contract-end') || null,
+    notes: v('co-notes')
+  };
+}
+
+async function saveClientOrder(){
+  var o = readOrderForm();
+  if(!o.name){ alert('الرجاء إدخال اسم الأوردر أو المشروع\nPlease enter the order / project name'); return; }
+  if(o.coverage_type === 'warranty' && !o.handover_date){
+    alert('تاريخ تسليم المشروع مطلوب لحساب مدة الضمان\nThe handover date is required to calculate the warranty period');
+    return;
+  }
+  if(o.coverage_type === 'contract' && !o.contract_end){
+    alert('تاريخ نهاية العقد مطلوب\nThe contract end date is required');
+    return;
+  }
+  var editId = document.getElementById('co-edit-id').value;
+  if(editId) o.id = isNaN(editId) ? editId : parseInt(editId,10);
+
+  var saved = await dbSave('client_orders', o);
+  if(saved === null) return;
+  if(saved && saved[0]) o.id = saved[0].id;
+  else if(!o.id) o.id = Date.now();
+
+  var i = clientOrders.findIndex(function(x){ return String(x.id) === String(o.id); });
+  if(i >= 0) clientOrders[i] = o; else clientOrders.unshift(o);
+
+  resetOrderForm();
+  renderClientOrders();
+}
+
+function editClientOrder(id){
+  var o = clientOrders.find(function(x){ return String(x.id) === String(id); });
+  if(!o) return;
+  var set = function(elId, val){ var e=document.getElementById(elId); if(e) e.value = val || ''; };
+  set('co-edit-id', o.id);
+  set('co-name', o.name);
+  set('co-po', o.po_number);
+  set('co-handover', o.handover_date);
+  set('co-coverage', o.coverage_type || 'warranty');
+  set('co-warranty-months', o.warranty_months || 12);
+  set('co-contract-start', o.contract_start);
+  set('co-contract-end', o.contract_end);
+  set('co-notes', o.notes);
+  document.getElementById('co-save-label').textContent = 'Save Changes';
+  onCoverageTypeChange();
+}
+
+async function deleteClientOrder(id){
+  var o = clientOrders.find(function(x){ return String(x.id) === String(id); });
+  if(!o) return;
+  if(!confirm('حذف الأوردر "'+(o.name||'')+'"؟\nDelete the order "'+(o.name||'')+'"?')) return;
+  if(_initSb()){
+    var r = await _sb.from('client_orders').delete().eq('id', id).select();
+    if(r.error){ alert('فشل الحذف: '+r.error.message); return; }
+    if(!r.data || !r.data.length){
+      alert('لم يتم حذف أي سجل — تحقق من صلاحيات الحذف (RLS) لجدول client_orders.\nNo row deleted — check the DELETE policy on client_orders.');
+      return;
+    }
+  }
+  clientOrders = clientOrders.filter(function(x){ return String(x.id) !== String(id); });
+  renderClientOrders();
+}
+
+function renderClientOrders(){
+  var el = document.getElementById('co-list');
+  if(!el) return;
+  var list = ordersOfClient(_ordersClientId);
+  var cnt = document.getElementById('co-count');
+  if(cnt) cnt.textContent = '(' + list.length + ')';
+
+  if(!list.length){
+    el.innerHTML = '<div style="padding:26px;text-align:center;color:#A0AEC0;font-size:12px"><i class="ti ti-package-off" style="font-size:26px;display:block;margin-bottom:6px"></i>لا توجد أوردرات بعد / No orders yet</div>';
+    return;
+  }
+  el.innerHTML = '';
+  list.forEach(function(o){
+    var c = orderCoverage(o);
+    var pal = COVERAGE[c.type] || COVERAGE.none;
+    var status = c.active
+      ? (LNG==='ar' ? ('سارٍ حتى '+fmtDate(c.endDate)) : ('Active until '+fmtDate(c.endDate)))
+      : (c.endDate ? (LNG==='ar' ? ('منتهٍ في '+fmtDate(c.endDate)) : ('Expired '+fmtDate(c.endDate)))
+                   : (LNG==='ar' ? 'خارج الضمان' : 'Out of warranty'));
+    var row = document.createElement('div');
+    row.style.cssText = 'border:1.5px solid #D9E2EC;border-radius:10px;padding:10px 12px;background:#fff';
+    row.innerHTML =
+        '<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">'
+      +   '<span style="font-size:13px;font-weight:700;color:#1a202c">'+(o.name||'')+'</span>'
+      +   (o.po_number ? '<span style="font-size:11px;color:#718096">#'+o.po_number+'</span>' : '')
+      +   '<span style="background:'+pal.bg+';color:'+pal.fg+';font-size:10px;font-weight:700;padding:2px 9px;border-radius:99px">'+covLabel(c.type)+'</span>'
+      +   '<span style="font-size:10px;font-weight:700;padding:2px 9px;border-radius:99px;background:'+(c.active?'#DFF3E3':'#F1F5F9')+';color:'+(c.active?'#1E7A34':'#64748B')+'">'+status+'</span>'
+      +   '<div style="flex:1"></div>'
+      +   '<button onclick="editClientOrder(\''+o.id+'\')" style="border:none;background:none;color:#1D4E89;cursor:pointer;font-size:12px"><i class="ti ti-pencil"></i></button>'
+      +   '<button onclick="deleteClientOrder(\''+o.id+'\')" style="border:none;background:none;color:#C0392B;cursor:pointer;font-size:12px"><i class="ti ti-trash"></i></button>'
+      + '</div>'
+      + '<div style="font-size:11px;color:#718096;margin-top:5px;display:flex;flex-wrap:wrap;gap:12px">'
+      +   (o.handover_date ? '<span><i class="ti ti-truck-delivery"></i> '+(LNG==='ar'?'التسليم':'Handover')+': '+o.handover_date+'</span>' : '')
+      +   (o.coverage_type==='warranty' ? '<span><i class="ti ti-shield"></i> '+(o.warranty_months||12)+' '+(LNG==='ar'?'شهر':'months')+'</span>' : '')
+      +   (o.contract_start ? '<span><i class="ti ti-calendar"></i> '+o.contract_start+' → '+(o.contract_end||'')+'</span>' : '')
+      + '</div>'
+      + (o.notes ? '<div style="font-size:11px;color:#A0AEC0;margin-top:4px">'+o.notes+'</div>' : '');
+    el.appendChild(row);
+  });
+}
+
 // ══════════════════════════════════════
 // MAINTENANCE REQUESTS (submitted by sales)
 // ══════════════════════════════════════
@@ -2542,6 +2801,82 @@ function clearMaintForm(){
   setMapStatus('mr-map-status','');
   var t=document.getElementById('mr-type'); if(t) t.value='paid';
   var pr=document.getElementById('mr-priority'); if(pr) pr.value='normal';
+}
+
+
+// ── New Visit: client + order pickers, coverage drives the visit type ─────
+function fillVisitClientSelect(){
+  var sel = document.getElementById('inp-client');
+  if(!sel) return;
+  var prev = sel.value;
+  var list = (clientsData||[]).slice().sort(function(a,b){
+    return String(a.name||'').localeCompare(String(b.name||''));
+  });
+  sel.innerHTML = '<option value="">' + (LNG==='ar' ? '— اختر العميل —' : '— Select client —') + '</option>'
+    + list.map(function(c){
+        return '<option value="'+String(c.name).replace(/"/g,'&quot;')+'" data-id="'+c.id+'">'+c.name+'</option>';
+      }).join('');
+  if(prev) sel.value = prev;
+  var warn = document.getElementById('nv-noclients');
+  if(warn) warn.style.display = list.length ? 'none' : 'block';
+  onVisitClientChange(true);
+}
+
+function selectedVisitClientId(){
+  var sel = document.getElementById('inp-client');
+  if(!sel) return null;
+  var opt = sel.options[sel.selectedIndex];
+  return opt ? opt.getAttribute('data-id') : null;
+}
+
+function onVisitClientChange(keepOrder){
+  var osel = document.getElementById('inp-order');
+  if(!osel) return;
+  var prev = keepOrder ? osel.value : '';
+  var cid = selectedVisitClientId();
+  var list = cid ? ordersOfClient(cid) : [];
+  osel.innerHTML = '<option value="">' + (LNG==='ar' ? '— بدون أوردر —' : '— No order —') + '</option>'
+    + list.map(function(o){
+        var c = orderCoverage(o);
+        var tag = covLabel(c.type) + (c.active ? '' : (LNG==='ar' ? ' — منتهٍ' : ' — expired'));
+        return '<option value="'+o.id+'">'+(o.name||'')+' · '+tag+'</option>';
+      }).join('');
+  if(prev) osel.value = prev;
+  onVisitOrderChange();
+}
+
+function onVisitOrderChange(){
+  var osel = document.getElementById('inp-order');
+  var info = document.getElementById('nv-coverage');
+  if(!osel || !info) return;
+  var o = clientOrders.find(function(x){ return String(x.id) === String(osel.value); });
+  if(!o){ info.innerHTML = ''; return; }
+
+  var c = orderCoverage(o);
+  var vtype = coverageVisitType(o);
+
+  // Set the visit type from the order's coverage — that's the whole point.
+  var vsel = document.getElementById('sel-vtype');
+  if(vsel){
+    vsel.value = vtype;
+    try{ vsel.dispatchEvent(new Event('change')); }catch(e){}
+  }
+
+  var ends = fmtDate(c.endDate);
+  if(c.active){
+    info.innerHTML = '<i class="ti ti-shield-check"></i> ' + (LNG==='ar'
+      ? ('مغطى ('+covLabel(c.type)+') حتى '+ends+' — '+c.daysLeft+' يوم متبقٍ')
+      : ('Covered ('+covLabel(c.type)+') until '+ends+' — '+c.daysLeft+' days left'));
+    info.style.color = '#2D7D3A';
+  } else if(c.endDate){
+    info.innerHTML = '<i class="ti ti-shield-off"></i> ' + (LNG==='ar'
+      ? ('انتهت التغطية في '+ends+' — الزيارة مدفوعة')
+      : ('Coverage ended '+ends+' — this visit is chargeable'));
+    info.style.color = '#C0392B';
+  } else {
+    info.innerHTML = '<i class="ti ti-cash"></i> ' + (LNG==='ar' ? 'خارج الضمان — زيارة مدفوعة' : 'Out of warranty — chargeable visit');
+    info.style.color = '#C4680A';
+  }
 }
 
 function fillMaintClientList(){
@@ -3024,10 +3359,8 @@ async function scheduleMaintRequest(id){
     set('inp-model', r.model);
     set('inp-serial', r.serial_no);
     set('inp-fault', r.problem);
-    var tabs = document.querySelectorAll('#pg-newvisit .tbox button');
-    var order = { warranty:0, paid:1, contract:2 };
-    var idx = order[r.visit_type];
-    if(tabs.length && typeof idx === 'number' && tabs[idx]) tabs[idx].click();
+    var vsel2 = document.getElementById('sel-vtype');
+    if(vsel2 && r.visit_type) vsel2.value = r.visit_type;
   }, 250);
 
   r.status = 'scheduled';
@@ -4915,6 +5248,67 @@ function updateClientStats(){
   var e5=document.getElementById('cl-stat-contracts'); if(e5) e5.textContent=contracts;
 }
 
+
+// Delete a client together with all of its orders. Visits are deliberately
+// left alone — they store the client's NAME and remain valid history.
+async function deleteClient(id){
+  var cl = clientsData.find(function(c){ return String(c.id) === String(id); });
+  if(!cl) return;
+
+  var orders = ordersOfClient(id);
+  var visitCount = (visData||[]).filter(function(v){
+    return String(v.client||'').trim().toLowerCase() === String(cl.name||'').trim().toLowerCase();
+  }).length;
+
+  var msg = 'حذف العميل "' + cl.name + '"؟\n'
+          + (orders.length ? ('سيتم حذف ' + orders.length + ' أوردر/مشروع مرتبط به.\n') : '')
+          + (visitCount ? ('ملاحظة: ' + visitCount + ' زيارة مسجلة باسمه ستبقى في السجل.\n') : '')
+          + 'لا يمكن التراجع عن هذا الإجراء.\n\n'
+          + 'Delete client "' + cl.name + '"?\n'
+          + (orders.length ? (orders.length + ' order(s)/project(s) will be deleted too.\n') : '')
+          + (visitCount ? ('Note: ' + visitCount + ' recorded visit(s) will remain in history.\n') : '')
+          + 'This cannot be undone.';
+  if(!confirm(msg)) return;
+
+  if(!_initSb()){
+    alert('⚠️ لا يوجد اتصال بقاعدة البيانات — لم يتم الحذف.\n⚠️ No database connection — nothing was deleted.');
+    return;
+  }
+
+  try{
+    // Orders first, so nothing is left pointing at a client that's gone.
+    if(orders.length){
+      var ro = await _sb.from('client_orders').delete().eq('client_id', id).select();
+      if(ro.error){
+        alert('⚠️ فشل حذف الأوردرات: ' + ro.error.message + '\n⚠️ Failed to delete the orders: ' + ro.error.message);
+        return;
+      }
+    }
+
+    var r = await _sb.from('clients').delete().eq('id', id).select();
+    if(r.error){
+      alert('⚠️ فشل الحذف: ' + r.error.message + '\n⚠️ Delete failed: ' + r.error.message);
+      return;
+    }
+    if(!r.data || !r.data.length){
+      alert('⚠️ لم يتم حذف أي سجل من قاعدة البيانات.\nالسبب الأرجح: صلاحيات الحذف (RLS) في Supabase تمنع الحذف لجدول clients.\n\n⚠️ No row was deleted.\nMost likely a Supabase Row Level Security policy is blocking DELETE on the clients table.');
+      return;
+    }
+
+    // Only drop it locally once the database confirms
+    clientOrders = clientOrders.filter(function(o){ return String(o.client_id) !== String(id); });
+    clientsData  = clientsData.filter(function(c){ return String(c.id) !== String(id); });
+    if(typeof acData !== 'undefined' && acData.client){
+      acData.client = acData.client.filter(function(n){ return n !== cl.name; });
+    }
+    renderClientGrid();
+    if(typeof fillVisitClientSelect === 'function') fillVisitClientSelect();
+  }catch(e){
+    console.error('deleteClient:', e);
+    alert('⚠️ خطأ أثناء الحذف: ' + e.message + '\n⚠️ Error while deleting: ' + e.message);
+  }
+}
+
 function renderClientGrid(){
   var g=document.getElementById('clientGrid');if(!g)return;g.innerHTML='';
   var fl=clientsData.filter(function(c){
@@ -4945,7 +5339,9 @@ function renderClientGrid(){
       +'<div style="display:flex;gap:6px;padding:10px 14px;border-top:1px solid #D9E2EC">'
       +'<button onclick="viewClientReports('+c.id+')" style="flex:1;padding:6px;border-radius:6px;font-size:11px;font-weight:600;cursor:pointer;border:1px solid #D9E2EC;background:#F8FAFC;color:#718096;font-family:Tajawal,sans-serif">Reports</button>'
       +'<button onclick="viewClientHistory('+c.id+')" style="flex:1;padding:6px;border-radius:6px;font-size:11px;font-weight:600;cursor:pointer;border:1px solid #D9E2EC;background:#F8FAFC;color:#718096;font-family:Tajawal,sans-serif">History</button>'
-      +'<button onclick="editClient('+c.id+')" style="flex:1;padding:6px;border-radius:6px;font-size:11px;font-weight:600;cursor:pointer;border:1px solid #D9E2EC;background:#F8FAFC;color:#718096;font-family:Tajawal,sans-serif">Edit</button></div>';
+      +'<button onclick="editClient('+c.id+')" style="flex:1;padding:6px;border-radius:6px;font-size:11px;font-weight:600;cursor:pointer;border:1px solid #D9E2EC;background:#F8FAFC;color:#718096;font-family:Tajawal,sans-serif">Edit</button>'
+      +'<button onclick="openClientOrders('+c.id+')" title="الأوردرات والمشاريع / Orders & projects" style="flex:1.2;padding:6px;border-radius:6px;font-size:11px;font-weight:700;cursor:pointer;border:none;background:#1D4E89;color:#fff;font-family:Tajawal,sans-serif"><i class="ti ti-package"></i> Orders ('+ordersOfClient(c.id).length+')</button>'
+      +'<button onclick="deleteClient('+c.id+')" title="حذف العميل وكل أوردراته / Delete client and all its orders" style="padding:6px 9px;border-radius:6px;font-size:11px;cursor:pointer;border:1px solid #F5C6C6;background:#FCEBEB;color:#C0392B;font-family:Tajawal,sans-serif"><i class="ti ti-trash"></i></button></div>';
     g.appendChild(card);
   });
   updateClientStats();
@@ -5545,41 +5941,12 @@ async function saveVisitDraft() {
 
 async function saveAndSign() {
   var visit = collectVisitData();
-  
-  // Auto-add client to DB if not already in clients list
-  var clientName = visit.client;
-  if(clientName && clientName !== 'Unknown'){
-    var exists = clientsData.find(function(c){ return c.name.toLowerCase()===clientName.toLowerCase(); });
-    if(!exists){
-      var newClient = {
-        name: clientName,
-        type: 'Unknown',
-        location: document.getElementById('inp-location').value || '',
-        contract: visit.visit_type==='ضمان'?'ضمان':visit.visit_type==='عقد'?'عقد صيانة':'مدفوع',
-        warranty: visit.visit_type==='ضمان',
-        total_visits: 1, completed: 0, pending: 1,
-        needs_parts: 0, warranty_visits: visit.visit_type==='ضمان'?1:0,
-        paid_visits: 0, contract_visits: 0,
-        initials: clientName.slice(0,2),
-        color: '#1D4E89', bg: '#E6F1FB'
-      };
-      var savedClient = await dbSave('clients', newClient);
-      var localClient = {
-        id: (savedClient&&savedClient[0]) ? savedClient[0].id : Date.now(),
-        name: clientName,
-        type: 'Unknown',
-        loc: newClient.location,
-        color: '#1D4E89', bg: '#E6F1FB',
-        init: clientName.slice(0,2),
-        contract: newClient.contract,
-        warranty: newClient.warranty,
-        total: 1, completed: 0, pending: 1, parts: 0, wv: 0
-      };
-      clientsData.push(localClient);
-      // Update autocomplete
-      if(!acData.client.includes(clientName)) acData.client.push(clientName);
-      console.log('Auto-added new client:', clientName);
-    }
+
+  // Clients are created only from the Clients section — a visit must reference
+  // one that already exists, so nothing is auto-created here any more.
+  if(!visit.client || visit.client === 'Unknown'){
+    alert('الرجاء اختيار العميل من القائمة\nPlease pick a client from the list.\n\nإذا لم يكن مسجلاً، أضِفه من صفحة العملاء أولاً.\nIf they are not registered yet, add them in the Clients page first.');
+    return;
   }
 
   if(currentVisitId) visit.id = currentVisitId;
@@ -5661,6 +6028,7 @@ function collectVisitData() {
     location:      document.getElementById('inp-location').value || '',
     map_url:       (typeof readMapField === 'function') ? readMapField('inp-map') : '',
     task_category: (typeof currentTaskCat !== 'undefined') ? currentTaskCat : '',
+    order_id:      (document.getElementById('inp-order')||{}).value || null,
     equipment:     document.getElementById('inp-equipment').value,
     serial_number: document.getElementById('inp-serial').value,
     model:         document.getElementById('inp-model').value,
@@ -6694,6 +7062,89 @@ async function showPublicReport(token){
           <button onclick="sendReqToNumber(document.getElementById('tw-manual').value)" class="btn btn-p" style="padding:9px 16px">Send</button>
         </div>
       </div>
+    </div>
+  </div>
+</div>
+
+
+<!-- CLIENT ORDERS / PROJECTS -->
+<div id="clientOrdersModal" class="modal" style="display:none">
+  <div class="mbox" style="max-width:720px">
+    <div class="mh">
+      <div class="mhtitle"><i class="ti ti-package"></i> Orders &amp; Projects — <span id="co-client-name"></span></div>
+      <button class="mclose" onclick="closeMod('clientOrdersModal')"><i class="ti ti-x"></i></button>
+    </div>
+    <div class="mb">
+
+      <div style="background:#F8FAFC;border:1.5px solid #D9E2EC;border-radius:10px;padding:14px;margin-bottom:14px">
+        <div style="font-size:12px;font-weight:700;color:#0F2D52;margin-bottom:10px"><i class="ti ti-plus"></i> <span id="co-form-title">New Order / Project — أوردر أو مشروع جديد</span></div>
+        <input type="hidden" id="co-edit-id">
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+
+          <div class="field" style="margin:0">
+            <label>Order / Project Name — اسم الأوردر أو المشروع *</label>
+            <input type="text" id="co-name" placeholder="e.g. Riyadh Park — Central Kitchen">
+          </div>
+
+          <div class="field" style="margin:0">
+            <label>PO / Reference — رقم الأمر</label>
+            <input type="text" id="co-po" placeholder="e.g. PO-2026-114" dir="ltr">
+          </div>
+
+          <div class="field" style="margin:0">
+            <label>Handover Date — تاريخ تسليم المشروع</label>
+            <input type="date" id="co-handover" onchange="updateOrderPreview()">
+          </div>
+
+          <div class="field" style="margin:0">
+            <label>Coverage — التغطية *</label>
+            <select id="co-coverage" onchange="onCoverageTypeChange()">
+              <option value="warranty">Warranty — ضمان</option>
+              <option value="contract">Maintenance Contract — عقد صيانة</option>
+              <option value="none">Out of warranty — خارج الضمان</option>
+            </select>
+          </div>
+
+          <div class="field" style="margin:0" id="co-warranty-fields">
+            <label>Warranty Period — مدة الضمان</label>
+            <select id="co-warranty-months" onchange="updateOrderPreview()">
+              <option value="12">12 months — سنة</option>
+              <option value="24">24 months — سنتان</option>
+              <option value="6">6 months — 6 أشهر</option>
+              <option value="36">36 months — 3 سنوات</option>
+            </select>
+          </div>
+
+          <div class="field" style="margin:0;grid-column:1/-1;display:none" id="co-contract-fields">
+            <label>Contract Period — مدة العقد</label>
+            <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+              <input type="date" id="co-contract-start" onchange="updateOrderPreview()" style="flex:1;min-width:150px">
+              <span style="color:#718096">→</span>
+              <input type="date" id="co-contract-end" onchange="updateOrderPreview()" style="flex:1;min-width:150px">
+            </div>
+          </div>
+
+          <div class="field" style="margin:0;grid-column:1/-1">
+            <label>Notes — ملاحظات</label>
+            <input type="text" id="co-notes" placeholder="Scope, equipment covered, special terms…">
+          </div>
+        </div>
+
+        <div id="co-preview" style="font-size:11px;font-weight:700;margin-top:8px"></div>
+
+        <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:12px">
+          <button class="btn btn-o" onclick="resetOrderForm()">Clear</button>
+          <button class="btn btn-p" onclick="saveClientOrder()"><i class="ti ti-device-floppy"></i> <span id="co-save-label">Add Order</span></button>
+        </div>
+      </div>
+
+      <div style="font-size:12px;font-weight:700;color:#0F2D52;margin-bottom:8px">
+        <i class="ti ti-list"></i> Orders <span id="co-count" style="color:#718096;font-weight:600"></span>
+      </div>
+      <div id="co-list" style="display:flex;flex-direction:column;gap:8px;max-height:300px;overflow-y:auto"></div>
+    </div>
+    <div class="mf">
+      <button onclick="closeMod('clientOrdersModal')" class="btn btn-o" style="flex:1">Close</button>
     </div>
   </div>
 </div>
