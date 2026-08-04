@@ -398,12 +398,9 @@ html,body{height:100%;overflow:auto;font-family:Tajawal,sans-serif;font-size:14p
     </div>
     <div class="fcard">
       <h3><i class="ti ti-checklist"></i><span id="t-tasks">Tasks Performed</span></h3>
-      <div id="tasklist" style="display:flex;flex-direction:column;gap:6px">
-        <div style="display:flex;align-items:center;gap:10px;padding:8px 12px;background:#F8FAFC;border:1px solid #D9E2EC;border-radius:8px"><input type="checkbox"><span id="t-task1">Check gas pressure</span></div>
-        <div style="display:flex;align-items:center;gap:10px;padding:8px 12px;background:#F8FAFC;border:1px solid #D9E2EC;border-radius:8px"><input type="checkbox"><span id="t-task2">Clean condenser</span></div>
-        <div style="display:flex;align-items:center;gap:10px;padding:8px 12px;background:#F8FAFC;border:1px solid #D9E2EC;border-radius:8px"><input type="checkbox"><span id="t-task3">Check control panel</span></div>
-        <div style="display:flex;align-items:center;gap:10px;padding:8px 12px;background:#F8FAFC;border:1px solid #D9E2EC;border-radius:8px"><input type="checkbox"><span id="t-task4">Check fan</span></div>
-      </div>
+      <div style="font-size:11px;color:#718096;margin-bottom:6px">اختر نوع المعدة لعرض مهامها / Pick the equipment type to load its checklist</div>
+      <div id="taskcats" style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px"></div>
+      <div id="tasklist" style="display:flex;flex-direction:column;gap:6px"></div>
       <button class="btn btn-o" style="margin-top:8px;font-size:12px" onclick="addTask()"><i class="ti ti-plus"></i><span id="t-add-task">Add Task</span></button>
     </div>
     <div class="fcard">
@@ -893,6 +890,24 @@ html,body{height:100%;overflow:auto;font-family:Tajawal,sans-serif;font-size:14p
       </div>
     </div>
 
+    <div class="card" id="tasks-mgmt-card" style="margin-bottom:14px">
+      <div class="ch">
+        <div class="ct"><i class="ti ti-checklist" style="color:#1D4E89"></i> Maintenance Checklists / قوائم مهام الصيانة</div>
+      </div>
+      <div style="padding:16px">
+        <div style="font-size:11px;color:#718096;margin-bottom:10px">عدّل المهام التي تظهر للفني حسب نوع المعدة / Edit the tasks technicians see for each equipment type.</div>
+        <div id="tt-cats" style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px"></div>
+        <div id="tt-list" style="display:flex;flex-direction:column;gap:6px;margin-bottom:10px"></div>
+        <div style="display:flex;gap:6px;flex-wrap:wrap">
+          <input type="text" id="tt-new" placeholder="مهمة جديدة / New task…" onkeydown="if(event.key==='Enter')ttAddTask()" style="flex:1;min-width:220px;padding:9px 12px;border:1.5px solid #D9E2EC;border-radius:8px;font-size:13px;font-family:inherit;outline:none">
+          <button class="btn btn-o" onclick="ttAddTask()"><i class="ti ti-plus"></i> Add</button>
+          <button class="btn btn-o" onclick="ttResetCat()" title="Restore the built-in list"><i class="ti ti-rotate"></i> Reset</button>
+          <button class="btn btn-p" onclick="ttSave()"><i class="ti ti-device-floppy"></i> Save Checklists</button>
+        </div>
+        <div id="tt-status" style="font-size:11px;color:#718096;margin-top:8px"></div>
+      </div>
+    </div>
+
     <div class="card" id="users-mgmt-card" style="margin-bottom:14px">
       <div class="ch">
         <div class="ct"><i class="ti ti-users" style="color:#2D7D3A"></i> User Management</div>
@@ -1273,6 +1288,7 @@ function lgSuccess(u, restoring){
     renderPending();
     try{ applyRolePermissions(); }catch(e){}
     try{ loadMaintRequests().then(function(){ updateMaintBadge(); }); }catch(e){}
+    try{ loadTaskTemplates(); }catch(e){}
     go(curUserRole === 'salesman' ? 'maint-requests' : 'dashboard');
     try{initChart();}catch(e){}
   });
@@ -1396,6 +1412,7 @@ async function refreshAll(){
     try{ await loadEquipmentData(); }catch(e){}
     try{ await loadPartsRequests(); }catch(e){}
     try{ await loadMaintRequests(); }catch(e){}
+    try{ await loadTaskTemplates(); }catch(e){}
     updatePendingBadge();
     // repaint the page currently on screen
     var current = 'dashboard';
@@ -1459,7 +1476,7 @@ function go(pg){
   }catch(e){console.log('go() error:',e);}
   if(pg==='dashboard'){updateDashStats();renderDashTechs();renderDashRecent();renderDashPending();renderPending();}
   if(pg==='signature') setTimeout(function(){initSig('tech');initSig('client');},80);
-  if(pg==='newvisit'){
+  if(pg==='newvisit'){ if(!document.querySelector('#taskcats button')) { renderTaskCats(); renderTaskList(); }
     window._visitStartTime = Date.now();
     populateTechSelect();
     resetNewVisitForm();
@@ -1473,7 +1490,7 @@ function go(pg){
   if(pg==='visits') renderVisits('all','');
   if(pg==='archive') loadArchive();
   if(pg==='maint-requests'){ fillMaintClientList(); loadMaintRequests().then(renderMaintRequests); }
-  if(pg==='settings'){renderUsersList();try{checkDBStatus();}catch(e){}}
+  if(pg==='settings'){renderTaskEditor();renderUsersList();try{checkDBStatus();}catch(e){}}
 }
 function setBn(b){document.querySelectorAll('.bn').forEach(function(x){x.style.color='#A0AEC0';});b.style.color='#1D4E89';}
 function toggleSb(){
@@ -1968,7 +1985,251 @@ function triggerAutoTranslate(){
     }
   }, 1200);
 }
-function addTask(){var txt=prompt(t('addTask')+':');if(txt){var d=document.createElement('div');d.style.cssText='display:flex;align-items:center;gap:10px;padding:8px 12px;background:#F8FAFC;border:1px solid #D9E2EC;border-radius:8px';d.innerHTML='<input type="checkbox"><span>'+txt+'</span>';document.getElementById('tasklist').appendChild(d);}}
+
+// ══════════════════════════════════════
+// TASK CHECKLISTS BY EQUIPMENT TYPE
+// ══════════════════════════════════════
+var TASK_CATEGORIES = [
+  { key:'kitchen',  icon:'ti-tools-kitchen-2', label:'معدات مطابخ / Kitchen Equipment' },
+  { key:'fridges',  icon:'ti-fridge',          label:'ثلاجات / Refrigerators' },
+  { key:'coldroom', icon:'ti-snowflake',       label:'غرف تبريد / Cold Rooms' },
+  { key:'washing',  icon:'ti-wash-machine',    label:'غسيل الأطباق والملابس / Dishwashing & Laundry' }
+];
+
+var DEFAULT_TASKS = {
+  kitchen: [
+    'فحص ضغط الغاز / Check gas pressure',
+    'فحص وتنظيف الشعلات / Inspect & clean burners',
+    'فحص صمام الأمان والثرموكبل / Check safety valve & thermocouple',
+    'معايرة الثرموستات ودرجة الحرارة / Calibrate thermostat & temperature',
+    'فحص لوحة التحكم والمفاتيح / Check control panel & switches',
+    'فحص تسريب الغاز / Gas leak test',
+    'فحص عناصر التسخين الكهربائية / Check electric heating elements',
+    'تنظيف الفلاتر والشفاط / Clean filters & extraction hood',
+    'فحص الأبواب والحشوات / Check doors & gaskets',
+    'فحص التوصيلات الكهربائية والتأريض / Check wiring & earthing'
+  ],
+  fridges: [
+    'قياس ضغط غاز التبريد / Check refrigerant pressure',
+    'تنظيف المكثف / Clean condenser',
+    'فحص المروحة والمحرك / Check fan & motor',
+    'فحص الكمبروسر وسحب التيار / Check compressor & current draw',
+    'إزالة الثلج من المبخر / Defrost evaporator',
+    'فحص تصريف المياه / Check water drainage',
+    'معايرة الثرموستات / Calibrate thermostat',
+    'فحص حشوات الأبواب / Check door gaskets',
+    'تسجيل درجة حرارة التشغيل / Record operating temperature',
+    'فحص الإنارة الداخلية / Check interior lighting'
+  ],
+  coldroom: [
+    'قياس ضغوط التشغيل العالي والمنخفض / Check high & low pressures',
+    'فحص وحدة التكثيف الخارجية / Inspect outdoor condensing unit',
+    'تنظيف المبخر والمراوح / Clean evaporator & fans',
+    'فحص دورة إزالة الثلج / Check defrost cycle',
+    'فحص العزل والأبواب والستائر / Check insulation, doors & curtains',
+    'فحص جهاز الإنذار ومراقبة الحرارة / Check alarm & temperature monitoring',
+    'فحص تصريف المياه والسخان / Check drain line & heater',
+    'فحص مستوى الزيت بالكمبروسر / Check compressor oil level',
+    'تسجيل درجات الحرارة عند نقاط مختلفة / Log temperatures at several points',
+    'فحص لوحة التحكم والكونتاكتورات / Check control panel & contactors'
+  ],
+  washing: [
+    'فحص مضخة المياه / Check water pump',
+    'تنظيف فلاتر ومرشحات المياه / Clean water filters & strainers',
+    'فحص وتنظيف أذرع الرش / Inspect & clean spray arms',
+    'فحص سخان المياه ودرجة الحرارة / Check water heater & temperature',
+    'فحص جرعات المنظف والملمع / Check detergent & rinse-aid dosing',
+    'فحص التسريبات والخراطيم / Check for leaks & hoses',
+    'فحص مضخة التصريف / Check drain pump',
+    'فحص حشوة الباب والقفل / Check door seal & latch',
+    'فحص دورة الغسيل الكاملة / Run a full wash cycle test',
+    'إزالة الترسبات الجيرية / Descale the machine'
+  ]
+};
+
+var taskTemplates = JSON.parse(JSON.stringify(DEFAULT_TASKS));
+var currentTaskCat = 'kitchen';
+
+function renderTaskCats(){
+  var el = document.getElementById('taskcats');
+  if(!el) return;
+  el.innerHTML = '';
+  TASK_CATEGORIES.forEach(function(c){
+    var active = (c.key === currentTaskCat);
+    var b = document.createElement('button');
+    b.type = 'button';
+    b.style.cssText = 'display:flex;align-items:center;gap:6px;padding:7px 12px;border-radius:8px;font-size:11px;font-weight:700;cursor:pointer;font-family:inherit;'
+      + (active ? 'background:#1D4E89;color:#fff;border:1.5px solid #1D4E89'
+                : 'background:#fff;color:#718096;border:1.5px solid #D9E2EC');
+    b.innerHTML = '<i class="ti ' + c.icon + '"></i> ' + c.label.split(' / ')[0];
+    b.title = c.label;
+    b.onclick = function(){ selectTaskCat(c.key); };
+    el.appendChild(b);
+  });
+}
+
+function selectTaskCat(key, keepChecks){
+  currentTaskCat = key;
+  renderTaskCats();
+  renderTaskList(keepChecks);
+}
+
+function renderTaskList(keepChecks){
+  var el = document.getElementById('tasklist');
+  if(!el) return;
+  var checked = {};
+  if(keepChecks){
+    el.querySelectorAll('input[type=checkbox]').forEach(function(cb){
+      if(cb.checked) checked[(cb.nextElementSibling||{}).textContent] = true;
+    });
+  }
+  var tasks = taskTemplates[currentTaskCat] || [];
+  el.innerHTML = '';
+  if(!tasks.length){
+    el.innerHTML = '<div style="padding:14px;text-align:center;color:#A0AEC0;font-size:12px">لا توجد مهام لهذا النوع — أضفها من الإعدادات / No tasks for this type — add them in Settings</div>';
+    return;
+  }
+  tasks.forEach(function(txt){
+    var d = document.createElement('div');
+    d.style.cssText = 'display:flex;align-items:center;gap:10px;padding:8px 12px;background:#F8FAFC;border:1px solid #D9E2EC;border-radius:8px';
+    var cb = document.createElement('input');
+    cb.type = 'checkbox';
+    if(checked[txt]) cb.checked = true;
+    var sp = document.createElement('span');
+    sp.textContent = txt;
+    sp.style.fontSize = '13px';
+    d.appendChild(cb); d.appendChild(sp);
+    el.appendChild(d);
+  });
+}
+
+// Load the (possibly customised) checklists from the database.
+
+// ── Checklist editor (Settings) ──────────────────────────────────────────
+var ttCat = 'kitchen';
+
+function renderTaskEditor(){
+  var cats = document.getElementById('tt-cats');
+  var list = document.getElementById('tt-list');
+  if(!cats || !list) return;
+
+  cats.innerHTML = '';
+  TASK_CATEGORIES.forEach(function(c){
+    var active = (c.key === ttCat);
+    var b = document.createElement('button');
+    b.type='button';
+    b.style.cssText = 'display:flex;align-items:center;gap:6px;padding:7px 12px;border-radius:8px;font-size:11px;font-weight:700;cursor:pointer;font-family:inherit;'
+      + (active ? 'background:#1D4E89;color:#fff;border:1.5px solid #1D4E89'
+                : 'background:#fff;color:#718096;border:1.5px solid #D9E2EC');
+    b.innerHTML = '<i class="ti '+c.icon+'"></i> '+c.label.split(' / ')[0]
+                + ' <span style="opacity:.75">('+((taskTemplates[c.key]||[]).length)+')</span>';
+    b.onclick = function(){ ttCat = c.key; renderTaskEditor(); };
+    cats.appendChild(b);
+  });
+
+  var tasks = taskTemplates[ttCat] || [];
+  list.innerHTML = '';
+  if(!tasks.length){
+    list.innerHTML = '<div style="padding:14px;text-align:center;color:#A0AEC0;font-size:12px">No tasks yet — add one below.</div>';
+    return;
+  }
+  tasks.forEach(function(txt, i){
+    var row = document.createElement('div');
+    row.style.cssText = 'display:flex;align-items:center;gap:8px;padding:8px 10px;background:#F8FAFC;border:1px solid #D9E2EC;border-radius:8px';
+    row.innerHTML = '<span style="font-size:11px;color:#A0AEC0;min-width:20px">'+(i+1)+'</span>'
+      + '<span style="flex:1;font-size:13px">'+txt.replace(/</g,'&lt;')+'</span>'
+      + '<button onclick="ttMove('+i+',-1)" title="Move up" style="border:none;background:none;color:#A0AEC0;cursor:pointer"><i class="ti ti-arrow-up"></i></button>'
+      + '<button onclick="ttMove('+i+',1)" title="Move down" style="border:none;background:none;color:#A0AEC0;cursor:pointer"><i class="ti ti-arrow-down"></i></button>'
+      + '<button onclick="ttRemove('+i+')" title="Remove" style="border:none;background:none;color:#C0392B;cursor:pointer"><i class="ti ti-trash"></i></button>';
+    list.appendChild(row);
+  });
+}
+
+function ttAddTask(){
+  var el = document.getElementById('tt-new');
+  var v = el ? el.value.trim() : '';
+  if(!v) return;
+  if(!taskTemplates[ttCat]) taskTemplates[ttCat] = [];
+  taskTemplates[ttCat].push(v);
+  el.value = '';
+  renderTaskEditor();
+  ttMark('غير محفوظ — اضغط "Save Checklists" / Unsaved — press "Save Checklists"', '#C4680A');
+}
+
+function ttRemove(i){
+  (taskTemplates[ttCat]||[]).splice(i,1);
+  renderTaskEditor();
+  ttMark('غير محفوظ — اضغط "Save Checklists" / Unsaved — press "Save Checklists"', '#C4680A');
+}
+
+function ttMove(i, dir){
+  var arr = taskTemplates[ttCat]||[];
+  var j = i + dir;
+  if(j < 0 || j >= arr.length) return;
+  var tmp = arr[i]; arr[i] = arr[j]; arr[j] = tmp;
+  renderTaskEditor();
+  ttMark('غير محفوظ — اضغط "Save Checklists" / Unsaved — press "Save Checklists"', '#C4680A');
+}
+
+function ttResetCat(){
+  if(!confirm('استعادة القائمة الافتراضية لهذا النوع؟\nRestore the built-in list for this type?')) return;
+  taskTemplates[ttCat] = (DEFAULT_TASKS[ttCat]||[]).slice();
+  renderTaskEditor();
+  ttMark('تمت الاستعادة — اضغط حفظ / Restored — press Save', '#C4680A');
+}
+
+function ttMark(msg, colour){
+  var st = document.getElementById('tt-status');
+  if(st){ st.textContent = msg; st.style.color = colour || '#718096'; }
+}
+
+async function ttSave(){
+  if(!_initSb()){ ttMark('لا يوجد اتصال بقاعدة البيانات / No database connection', '#C0392B'); return; }
+  ttMark('جاري الحفظ... / Saving...');
+  try{
+    var rows = TASK_CATEGORIES.map(function(c){
+      return { category: c.key, tasks: JSON.stringify(taskTemplates[c.key]||[]) };
+    });
+    var r = await _sb.from('task_templates').upsert(rows, { onConflict: 'category' }).select();
+    if(r.error){
+      console.error('ttSave:', r.error);
+      ttMark('فشل الحفظ: ' + r.error.message + ' / Save failed', '#C0392B');
+      return;
+    }
+    ttMark('✅ تم حفظ القوائم / Checklists saved', '#2D7D3A');
+    renderTaskCats(); renderTaskList(true);
+  }catch(e){
+    ttMark('فشل الحفظ: ' + e.message, '#C0392B');
+  }
+}
+
+async function loadTaskTemplates(){
+  if(!_initSb()) { renderTaskCats(); renderTaskList(); return; }
+  try{
+    var r = await _sb.from('task_templates').select('*');
+    if(!r.error && r.data && r.data.length){
+      r.data.forEach(function(row){
+        try{
+          var arr = typeof row.tasks === 'string' ? JSON.parse(row.tasks) : row.tasks;
+          if(Array.isArray(arr)) taskTemplates[row.category] = arr;
+        }catch(e){}
+      });
+    }
+  }catch(e){ console.log('loadTaskTemplates:', e); }
+  renderTaskCats();
+  renderTaskList();
+}
+
+function addTask(){
+  var txt = prompt(t('addTask')+':');
+  if(!txt) return;
+  var d = document.createElement('div');
+  d.style.cssText = 'display:flex;align-items:center;gap:10px;padding:8px 12px;background:#F8FAFC;border:1px solid #D9E2EC;border-radius:8px';
+  var cb = document.createElement('input'); cb.type='checkbox'; cb.checked = true;
+  var sp = document.createElement('span'); sp.textContent = txt; sp.style.fontSize='13px';
+  d.appendChild(cb); d.appendChild(sp);
+  document.getElementById('tasklist').appendChild(d);
+}
 var selParts=[];
 function addPart(){
   var v=document.getElementById('inp-part').value.trim();
@@ -2803,6 +3064,8 @@ function applyRolePermissions(){
   var acc = document.getElementById('sb-acc');
   if(acc) acc.style.display = salesOnly ? 'none' : '';
   // Managers don't need the submission form cluttering their review screen
+  var ttCard = document.getElementById('tasks-mgmt-card');
+  if(ttCard) ttCard.style.display = (curUserRole === 'manager') ? '' : 'none';
   var formCard = document.getElementById('mr-form-card');
   if(formCard) formCard.style.display = (curUserRole === 'manager') ? 'none' : '';
   var title = document.getElementById('mr-list-title');
@@ -5176,6 +5439,7 @@ function resetNewVisitForm(){
   // Clear parts tags
   selParts=[];renderTags();
   // Reset checkboxes
+  if(typeof selectTaskCat === 'function') selectTaskCat('kitchen');
   document.querySelectorAll('#tasklist input[type=checkbox]').forEach(function(cb){cb.checked=false;});
   // Stop mic if running
   if(micOn&&_recog){try{_recog.stop();}catch(e){}}
@@ -5343,6 +5607,7 @@ function collectVisitData() {
     client:        document.getElementById('inp-client').value || 'Unknown',
     location:      document.getElementById('inp-location').value || '',
     map_url:       (typeof readMapField === 'function') ? readMapField('inp-map') : '',
+    task_category: (typeof currentTaskCat !== 'undefined') ? currentTaskCat : '',
     equipment:     document.getElementById('inp-equipment').value,
     serial_number: document.getElementById('inp-serial').value,
     model:         document.getElementById('inp-model').value,
