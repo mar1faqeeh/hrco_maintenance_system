@@ -395,64 +395,83 @@ export default async function handler(req, res) {
     // coordinates. Giving the model the exact list of numbers to find is far
     // more reliable than asking it to infer everything.
     if (positionsOnly && hasDiagram) {
-      const wanted = Array.isArray(numbers) && numbers.length
-        ? numbers.map(n => String(n)).join(', ')
-        : '';
-      parts.push({ text:
-        'This drawing has small numbered circles (callout bubbles), each joined by a thin leader line to a component.' +
-        (wanted ? ' The numbers used on it are: ' + wanted + '.' : '') +
-        ' Find the CENTRE OF EACH NUMBERED CIRCLE and report it on a 0-1000 grid, where y=0 is the top edge, y=1000 the bottom edge, x=0 the left edge and x=1000 the right edge.' +
-        ' Answer with ONLY a JSON object mapping each number to its centre, using explicit x and y keys, like:' +
-        ' {"1": {"y": 301, "x": 452}, "2": {"y": 284, "x": 500}}' +
-        ' No explanations, no markdown code fences, no other keys.'
-      });
-
-      const posResult = await callGemini(apiKey, {
-        parts: parts, json: true, search: false, maxTokens: 8192
-      });
-      let posText = extractText(posResult.data).trim()
-        .replace(/^```json\s*/i, '').replace(/^```\s*/i, '').replace(/```\s*$/i, '');
-      const pf = posText.indexOf('{');
-      const pl = posText.lastIndexOf('}');
-      if (pf !== -1 && pl > pf) posText = posText.slice(pf, pl + 1);
-      let posParsed = null;
-      try { posParsed = JSON.parse(posText); } catch (e) { posParsed = null; }
-
-      // A long drawing can exhaust the token budget mid-object, leaving valid
-      // pairs followed by a half-written one. Rather than throw the whole
-      // answer away, pull out every complete "num": {x, y} pair we can see.
-      if (!posParsed) {
-        const salvaged = {};
-        const re = /"(\d{1,4})"\s*:\s*\{[^{}]*?"x"\s*:\s*(-?\d+(?:\.\d+)?)[^{}]*?"y"\s*:\s*(-?\d+(?:\.\d+)?)[^{}]*?\}/g;
-        const re2 = /"(\d{1,4})"\s*:\s*\{[^{}]*?"y"\s*:\s*(-?\d+(?:\.\d+)?)[^{}]*?"x"\s*:\s*(-?\d+(?:\.\d+)?)[^{}]*?\}/g;
-        let m;
-        while ((m = re.exec(posText)) !== null) salvaged[m[1]] = { x: parseFloat(m[2]), y: parseFloat(m[3]) };
-        while ((m = re2.exec(posText)) !== null) {
-          if (!salvaged[m[1]]) salvaged[m[1]] = { y: parseFloat(m[2]), x: parseFloat(m[3]) };
-        }
-        // Also handle a bare [x, y] / [y, x] array form
-        const reArr = /"(\d{1,4})"\s*:\s*\[\s*(-?\d+(?:\.\d+)?)\s*,\s*(-?\d+(?:\.\d+)?)\s*\]/g;
-        while ((m = reArr.exec(posText)) !== null) {
-          if (!salvaged[m[1]]) salvaged[m[1]] = [parseFloat(m[2]), parseFloat(m[3])];
-        }
-        if (Object.keys(salvaged).length) posParsed = { positions: salvaged, truncated: true };
+      // Asking for all 25+ callouts at once produced replies that ran out of
+      // tokens mid-object. Two changes make this reliable:
+      //   1. a COMPACT output format ("2:568,298;3:612,298") instead of JSON —
+      //      roughly a fifth of the characters per callout;
+      //   2. CHUNKING — the numbers are requested a dozen at a time, so no
+      //      single reply is long enough to be cut off.
+      const wantedAll = (Array.isArray(numbers) && numbers.length)
+        ? numbers.map(n => String(n).trim()).filter(Boolean)
+        : [];
+      const CHUNK = 12;
+      const chunks = [];
+      if (wantedAll.length) {
+        for (let i = 0; i < wantedAll.length; i += CHUNK) chunks.push(wantedAll.slice(i, i + CHUNK));
+      } else {
+        chunks.push(null);   // let the model find whatever numbers it can
       }
 
-      if (!posParsed) {
-        return res.status(200).json({
-          parts: [], positions: {},
-          warning: 'The model did not return readable coordinates.',
-          raw: extractText(posResult.data).slice(0, 400),
-          model: posResult.model, api: posResult.api
+      const merged = {};
+      let usedModel = null, usedApi = null, lastRaw = '';
+      // Several chunks means several round trips — stop before Vercel's own
+      // limit and return whatever has been found so far.
+      const overallDeadline = Date.now() + 45000;
+      let stoppedEarly = false;
+
+      for (const chunk of chunks) {
+        if (Date.now() > overallDeadline) { stoppedEarly = true; break; }
+        const ask = [];
+        // Re-send the drawing with every chunk — it's the subject of the question.
+        ask.push({ text: 'DIAGRAM IMAGE (the numbered exploded-view drawing):' });
+        ask.push(toImagePart(diagramImage));
+        ask.push({ text:
+          'This drawing has small numbered circles (callout bubbles), each joined by a thin leader line to a component.' +
+          (chunk ? (' Find ONLY these numbers: ' + chunk.join(', ') + '.') : '') +
+          ' For each one, give the centre of THE CIRCLE ITSELF on a 0-1000 grid' +
+          ' (x=0 left edge, x=1000 right edge, y=0 top edge, y=1000 bottom edge).' +
+          ' Answer in this exact compact format and NOTHING else — no JSON, no prose, no code fences:' +
+          ' number:x,y;number:x,y;' +
+          ' Example: 2:568,298;3:612,298;' +
+          ' Skip any number you genuinely cannot find.'
         });
+
+        let r;
+        try {
+          r = await callGemini(apiKey, { parts: ask, json: false, search: false, maxTokens: 1024 });
+        } catch (e) {
+          if (Object.keys(merged).length) break;   // keep what we already have
+          throw e;
+        }
+        usedModel = r.model; usedApi = r.api;
+        const txt = extractText(r.data) || '';
+        lastRaw = txt;
+
+        // Compact pairs — tolerant of spaces, newlines and a trailing cut-off entry
+        const re = /(\d{1,4})\s*[:=]\s*(-?\d+(?:\.\d+)?)\s*,\s*(-?\d+(?:\.\d+)?)/g;
+        let m;
+        while ((m = re.exec(txt)) !== null) {
+          const key = String(parseInt(m[1], 10));
+          if (!merged[key]) merged[key] = { x: parseFloat(m[2]), y: parseFloat(m[3]) };
+        }
+        // Fall back to JSON shapes in case the model ignored the format
+        const reJson = /"?(\d{1,4})"?\s*:\s*\{[^{}]*?"x"\s*:\s*(-?\d+(?:\.\d+)?)[^{}]*?"y"\s*:\s*(-?\d+(?:\.\d+)?)[^{}]*?\}/g;
+        while ((m = reJson.exec(txt)) !== null) {
+          const key = String(parseInt(m[1], 10));
+          if (!merged[key]) merged[key] = { x: parseFloat(m[2]), y: parseFloat(m[3]) };
+        }
       }
-      const posOut = normalisePositions(posParsed.positions || posParsed);
+
+      const posOut = normalisePositions(merged);
+      const found = Object.keys(posOut).length;
       return res.status(200).json({
         parts: [], positions: posOut,
-        model: posResult.model, api: posResult.api,
-        truncated: posParsed.truncated || undefined,
-        raw: Object.keys(posOut).length ? undefined : extractText(posResult.data).slice(0, 400),
-        warning: Object.keys(posOut).length ? undefined : 'The model answered, but no usable coordinates were found in its reply.'
+        model: usedModel, api: usedApi,
+        asked: wantedAll.length || undefined,
+        chunks: chunks.length,
+        truncated: stoppedEarly || undefined,
+        raw: found ? undefined : lastRaw.slice(0, 400),
+        warning: found ? undefined : 'The model answered, but no usable coordinates were found in its reply.'
       });
     }
 
