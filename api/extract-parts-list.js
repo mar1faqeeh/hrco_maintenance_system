@@ -408,7 +408,7 @@ export default async function handler(req, res) {
       });
 
       const posResult = await callGemini(apiKey, {
-        parts: parts, json: true, search: false, maxTokens: 2048
+        parts: parts, json: true, search: false, maxTokens: 8192
       });
       let posText = extractText(posResult.data).trim()
         .replace(/^```json\s*/i, '').replace(/^```\s*/i, '').replace(/```\s*$/i, '');
@@ -417,6 +417,27 @@ export default async function handler(req, res) {
       if (pf !== -1 && pl > pf) posText = posText.slice(pf, pl + 1);
       let posParsed = null;
       try { posParsed = JSON.parse(posText); } catch (e) { posParsed = null; }
+
+      // A long drawing can exhaust the token budget mid-object, leaving valid
+      // pairs followed by a half-written one. Rather than throw the whole
+      // answer away, pull out every complete "num": {x, y} pair we can see.
+      if (!posParsed) {
+        const salvaged = {};
+        const re = /"(\d{1,4})"\s*:\s*\{[^{}]*?"x"\s*:\s*(-?\d+(?:\.\d+)?)[^{}]*?"y"\s*:\s*(-?\d+(?:\.\d+)?)[^{}]*?\}/g;
+        const re2 = /"(\d{1,4})"\s*:\s*\{[^{}]*?"y"\s*:\s*(-?\d+(?:\.\d+)?)[^{}]*?"x"\s*:\s*(-?\d+(?:\.\d+)?)[^{}]*?\}/g;
+        let m;
+        while ((m = re.exec(posText)) !== null) salvaged[m[1]] = { x: parseFloat(m[2]), y: parseFloat(m[3]) };
+        while ((m = re2.exec(posText)) !== null) {
+          if (!salvaged[m[1]]) salvaged[m[1]] = { y: parseFloat(m[2]), x: parseFloat(m[3]) };
+        }
+        // Also handle a bare [x, y] / [y, x] array form
+        const reArr = /"(\d{1,4})"\s*:\s*\[\s*(-?\d+(?:\.\d+)?)\s*,\s*(-?\d+(?:\.\d+)?)\s*\]/g;
+        while ((m = reArr.exec(posText)) !== null) {
+          if (!salvaged[m[1]]) salvaged[m[1]] = [parseFloat(m[2]), parseFloat(m[3])];
+        }
+        if (Object.keys(salvaged).length) posParsed = { positions: salvaged, truncated: true };
+      }
+
       if (!posParsed) {
         return res.status(200).json({
           parts: [], positions: {},
@@ -429,6 +450,7 @@ export default async function handler(req, res) {
       return res.status(200).json({
         parts: [], positions: posOut,
         model: posResult.model, api: posResult.api,
+        truncated: posParsed.truncated || undefined,
         raw: Object.keys(posOut).length ? undefined : extractText(posResult.data).slice(0, 400),
         warning: Object.keys(posOut).length ? undefined : 'The model answered, but no usable coordinates were found in its reply.'
       });
