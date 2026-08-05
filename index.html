@@ -2633,6 +2633,10 @@ function openClientOrders(clientId){
   renderClientOrders();
   var sub = document.getElementById('co-client-sub');
   if(sub) sub.textContent = [cl.nickname, cl.type, cl.loc].filter(Boolean).join(' · ');
+  // Always open on a clean list: form collapsed, no leftover search or filter
+  var box = document.getElementById('co-search'); if(box) box.value = '';
+  setOrderFilter('all', document.querySelector('#co-filters .mrf'));
+  hideOrderForm();
   go('client-orders');
 }
 
@@ -2643,7 +2647,12 @@ function resetOrderForm(){
   var ct = document.getElementById('co-coverage'); if(ct) ct.value = 'warranty';
   var wm = document.getElementById('co-warranty-months'); if(wm) wm.value = '12';
   document.getElementById('co-edit-id').value = '';
-  document.getElementById('co-save-label').textContent = 'Add Order';
+  var lbl0 = document.getElementById('co-save-label');
+  if(lbl0){
+    lbl0.setAttribute('data-en','Add Order');
+    lbl0.setAttribute('data-ar','إضافة أوردر');
+    lbl0.textContent = (LNG==='ar') ? 'إضافة أوردر' : 'Add Order';
+  }
   onCoverageTypeChange();
 }
 
@@ -2712,7 +2721,7 @@ async function saveClientOrder(){
   var i = clientOrders.findIndex(function(x){ return String(x.id) === String(o.id); });
   if(i >= 0) clientOrders[i] = o; else clientOrders.unshift(o);
 
-  resetOrderForm();
+  hideOrderForm();
   renderClientOrders();
 }
 
@@ -2729,7 +2738,14 @@ function editClientOrder(id){
   set('co-contract-start', o.contract_start);
   set('co-contract-end', o.contract_end);
   set('co-notes', o.notes);
-  document.getElementById('co-save-label').textContent = 'Save Changes';
+  var lbl = document.getElementById('co-save-label');
+  if(lbl){
+    lbl.setAttribute('data-en','Save Changes');
+    lbl.setAttribute('data-ar','حفظ التعديلات');
+    lbl.textContent = (LNG==='ar') ? 'حفظ التعديلات' : 'Save Changes';
+  }
+  var card = document.getElementById('co-form-card');
+  if(card){ card.style.display=''; card.scrollIntoView({block:'nearest'}); }
   onCoverageTypeChange();
 }
 
@@ -2749,16 +2765,80 @@ async function deleteClientOrder(id){
   renderClientOrders();
 }
 
+
+var orderFilter = 'all';
+
+function showOrderForm(){
+  resetOrderForm();
+  var card = document.getElementById('co-form-card');
+  if(card){
+    card.style.display = '';
+    card.scrollIntoView({ block:'nearest' });
+  }
+  var n = document.getElementById('co-name');
+  if(n) n.focus();
+}
+
+function hideOrderForm(){
+  var card = document.getElementById('co-form-card');
+  if(card) card.style.display = 'none';
+  resetOrderForm();
+}
+
+function clearOrderSearch(){
+  var box = document.getElementById('co-search');
+  if(box) box.value = '';
+  renderClientOrders();
+  if(box) box.focus();
+}
+
+function setOrderFilter(f, el){
+  orderFilter = f;
+  document.querySelectorAll('#co-filters .mrf').forEach(function(b){ b.classList.remove('mrf-active'); });
+  if(el) el.classList.add('mrf-active');
+  renderClientOrders();
+}
+
 function renderClientOrders(){
   var el = document.getElementById('co-list');
   if(!el) return;
   if(!_ordersClientId){ go('clients'); return; }
-  var list = ordersOfClient(_ordersClientId);
-  var cnt = document.getElementById('co-count');
-  if(cnt) cnt.textContent = '(' + list.length + ')';
+  var all = ordersOfClient(_ordersClientId);
 
+  var box = document.getElementById('co-search');
+  var q = box ? box.value.trim().toLowerCase() : '';
+  var clearBtn = document.getElementById('co-search-clear');
+  if(clearBtn) clearBtn.style.display = q ? 'block' : 'none';
+
+  var list = all.filter(function(o){
+    if(orderFilter !== 'all'){
+      var active = orderCoverage(o).active;
+      if(orderFilter === 'active' && !active) return false;
+      if(orderFilter === 'expired' && active) return false;
+    }
+    if(!q) return true;
+    // Search the name, PO, notes, dates and the coverage wording
+    var hay = [o.name, o.po_number, o.notes, o.handover_date, o.contract_start, o.contract_end,
+               covLabel(orderCoverage(o).type), o.coverage_type].join(' ').toLowerCase();
+    return hay.indexOf(q) !== -1;
+  });
+
+  var cnt = document.getElementById('co-count');
+  if(cnt) cnt.textContent = (q || orderFilter !== 'all')
+    ? '(' + list.length + ' / ' + all.length + ')'
+    : '(' + all.length + ')';
+
+  if(!all.length){
+    el.innerHTML = '<div style="padding:26px;text-align:center;color:#A0AEC0;font-size:12px">'
+      + '<i class="ti ti-package-off" style="font-size:26px;display:block;margin-bottom:6px"></i>'
+      + (LNG==='ar' ? 'لا توجد أوردرات بعد — اضغط "أوردر جديد" لإضافة واحد'
+                    : 'No orders yet — press "New Order" to add one') + '</div>';
+    return;
+  }
   if(!list.length){
-    el.innerHTML = '<div style="padding:26px;text-align:center;color:#A0AEC0;font-size:12px"><i class="ti ti-package-off" style="font-size:26px;display:block;margin-bottom:6px"></i>لا توجد أوردرات بعد / No orders yet</div>';
+    el.innerHTML = '<div style="padding:26px;text-align:center;color:#A0AEC0;font-size:12px">'
+      + '<i class="ti ti-search-off" style="font-size:26px;display:block;margin-bottom:6px"></i>'
+      + (LNG==='ar' ? 'لا توجد نتائج مطابقة' : 'No matching orders') + '</div>';
     return;
   }
   el.innerHTML = '';
@@ -7128,11 +7208,17 @@ async function showPublicReport(token){
       <div class="pt"><span data-en="Orders &amp; Projects" data-ar="الأوردرات والمشاريع">Orders &amp; Projects</span> — <span id="co-client-name"></span></div>
       <div class="ps" id="co-client-sub"></div>
     </div>
-    <button class="btn btn-o" onclick="go('clients')"><i class="ti ti-arrow-left"></i> <span data-en="Back to Clients" data-ar="رجوع إلى العملاء">Back to Clients</span></button>
+    <div style="display:flex;gap:8px;flex-wrap:wrap">
+      <button class="btn btn-o" onclick="go('clients')"><i class="ti ti-arrow-left"></i> <span data-en="Back to Clients" data-ar="رجوع إلى العملاء">Back to Clients</span></button>
+      <button class="btn btn-p" id="co-new-btn" onclick="showOrderForm()"><i class="ti ti-plus"></i> <span data-en="New Order" data-ar="أوردر جديد">New Order</span></button>
+    </div>
   </div>
 
-  <div class="card" style="margin-bottom:16px">
-    <div class="ch"><div class="ct"><i class="ti ti-plus" style="color:#1D4E89"></i> <span id="co-form-title" data-en="New Order / Project" data-ar="أوردر أو مشروع جديد">New Order / Project</span></div></div>
+  <div class="card" id="co-form-card" style="margin-bottom:16px;display:none">
+    <div class="ch" style="display:flex;align-items:center;justify-content:space-between">
+      <div class="ct"><i class="ti ti-plus" style="color:#1D4E89"></i> <span id="co-form-title" data-en="New Order / Project" data-ar="أوردر أو مشروع جديد">New Order / Project</span></div>
+      <button onclick="hideOrderForm()" title="Close" style="border:none;background:none;color:#A0AEC0;cursor:pointer;font-size:16px"><i class="ti ti-x"></i></button>
+    </div>
     <div style="padding:16px">
       <input type="hidden" id="co-edit-id">
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
@@ -7189,15 +7275,30 @@ async function showPublicReport(token){
       <div id="co-preview" style="font-size:12px;font-weight:700;margin-top:10px"></div>
 
       <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:14px">
-        <button class="btn btn-o" onclick="resetOrderForm()"><i class="ti ti-eraser"></i> <span data-en="Clear" data-ar="مسح">Clear</span></button>
+        <button class="btn btn-o" onclick="hideOrderForm()"><i class="ti ti-x"></i> <span data-en="Cancel" data-ar="إلغاء">Cancel</span></button>
         <button class="btn btn-p" onclick="saveClientOrder()"><i class="ti ti-device-floppy"></i> <span id="co-save-label" data-en="Add Order" data-ar="إضافة أوردر">Add Order</span></button>
       </div>
     </div>
   </div>
 
-  <div style="font-size:13px;font-weight:700;color:#0F2D52;margin-bottom:10px;display:flex;align-items:center;gap:6px">
-    <i class="ti ti-list"></i> <span data-en="Orders" data-ar="الأوردرات">Orders</span>
-    <span id="co-count" style="color:#718096;font-weight:600;font-size:11px"></span>
+  <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px;flex-wrap:wrap">
+    <div style="font-size:13px;font-weight:700;color:#0F2D52;display:flex;align-items:center;gap:6px">
+      <i class="ti ti-list"></i> <span data-en="Orders" data-ar="الأوردرات">Orders</span>
+      <span id="co-count" style="color:#718096;font-weight:600;font-size:11px"></span>
+    </div>
+    <div style="flex:1"></div>
+    <div class="tbox" id="co-filters" style="display:flex;gap:4px">
+      <button onclick="setOrderFilter('all',this)" class="mrf mrf-active" data-en="All" data-ar="الكل">All</button>
+      <button onclick="setOrderFilter('active',this)" class="mrf" data-en="Active" data-ar="سارية">Active</button>
+      <button onclick="setOrderFilter('expired',this)" class="mrf" data-en="Expired" data-ar="منتهية">Expired</button>
+    </div>
+    <div style="position:relative;min-width:220px">
+      <i class="ti ti-search" style="position:absolute;top:50%;transform:translateY(-50%);inset-inline-start:10px;color:#A0AEC0;font-size:14px;pointer-events:none"></i>
+      <input type="text" id="co-search" oninput="renderClientOrders()" data-ph-en="Search orders…" data-ph-ar="بحث في الأوردرات…" placeholder="Search orders…"
+             style="width:100%;padding:8px 32px;border:1.5px solid #D9E2EC;border-radius:8px;font-size:12px;font-family:inherit;outline:none">
+      <button type="button" id="co-search-clear" onclick="clearOrderSearch()" title="Clear"
+              style="display:none;position:absolute;top:50%;transform:translateY(-50%);inset-inline-end:6px;border:none;background:none;color:#A0AEC0;cursor:pointer;font-size:14px;padding:2px 4px"><i class="ti ti-x"></i></button>
+    </div>
   </div>
   <div id="co-list" style="display:flex;flex-direction:column;gap:8px;margin-bottom:20px"></div>
 </div>
