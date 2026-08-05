@@ -5327,6 +5327,17 @@ async function deleteClient(id){
   }
 }
 
+// Human-readable agreement label in the current interface language.
+function agreementLabel(k){
+  var m = {
+    contract: { en:'Contract',  ar:'عقد صيانة' },
+    warranty: { en:'Warranty',  ar:'ضمان' },
+    paid:     { en:'Paid',      ar:'مدفوع' }
+  }[k];
+  if(!m) return k || '';
+  return (LNG === 'ar') ? m.ar : m.en;
+}
+
 function renderClientGrid(){
   var g=document.getElementById('clientGrid');if(!g)return;g.innerHTML='';
   var fl=clientsData.filter(function(c){
@@ -5351,8 +5362,8 @@ function renderClientGrid(){
           +(c.phone ? '<span dir="ltr"><i class="ti ti-phone"></i> '+c.phone+'</span>' : '')
           +(c.email ? '<a href="mailto:'+c.email+'" onclick="event.stopPropagation()" dir="ltr" style="color:#1D4E89;text-decoration:none"><i class="ti ti-mail"></i> '+c.email+'</a>' : '')
         +'</div>' : '')
-      +'<div style="display:flex;gap:5px;margin-top:5px;flex-wrap:wrap"><span style="font-size:10px;padding:2px 7px;border-radius:99px;font-weight:700;display:inline-flex;align-items:center;gap:3px;'+ctag+'"><i class="ti ti-file-invoice" style="font-size:10px"></i>'+c.contract+'</span>'
-      +(c.warranty?'<span style="font-size:10px;padding:2px 7px;border-radius:99px;font-weight:700;background:#DBEAFE;color:#1D4ED8">Warranty</span>':'')+'</div></div></div>'
+      +'<div style="display:flex;gap:5px;margin-top:5px;flex-wrap:wrap"><span style="font-size:10px;padding:2px 7px;border-radius:99px;font-weight:700;display:inline-flex;align-items:center;gap:3px;'+ctag+'"><i class="ti ti-file-invoice" style="font-size:10px"></i>'+agreementLabel(c.contract)+'</span>'
+      +((c.warranty && c.contract!=='warranty')?'<span style="font-size:10px;padding:2px 7px;border-radius:99px;font-weight:700;background:#DBEAFE;color:#1D4ED8">'+agreementLabel("warranty")+'</span>':'')+'</div></div></div>'
       +'<div style="display:grid;grid-template-columns:repeat(4,1fr);border-bottom:1px solid #D9E2EC">'
       +'<div style="padding:10px 8px;text-align:center;border-left:1px solid #D9E2EC"><div style="font-size:15px;font-weight:700">'+c.total+'</div><div style="font-size:10px;color:#718096">Total</div></div>'
       +'<div style="padding:10px 8px;text-align:center;border-left:1px solid #D9E2EC"><div style="font-size:15px;font-weight:700;color:#2D7D3A">'+c.completed+'</div><div style="font-size:10px;color:#718096">Done</div></div>'
