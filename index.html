@@ -4209,6 +4209,7 @@ function renderEquipGrid(){
       // actions
       +'<div style="display:flex;gap:6px;flex-shrink:0">'
       +'<button onclick="event.stopPropagation();openDiagram('+eq.id+')" style="padding:7px 16px;border-radius:6px;border:none;background:#1D4E89;color:#fff;cursor:pointer;font-size:11px;font-weight:700;font-family:inherit"><i class="ti ti-eye"></i> View</button>'
+      +'<button onclick="event.stopPropagation();editEquipment('+eq.id+')" title="'+(LNG==='ar'?'تعديل':'Edit')+'" style="padding:7px 12px;border-radius:6px;border:1px solid #D9E2EC;background:#F8FAFC;color:#1D4E89;cursor:pointer;font-size:11px;font-weight:700;font-family:inherit"><i class="ti ti-pencil"></i> '+(LNG==='ar'?'تعديل':'Edit')+'</button>'
       +'<button onclick="event.stopPropagation();deleteEquipment('+eq.id+')" style="padding:7px 10px;border-radius:6px;border:1px solid #FCEBEB;background:#FCEBEB;color:#C0392B;cursor:pointer;font-size:11px;font-family:inherit"><i class="ti ti-trash"></i></button>'
       +'</div>';
     el.appendChild(row);
@@ -5159,6 +5160,89 @@ function ueReadFileAsDataUrl(file){
   });
 }
 
+
+// ── Editing a saved equipment record ─────────────────────────────────────
+var ueEditingId = null;
+
+function resetEquipForm(){
+  ueEditingId = null;
+  ['ue-name','ue-parts','ue-files'].forEach(function(id){
+    var e = document.getElementById(id); if(e) e.value = '';
+  });
+  var st = document.getElementById('ue-files-status'); if(st) st.textContent = '';
+  var strip = document.getElementById('ue-pages-strip'); if(strip) strip.innerHTML = '';
+  var pf = document.getElementById('ue-parts-field'); if(pf) pf.style.display = 'none';
+  var hf = document.getElementById('ue-hotspot-field'); if(hf) hf.style.display = 'none';
+  uePages = []; uePositions = {}; ueParsedParts = [];
+  setEquipModalMode(false);
+}
+
+function setEquipModalMode(editing){
+  var title = document.querySelector('#uploadEquipModal .mhtitle');
+  if(title){
+    title.innerHTML = '<i class="ti ti-' + (editing ? 'pencil' : 'upload') + '"></i> '
+      + (editing ? (LNG==='ar' ? 'تعديل المعدة' : 'Edit Equipment')
+                 : (LNG==='ar' ? 'رفع معدة' : 'Upload Equipment'));
+  }
+  var btn = document.querySelector('#uploadEquipModal .mf .btn-p');
+  if(btn){
+    btn.innerHTML = '<i class="ti ti-device-floppy"></i> '
+      + (editing ? (LNG==='ar' ? 'حفظ التعديلات' : 'Save Changes')
+                 : (LNG==='ar' ? 'حفظ المعدة' : 'Save Equipment'));
+  }
+}
+
+// Open a saved record in the same modal, fully populated: photo, parts-list
+// pages, the parts text, and every marker already placed on the drawing.
+function editEquipment(id){
+  var eq = equipmentData.find(function(e){ return String(e.id) === String(id); });
+  if(!eq) return;
+
+  resetEquipForm();
+  ueEditingId = eq.id;
+
+  var nameEl = document.getElementById('ue-name');
+  if(nameEl) nameEl.value = eq.name || '';
+
+  // Rebuild the page strip from what was saved
+  uePages = [];
+  if(eq.diagramBase64) uePages.push({ dataUrl: eq.diagramBase64, rows: [], tags: [] });
+  (eq.extraFiles || []).forEach(function(f){
+    if(f && f.dataUrl && f.type !== 'pdf') uePages.push({ dataUrl: f.dataUrl, rows: [], tags: [] });
+  });
+
+  // Parts list back into the textarea, and their markers back onto the drawing
+  var parts = eq.parts || [];
+  var lines = parts.map(function(p){
+    return [p.num, p.name, p.desc].filter(function(v){ return v !== undefined && v !== ''; }).join(' | ');
+  });
+  var ta = document.getElementById('ue-parts');
+  if(ta) ta.value = lines.join('\n');
+
+  uePositions = {};
+  parts.forEach(function(p){
+    if(p.pos && p.pos.length === 2) uePositions[String(p.num)] = [p.pos[0], p.pos[1]];
+  });
+
+  ueRenderPagesStrip();
+  ueSyncMainPreview();
+  var pf = document.getElementById('ue-parts-field');
+  if(pf) pf.style.display = uePages.length ? 'block' : 'none';
+  ueRebuildHotspotList();
+
+  var placed = Object.keys(uePositions).length;
+  var st = document.getElementById('ue-files-status');
+  if(st){
+    st.textContent = (LNG==='ar')
+      ? (uePages.length + ' صفحة محفوظة · ' + parts.length + ' قطعة · ' + placed + ' علامة — ارفع ملفات جديدة لاستبدال الصور')
+      : (uePages.length + ' saved page(s) · ' + parts.length + ' parts · ' + placed + ' markers — upload new files to replace the images');
+    st.style.color = '#1D4E89';
+  }
+
+  setEquipModalMode(true);
+  openMod('uploadEquipModal');
+}
+
 async function saveEquipment(){
   var name = (document.getElementById('ue-name')||{}).value.trim();
   if(!name){ alert('Enter equipment name'); return; }
@@ -5182,31 +5266,34 @@ async function saveEquipment(){
   var base64 = uePages[0].dataUrl;
   var extraFiles = uePages.slice(1).map(function(pg,i){ return {name:'Parts List '+(i+1), type:'image', dataUrl: pg.dataUrl}; });
 
-  var equip = { id: Date.now(), name: name, diagramBase64: base64, parts: parts, extraFiles: extraFiles };
-  equipmentData.push(equip);
-
-  // Save to Supabase (dbSave auto-retries without a field if that column doesn't exist yet)
-  var saved = await dbSave('equipment_diagrams', {
+  var payload = {
     name: name,
     diagram_data: base64,
     parts_list: JSON.stringify(parts),
     extra_files: JSON.stringify(extraFiles)
-  });
-  // Capture the real database id so deleteEquipment() can find the correct row later —
-  // without this, delete only removed it from the local list and it came back after reload.
-  if(saved && saved[0] && saved[0].id != null) equip.id = saved[0].id;
+  };
+  // Carrying the id makes dbSave UPDATE the existing row instead of inserting
+  // a duplicate — the recurring "edit creates a copy" trap.
+  if(ueEditingId != null) payload.id = ueEditingId;
 
+  var saved = await dbSave('equipment_diagrams', payload);
+  if(saved === null) return;
+
+  var equip = {
+    id: (saved && saved[0] && saved[0].id != null) ? saved[0].id : (ueEditingId != null ? ueEditingId : Date.now()),
+    name: name, diagramBase64: base64, parts: parts, extraFiles: extraFiles
+  };
+
+  var idx = equipmentData.findIndex(function(e){ return String(e.id) === String(equip.id); });
+  if(idx >= 0) equipmentData[idx] = equip; else equipmentData.push(equip);
+
+  var wasEditing = (ueEditingId != null);
   closeMod('uploadEquipModal');
+  resetEquipForm();
   renderEquipGrid();
-  document.getElementById('ue-name').value='';
-  document.getElementById('ue-parts').value='';
-  document.getElementById('ue-files').value='';
-  document.getElementById('ue-files-status').textContent='';
-  document.getElementById('ue-pages-strip').innerHTML='';
-  document.getElementById('ue-parts-field').style.display='none';
-  document.getElementById('ue-hotspot-field').style.display='none';
-  uePages = []; uePositions = {}; ueParsedParts = [];
-  alert('Equipment saved!');
+  alert(wasEditing
+    ? (LNG==='ar' ? 'تم حفظ التعديلات!' : 'Changes saved!')
+    : (LNG==='ar' ? 'تم حفظ المعدة!' : 'Equipment saved!'));
 }
 
 async function loadEquipmentData(){
@@ -7343,7 +7430,7 @@ async function showPublicReport(token){
   <div class="ph">
     <div><div class="pt">Parts Request</div><div class="ps">AI-powered equipment diagram search & parts selection</div></div>
     <div style="display:flex;gap:8px">
-      <button class="btn btn-o" onclick="openMod('uploadEquipModal')"><i class="ti ti-upload"></i> Upload Manually</button>
+      <button class="btn btn-o" onclick="resetEquipForm();openMod('uploadEquipModal')"><i class="ti ti-upload"></i> <span data-en="Upload Manually" data-ar="رفع يدوي">Upload Manually</span></button>
     </div>
   </div>
 
