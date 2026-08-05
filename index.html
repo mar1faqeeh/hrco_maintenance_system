@@ -864,7 +864,8 @@ html,body{height:100%;overflow:auto;font-family:Tajawal,sans-serif;font-size:14p
     <div class="mh"><div class="mhtitle">Add Client</div><button class="mclose" onclick="closeMod('clientModal')"><i class="ti ti-x"></i></button></div>
     <div class="mb">
       <div class="mg2">
-        <div class="field" style="margin-bottom:0;grid-column:1/-1"><label>Client Name</label><input type="text" id="cl-name" placeholder="Client Name"></div>
+        <div class="field" style="margin-bottom:0"><label>Official Name — الاسم الرسمي *</label><input type="text" id="cl-name" placeholder="e.g. شركة المأكولات السريعة"></div>
+        <div class="field" style="margin-bottom:0"><label>Known As — اسم الشهرة</label><input type="text" id="cl-nickname" placeholder="e.g. البيك / Al Baik"></div>
         <div class="field" style="margin-bottom:0"><label>Type</label><select id="cl-type"><option>Hotel</option><option>Restaurant</option><option>Restaurant Chain</option><option>Hospital</option><option>Airport</option></select></div>
         <div class="field" style="margin-bottom:0"><label>Phone</label><input type="text" id="cl-phone" placeholder="Phone"></div>
         <div class="field" style="margin-bottom:0"><label>Location</label><input type="text" id="cl-loc" placeholder="City / District"></div>
@@ -1343,7 +1344,7 @@ async function loadAllFromDB(){
       // Always load from DB (even if empty - overrides hardcoded defaults)
       clientsData = r2.data.map(function(cl){
         return {
-          id: cl.id, name: cl.name, type: cl.type||'',
+          id: cl.id, name: cl.name, nickname: cl.nickname||'', type: cl.type||'',
           loc: cl.location||cl.loc||'', color: cl.color||'#1D4E89',
           bg: cl.bg||'#E6F1FB', init: cl.initials||cl.name.slice(0,2),
           contract: cl.contract==='عقد صيانة'?'contract':cl.contract==='ضمان'?'warranty':cl.contract==='مدفوع'?'paid':'paid',
@@ -2814,7 +2815,8 @@ function fillVisitClientSelect(){
   });
   sel.innerHTML = '<option value="">' + (LNG==='ar' ? '— اختر العميل —' : '— Select client —') + '</option>'
     + list.map(function(c){
-        return '<option value="'+String(c.name).replace(/"/g,'&quot;')+'" data-id="'+c.id+'">'+c.name+'</option>';
+        var shown = c.nickname ? (c.nickname + ' — ' + c.name) : c.name;
+        return '<option value="'+String(c.name).replace(/"/g,'&quot;')+'" data-id="'+c.id+'">'+shown+'</option>';
       }).join('');
   if(prev) sel.value = prev;
   var warn = document.getElementById('nv-noclients');
@@ -2882,8 +2884,13 @@ function onVisitOrderChange(){
 function fillMaintClientList(){
   var dl = document.getElementById('mr-client-list');
   if(!dl || typeof clientsData === 'undefined') return;
+  // Offer both the official name and the well-known one, so sales can type
+  // whichever they know.
   dl.innerHTML = (clientsData||[]).map(function(c){
-    return '<option value="'+String(c.name||'').replace(/"/g,'&quot;')+'">';
+    var esc = function(v){ return String(v||'').replace(/"/g,'&quot;'); };
+    var out = '<option value="'+esc(c.name)+'">';
+    if(c.nickname) out += '<option value="'+esc(c.nickname)+'" label="'+esc(c.name)+'">';
+    return out;
   }).join('');
 }
 
@@ -5312,7 +5319,8 @@ async function deleteClient(id){
 function renderClientGrid(){
   var g=document.getElementById('clientGrid');if(!g)return;g.innerHTML='';
   var fl=clientsData.filter(function(c){
-    return(!cSrch||c.name.toLowerCase().includes(cSrch.toLowerCase()))
+    return(!cSrch|| c.name.toLowerCase().includes(cSrch.toLowerCase())
+                 || String(c.nickname||'').toLowerCase().includes(cSrch.toLowerCase()))
       &&(cFil==='all'||(cFil==='contract'&&c.contract==='contract')||(cFil==='warranty'&&c.warranty)||(cFil==='paid'&&c.contract==='paid'));
   });
   fl.forEach(function(c){
@@ -5324,7 +5332,9 @@ function renderClientGrid(){
     card.style.cssText='background:#fff;border:1px solid #D9E2EC;border-radius:12px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,.06)';
     card.innerHTML='<div style="padding:14px 16px 10px;border-bottom:1px solid #D9E2EC;display:flex;align-items:flex-start;gap:12px">'
       +'<div style="width:44px;height:44px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:16px;font-weight:700;flex-shrink:0;background:'+c.bg+';color:'+c.color+'">'+c.init+'</div>'
-      +'<div style="flex:1;min-width:0"><div style="font-size:14px;font-weight:700">'+c.name+'</div><div style="font-size:11px;color:#718096;margin-top:2px">'+c.type+' · '+c.loc+'</div>'
+      +'<div style="flex:1;min-width:0"><div style="font-size:14px;font-weight:700">'+(c.nickname || c.name)+'</div>'
+      +(c.nickname ? '<div style="font-size:10px;color:#A0AEC0;margin-top:1px">'+c.name+'</div>' : '')
+      +'<div style="font-size:11px;color:#718096;margin-top:2px">'+c.type+' · '+c.loc+'</div>'
       +'<div style="display:flex;gap:5px;margin-top:5px;flex-wrap:wrap"><span style="font-size:10px;padding:2px 7px;border-radius:99px;font-weight:700;display:inline-flex;align-items:center;gap:3px;'+ctag+'"><i class="ti ti-file-invoice" style="font-size:10px"></i>'+c.contract+'</span>'
       +(c.warranty?'<span style="font-size:10px;padding:2px 7px;border-radius:99px;font-weight:700;background:#DBEAFE;color:#1D4ED8">Warranty</span>':'')+'</div></div></div>'
       +'<div style="display:grid;grid-template-columns:repeat(4,1fr);border-bottom:1px solid #D9E2EC">'
@@ -5376,6 +5386,7 @@ function editClient(id){
   if(!cl) return;
   // Load client data into modal
   document.getElementById('cl-name').value = cl.name || '';
+  var nickEl = document.getElementById('cl-nickname'); if(nickEl) nickEl.value = cl.nickname || '';
   document.getElementById('cl-loc').value = cl.loc || '';
   document.getElementById('cl-phone').value = cl.phone || '';
   var typeEl = document.getElementById('cl-type');
@@ -5402,13 +5413,17 @@ function renderDonut(){
 }
 function renderTopClients(){
   var el=document.getElementById('topClientsList');if(!el)return;el.innerHTML='';
-  var sorted=clientsData.slice().sort(function(a,b){return b.total-a.total;}).slice(0,5);
-  var mx=sorted[0].total;
+  var sorted=clientsData.slice().sort(function(a,b){return (b.total||0)-(a.total||0);}).slice(0,5);
+  if(!sorted.length){
+    el.innerHTML = '<div style="padding:20px;text-align:center;color:#A0AEC0;font-size:12px">No clients yet</div>';
+    return;
+  }
+  var mx=Math.max(sorted[0].total||0, 1);
   sorted.forEach(function(c,i){
     var rk=['#F59E0B','#94A3B8','#C2855A','#D9E2EC','#D9E2EC'][i];
     var rktxt=['#fff','#fff','#fff','#64748B','#64748B'][i];
     var r=document.createElement('div');r.style.cssText='display:flex;align-items:center;gap:10px;padding:9px 16px;border-bottom:1px solid #D9E2EC';
-    r.innerHTML='<div style="width:22px;height:22px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;flex-shrink:0;background:'+rk+';color:'+rktxt+'">'+(i+1)+'</div><div style="width:28px;height:28px;border-radius:6px;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;flex-shrink:0;background:'+c.bg+';color:'+c.color+'">'+c.init+'</div><div style="flex:1;min-width:0"><div style="font-size:12px;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+c.name+'</div><div style="font-size:10px;color:#718096">'+c.type+'</div></div><div style="flex:1.5"><div style="height:8px;background:#F0F4F8;border-radius:99px;overflow:hidden"><div style="height:100%;width:'+Math.round(c.total/mx*100)+'%;background:'+c.color+';border-radius:99px"></div></div></div><div style="font-size:12px;font-weight:700;min-width:36px">'+c.total+'</div>';
+    r.innerHTML='<div style="width:22px;height:22px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;flex-shrink:0;background:'+rk+';color:'+rktxt+'">'+(i+1)+'</div><div style="width:28px;height:28px;border-radius:6px;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;flex-shrink:0;background:'+c.bg+';color:'+c.color+'">'+c.init+'</div><div style="flex:1;min-width:0"><div style="font-size:12px;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+(c.nickname || c.name)+'</div><div style="font-size:10px;color:#718096">'+(c.nickname ? c.name : c.type)+'</div></div><div style="flex:1.5"><div style="height:8px;background:#F0F4F8;border-radius:99px;overflow:hidden"><div style="height:100%;width:'+Math.round(c.total/mx*100)+'%;background:'+c.color+';border-radius:99px"></div></div></div><div style="font-size:12px;font-weight:700;min-width:36px">'+c.total+'</div>';
     el.appendChild(r);
   });
 }
@@ -5424,13 +5439,14 @@ async function saveClient(){
       var contractRawE = document.getElementById('cl-contract').value;
       var contractMapE = {'contract':'عقد صيانة','warranty':'ضمان','paid':'مدفوع'};
       existing.name = name;
+      existing.nickname = (document.getElementById('cl-nickname')||{}).value.trim() || '';
       existing.loc = document.getElementById('cl-loc').value;
       existing.phone = document.getElementById('cl-phone').value;
       existing.type = document.getElementById('cl-type').value;
       existing.contract = contractRawE;
       existing.warranty = contractRawE==='warranty';
       await dbSave('clients', {
-        id: existing.id, name: existing.name,
+        id: existing.id, name: existing.name, nickname: existing.nickname,
         location: existing.loc, phone: existing.phone,
         type: existing.type, contract: contractMapE[contractRawE]||'بدون عقد',
         warranty: existing.warranty
@@ -5449,6 +5465,7 @@ async function saveClient(){
   // Data for Supabase (DB columns)
   var dbData={
     name: name,
+    nickname: (document.getElementById('cl-nickname')||{}).value.trim() || '',
     type: document.getElementById('cl-type').value,
     location: document.getElementById('cl-loc').value,
     phone: document.getElementById('cl-phone').value,
@@ -5465,6 +5482,7 @@ async function saveClient(){
   var localClient = {
     id: (saved && saved[0]) ? saved[0].id : Date.now(),
     name: name,
+    nickname: dbData.nickname,
     type: dbData.type,
     loc: dbData.location,
     phone: dbData.phone,
