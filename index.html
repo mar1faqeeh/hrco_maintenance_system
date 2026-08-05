@@ -342,6 +342,18 @@ html,body{height:100%;overflow:auto;font-family:Tajawal,sans-serif;font-size:14p
         <select id="inp-order" onchange="onVisitOrderChange()"></select>
         <div id="nv-coverage" style="font-size:11px;font-weight:700;margin-top:5px"></div>
       </div>
+
+      <div class="field" id="nv-items-field" style="display:none">
+        <label data-en="Items Needing Service" data-ar="الأصناف المطلوب صيانتها">Items Needing Service</label>
+        <div style="font-size:11px;color:#718096;margin-bottom:6px" data-en="Pick one or more items from this order" data-ar="اختر صنفاً واحداً أو أكثر من هذا الأوردر">Pick one or more items from this order</div>
+        <div style="position:relative;margin-bottom:6px">
+          <i class="ti ti-search" style="position:absolute;top:50%;transform:translateY(-50%);inset-inline-start:10px;color:#A0AEC0;font-size:14px;pointer-events:none"></i>
+          <input type="text" id="nv-items-search" oninput="renderVisitItems()" data-ph-en="Search by code or name…" data-ph-ar="ابحث بالكود أو الاسم…" placeholder="Search by code or name…"
+                 style="width:100%;padding:8px 32px;border:1.5px solid #D9E2EC;border-radius:8px;font-size:12px;font-family:inherit;outline:none">
+        </div>
+        <div id="nv-items-list" style="display:flex;flex-direction:column;gap:4px;max-height:230px;overflow-y:auto;border:1.5px solid #D9E2EC;border-radius:8px;padding:6px"></div>
+        <div id="nv-items-summary" style="font-size:11px;color:#718096;margin-top:5px"></div>
+      </div>
       <div class="field"><label id="t-lbl-loc">Location / Branch</label><input type="text" id="inp-location" placeholder="Location..."></div>
       <div class="field">
         <label id="t-lbl-gps">GPS Location</label>
@@ -943,7 +955,7 @@ html,body{height:100%;overflow:auto;font-family:Tajawal,sans-serif;font-size:14p
       <div class="field"><label>Username</label><input type="text" id="au-user" placeholder="username (no spaces)"></div>
       <div class="field"><label>Full Name</label><input type="text" id="au-name" placeholder="Full Name"></div>
       <div class="field"><label>Password</label><input type="password" id="au-pass" placeholder="Password"></div>
-      <div class="field"><label>Role</label><select id="au-role"><option value="manager">Manager</option><option value="technician">Technician</option><option value="salesman">Salesman / مبيعات</option></select></div>
+      <div class="field"><label>Role</label><select id="au-role"><option value="manager">Manager</option><option value="technician">Technician</option><option value="salesman">Salesman / مبيعات</option><option value="data_entry">Data Entry / مدخل بيانات</option></select></div>
       <div style="display:flex;gap:8px;margin-top:16px">
         <button class="btn btn-o" onclick="closeMod('addUserModal')" style="flex:1">Cancel</button>
         <button class="btn btn-p" onclick="addNewUser()" style="flex:2"><i class="ti ti-device-floppy"></i> Save User</button>
@@ -1146,9 +1158,11 @@ var LG_ROLE='manager';
 var USERS={'manager':{pass:'hrco2026',role:'manager',name:'Manager',init:'M'}};
 var curUser='', curUserLogin='', curUserRole='';
 function roleLabel(r){
-  return r==='manager' ? 'Maintenance Manager'
-       : r==='salesman' ? 'Sales'
-       : 'Technician';
+  var ar = (typeof LNG !== 'undefined' && LNG === 'ar');
+  if(r === 'manager')    return ar ? 'مدير الصيانة' : 'Maintenance Manager';
+  if(r === 'salesman')   return ar ? 'مبيعات' : 'Sales';
+  if(r === 'data_entry') return ar ? 'مدخل بيانات' : 'Data Entry';
+  return ar ? 'فني' : 'Technician';
 }
 
 async function loadSystemUsers(){
@@ -1325,7 +1339,9 @@ function lgSuccess(u, restoring){
     try{ loadMaintRequests().then(function(){ updateMaintBadge(); }); }catch(e){}
     try{ loadTaskTemplates(); }catch(e){}
     try{ loadClientOrders().then(function(){ if(typeof renderClientGrid==='function') renderClientGrid(); }); }catch(e){}
-    go(curUserRole === 'salesman' ? 'maint-requests' : 'dashboard');
+    go(curUserRole === 'salesman'   ? 'maint-requests'
+     : curUserRole === 'data_entry' ? 'clients'
+     : 'dashboard');
     try{initChart();}catch(e){}
   });
 }
@@ -1595,7 +1611,8 @@ function renderVisits(f,q){
       +'<button class="rbtn" onclick="viewVisit('+rid+')" title="View" style="padding:3px 5px;font-size:13px"><i class="ti ti-eye"></i></button>'
       +'<button class="rbtn" onclick="showPrintOptions('+rid+')" title="Print" style="padding:3px 5px;font-size:13px"><i class="ti ti-printer"></i></button>'
       +'<button class="rbtn" onclick="sendByEmail('+rid+')" title="Send Email" style="padding:3px 5px;font-size:13px;color:#C4680A"><i class="ti ti-mail"></i></button>'
-      +'<button class="rbtn" onclick="deleteVisit('+rid+')" title="Delete" style="padding:3px 5px;font-size:13px;color:#C0392B"><i class="ti ti-trash"></i></button>'
+      +(curUserRole === 'data_entry' ? ''
+        : '<button class="rbtn" onclick="deleteVisit('+rid+')" title="Delete" style="padding:3px 5px;font-size:13px;color:#C0392B"><i class="ti ti-trash"></i></button>')
       +'</div>';
     body.appendChild(row);
   });
@@ -1703,6 +1720,28 @@ function _showVisitModal(v){
   document.getElementById('vm-serial').textContent = v.serial_number || '—';
   document.getElementById('vm-date').textContent = v.date || '—';
   document.getElementById('vm-fault').textContent = v.fault || '—';
+
+  // Which specific items from the order this visit covered
+  var vmBox = document.getElementById('vm-items-box');
+  var vmList = document.getElementById('vm-items');
+  if(vmBox && vmList){
+    var vItems = [];
+    try{ vItems = typeof v.items === 'string' ? JSON.parse(v.items) : (v.items || []); }catch(e){ vItems = []; }
+    if(Array.isArray(vItems) && vItems.length){
+      vmBox.style.display = '';
+      vmList.innerHTML = vItems.map(function(it){
+        var esc = function(x){ return String(x==null?'':x).replace(/</g,'&lt;'); };
+        return '<div style="display:flex;align-items:center;gap:8px;padding:5px 0;border-bottom:1px solid #EDF2F7">'
+          + '<i class="ti ti-tool" style="color:#1D4E89;font-size:13px"></i>'
+          + '<span style="font-size:12px;font-weight:600">' + esc(it.name) + '</span>'
+          + (it.code ? '<span style="font-size:10px;color:#718096" dir="ltr">' + esc(it.code) + '</span>' : '')
+          + '</div>';
+      }).join('');
+    } else {
+      vmBox.style.display = 'none';
+      vmList.innerHTML = '';
+    }
+  }
   document.getElementById('vm-notes').textContent = v.notes || '—';
   
   // Status badge
@@ -2703,6 +2742,7 @@ function readOrderForm(){
 }
 
 async function saveClientOrder(){
+  if(!canManageClientRecords()){ denyClientEdit(); return; }
   var o = readOrderForm();
   if(!o.name){ alert('الرجاء إدخال اسم الأوردر أو المشروع\nPlease enter the order / project name'); return; }
   if(o.coverage_type === 'warranty' && !o.handover_date){
@@ -2729,6 +2769,7 @@ async function saveClientOrder(){
 }
 
 function editClientOrder(id){
+  if(!canManageClientRecords()){ denyClientEdit(); return; }
   var o = clientOrders.find(function(x){ return String(x.id) === String(id); });
   if(!o) return;
   var set = function(elId, val){ var e=document.getElementById(elId); if(e) e.value = val || ''; };
@@ -2763,6 +2804,7 @@ function editClientOrder(id){
 }
 
 async function deleteClientOrder(id){
+  if(!canManageClientRecords()){ denyClientEdit(); return; }
   var o = clientOrders.find(function(x){ return String(x.id) === String(id); });
   if(!o) return;
   if(!confirm('حذف الأوردر "'+(o.name||'')+'"؟\nDelete the order "'+(o.name||'')+'"?')) return;
@@ -2921,7 +2963,16 @@ function orderItems(o){
   try{ var a = JSON.parse(v); return Array.isArray(a) ? a : []; }catch(e){ return []; }
 }
 
+function canManageClientRecords(){
+  return curUserRole === 'manager' || curUserRole === 'data_entry';
+}
+
+function denyClientEdit(){
+  alert('ليس لديك صلاحية لتعديل بيانات العملاء أو الأوردرات.\nYou do not have permission to change client records or orders.');
+}
+
 function showOrderForm(){
+  if(!canManageClientRecords()){ denyClientEdit(); return; }
   resetOrderForm();
   var card = document.getElementById('co-form-card');
   if(card){
@@ -2953,6 +3004,7 @@ function setOrderFilter(f, el){
 }
 
 function renderClientOrders(){
+  var canEditOrders = (curUserRole === 'manager' || curUserRole === 'data_entry');
   var el = document.getElementById('co-list');
   if(!el) return;
   if(!_ordersClientId){ go('clients'); return; }
@@ -3015,8 +3067,10 @@ function renderClientOrders(){
       +   (orderItems(o).length
             ? '<button onclick="viewOrderItems(\''+o.id+'\')" title="'+(LNG==='ar'?'عرض الأصناف':'View items')+'" style="border:1px solid #D9E2EC;background:#fff;color:#1D4E89;cursor:pointer;font-size:11px;font-weight:700;border-radius:99px;padding:2px 10px;font-family:inherit"><i class="ti ti-list-details"></i> '+orderItems(o).length+' '+(LNG==='ar'?'صنف':'items')+'</button>'
             : '')
-      +   '<button onclick="editClientOrder(\''+o.id+'\')" style="border:none;background:none;color:#1D4E89;cursor:pointer;font-size:12px"><i class="ti ti-pencil"></i></button>'
-      +   '<button onclick="deleteClientOrder(\''+o.id+'\')" style="border:none;background:none;color:#C0392B;cursor:pointer;font-size:12px"><i class="ti ti-trash"></i></button>'
+      +   (canEditOrders
+            ? '<button onclick="editClientOrder(\''+o.id+'\')" style="border:none;background:none;color:#1D4E89;cursor:pointer;font-size:12px"><i class="ti ti-pencil"></i></button>'
+            + '<button onclick="deleteClientOrder(\''+o.id+'\')" style="border:none;background:none;color:#C0392B;cursor:pointer;font-size:12px"><i class="ti ti-trash"></i></button>'
+            : '')
       + '</div>'
       + '<div style="font-size:11px;color:#718096;margin-top:5px;display:flex;flex-wrap:wrap;gap:12px">'
       +   (o.handover_date ? '<span><i class="ti ti-truck-delivery"></i> '+(LNG==='ar'?'التسليم':'Handover')+': '+o.handover_date+'</span>' : '')
@@ -3099,7 +3153,95 @@ function onVisitClientChange(keepOrder){
   onVisitOrderChange();
 }
 
+
+// ── Items needing service on this visit ──────────────────────────────────
+var visitSelectedItems = {};   // key -> item
+
+function itemKey(it, i){
+  return (it.code || '') + '|' + (it.name || '') + '|' + (it.sn || i);
+}
+
+function currentOrderItems(){
+  var osel = document.getElementById('inp-order');
+  if(!osel || !osel.value) return [];
+  var o = clientOrders.find(function(x){ return String(x.id) === String(osel.value); });
+  return o ? orderItems(o) : [];
+}
+
+function renderVisitItems(){
+  var field = document.getElementById('nv-items-field');
+  var list  = document.getElementById('nv-items-list');
+  if(!field || !list) return;
+
+  var items = currentOrderItems();
+  if(!items.length){ field.style.display = 'none'; list.innerHTML = ''; return; }
+  field.style.display = '';
+
+  var box = document.getElementById('nv-items-search');
+  var q = box ? box.value.trim().toLowerCase() : '';
+  var shown = !q ? items : items.filter(function(it){
+    return (String(it.code||'') + ' ' + String(it.name||'')).toLowerCase().indexOf(q) !== -1;
+  });
+
+  list.innerHTML = '';
+  if(!shown.length){
+    list.innerHTML = '<div style="padding:14px;text-align:center;color:#A0AEC0;font-size:12px">'
+      + (LNG==='ar' ? 'لا توجد نتائج' : 'No matching items') + '</div>';
+  }
+
+  shown.forEach(function(it){
+    var idx = items.indexOf(it);
+    var key = itemKey(it, idx);
+    var row = document.createElement('label');
+    var on = !!visitSelectedItems[key];
+    row.style.cssText = 'display:flex;align-items:center;gap:9px;padding:7px 9px;border-radius:6px;cursor:pointer;'
+      + 'width:100%;box-sizing:border-box;border:1px solid '
+      + (on ? '#1D4E89' : '#F0F4F8') + ';background:' + (on ? '#E6F1FB' : '#fff');
+    var cb = document.createElement('input');
+    cb.type = 'checkbox';
+    cb.checked = on;
+    cb.style.cssText = 'flex:0 0 auto;margin:0;width:16px;height:16px';
+    cb.onchange = function(){
+      if(cb.checked) visitSelectedItems[key] = { sn:it.sn, code:it.code, name:it.name, qty:it.qty };
+      else delete visitSelectedItems[key];
+      // Restyle just this row — re-rendering the list would tear out the very
+      // element being clicked and swallow rapid successive ticks.
+      row.style.borderColor = cb.checked ? '#1D4E89' : '#F0F4F8';
+      row.style.background  = cb.checked ? '#E6F1FB' : '#fff';
+      updateVisitItemsSummary();
+    };
+    var txt = document.createElement('div');
+    txt.style.cssText = 'flex:1;min-width:0';
+    txt.innerHTML = '<div style="font-size:12px;font-weight:600;color:#1a202c;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + String(it.name||'').replace(/</g,'&lt;') + '</div>'
+      + (it.code ? '<div style="font-size:10px;color:#718096" dir="ltr">' + String(it.code).replace(/</g,'&lt;') + '</div>' : '');
+    row.appendChild(cb); row.appendChild(txt);
+    list.appendChild(row);
+  });
+
+  updateVisitItemsSummary();
+}
+
+function updateVisitItemsSummary(){
+  var sum = document.getElementById('nv-items-summary');
+  if(!sum) return;
+  var total = currentOrderItems().length;
+  var n = Object.keys(visitSelectedItems).length;
+  sum.textContent = n
+    ? (LNG==='ar' ? (n + ' صنف مُختار من ' + total) : (n + ' of ' + total + ' items selected'))
+    : (LNG==='ar' ? ('الأوردر يحتوي ' + total + ' صنف') : (total + ' items in this order'));
+  sum.style.color = n ? '#1D4E89' : '#718096';
+}
+
+function clearVisitItems(){
+  visitSelectedItems = {};
+  var box = document.getElementById('nv-items-search'); if(box) box.value = '';
+  renderVisitItems();
+}
+
 function onVisitOrderChange(){
+  visitSelectedItems = {};
+  var isearch = document.getElementById('nv-items-search'); if(isearch) isearch.value = '';
+  renderVisitItems();
   var osel = document.getElementById('inp-order');
   var info = document.getElementById('nv-coverage');
   if(!osel || !info) return;
@@ -3228,7 +3370,8 @@ function renderMaintRequests(){
     return norm(r.requested_by) === norm(curUser);
   };
   var visible = maintRequests.filter(function(r){
-    return isManager || curUserRole !== 'salesman' || mine(r);
+    var ownOnly = (curUserRole === 'salesman' || curUserRole === 'data_entry');
+    return isManager || !ownOnly || mine(r);
   });
   var list = visible.filter(function(r){
     if(maintFilter === 'all') return true;
@@ -3238,7 +3381,7 @@ function renderMaintRequests(){
   // A quick status summary so the salesperson can see where everything stands
   var sumEl = document.getElementById('mr-summary');
   if(sumEl){
-    if(curUserRole === 'salesman' && visible.length){
+    if((curUserRole === 'salesman' || curUserRole === 'data_entry') && visible.length){
       var counts = {};
       visible.forEach(function(r){ var k=r.status||'new'; counts[k]=(counts[k]||0)+1; });
       sumEl.style.display = 'flex';
@@ -3391,7 +3534,7 @@ function openMaintDetails(id){
   var actions = '<button onclick="closeMod(\'maintDetailsModal\')" class="btn btn-o" style="flex:1">Close</button>'
     + '<button onclick="printMaintRequest('+r.id+')" class="btn btn-o" style="flex:1" title="Print / طباعة"><i class="ti ti-printer"></i> Print</button>';
   // Dispatching a job is a manager action — sales staff only track status.
-  if(curUserRole !== 'salesman'){
+  if(curUserRole !== 'salesman' && curUserRole !== 'data_entry'){
     actions += '<button onclick="whatsappMaintRequest('+r.id+')" class="btn btn-o" style="flex:1;color:#128C7E;border-color:#A7E1D5" title="Send to the customer contact / إرسال للعميل"><i class="ti ti-brand-whatsapp"></i> Customer</button>'
             +  '<button onclick="openTechWhatsApp('+r.id+')" class="btn btn-o" style="flex:1;color:#128C7E;border-color:#A7E1D5" title="Send to a technician / إرسال للفني"><i class="ti ti-brand-whatsapp"></i> Technician</button>';
   }
@@ -3691,30 +3834,63 @@ async function reopenMaintRequest(id){
 function applyRolePermissions(){
   var salesOnly = (curUserRole === 'salesman');
   // Sales staff track their requests across every stage, so default to All.
-  if(salesOnly && maintFilter === 'new'){
+  if((salesOnly || curUserRole === 'data_entry') && maintFilter === 'new'){
     maintFilter = 'all';
     var tabs = document.querySelectorAll('#mr-filters .mrf');
     tabs.forEach(function(b){ b.classList.remove('mrf-active'); });
     if(tabs.length) tabs[tabs.length-1].classList.add('mrf-active');
   }
+  // Data entry staff only maintain the client register.
+  var dataEntry = (curUserRole === 'data_entry');
+
   document.querySelectorAll('.nav-item').forEach(function(n){
     if(!n.id) return;
-    var allowed = (n.id === 'nav-maint-requests');
-    n.style.display = (salesOnly && !allowed) ? 'none' : '';
+    var hide = false;
+    if(salesOnly)  hide = (n.id !== 'nav-maint-requests');
+    if(dataEntry)  hide = ['nav-clients','nav-visits','nav-maint-requests'].indexOf(n.id) === -1;
+    n.style.display = hide ? 'none' : '';
   });
+  var narrow = salesOnly || dataEntry;
   ['sb-main','sb-mgmt','sb-rep'].forEach(function(id){
     var e = document.getElementById(id);
-    if(e) e.style.display = salesOnly ? 'none' : '';
+    if(e) e.style.display = narrow ? 'none' : '';
   });
   var acc = document.getElementById('sb-acc');
-  if(acc) acc.style.display = salesOnly ? 'none' : '';
+  if(acc) acc.style.display = narrow ? 'none' : '';
+
+  // Only the manager and data entry may add or edit clients.
+  // Only the manager and data entry maintain the client register — that
+  // covers clients AND their orders/projects.
+  var canAddClients = (curUserRole === 'manager' || dataEntry);
+  var newOrderBtn = document.getElementById('co-new-btn');
+  if(newOrderBtn) newOrderBtn.style.display = canAddClients ? '' : 'none';
+  if(!canAddClients){ try{ hideOrderForm(); }catch(e){} }
+  if(typeof renderClientOrders === 'function' && document.getElementById('co-list') && _ordersClientId){
+    try{ renderClientOrders(); }catch(e){}
+  }
+  var addClientBtn = document.querySelector('#pg-clients .ph button');
+  if(addClientBtn) addClientBtn.style.display = canAddClients ? '' : 'none';
+
+  // Visits are read-only for data entry — they may look and print, not create.
+  var newVisitBtn = document.querySelector('#pg-visits .ph button');
+  if(newVisitBtn) newVisitBtn.style.display = dataEntry ? 'none' : '';
+  var vmEdit = document.getElementById('vm-edit-btn');
+  if(vmEdit) vmEdit.style.display = dataEntry ? 'none' : '';
+  if(typeof renderVisits === 'function' && document.getElementById('visBody')){
+    try{ renderVisits(); }catch(e){}
+  }
+  // Re-render so the per-card buttons match this role
+  if(typeof renderClientGrid === 'function' && document.getElementById('clientGrid')) renderClientGrid();
   // Managers don't need the submission form cluttering their review screen
   var ttCard = document.getElementById('tasks-mgmt-card');
   if(ttCard) ttCard.style.display = (curUserRole === 'manager') ? '' : 'none';
   var formCard = document.getElementById('mr-form-card');
   if(formCard) formCard.style.display = (curUserRole === 'manager') ? 'none' : '';
   var title = document.getElementById('mr-list-title');
-  if(title) title.textContent = (curUserRole === 'salesman') ? 'My Requests' : 'Requests';
+  var ownList = (curUserRole === 'salesman' || curUserRole === 'data_entry');
+  if(title) title.textContent = ownList
+    ? (LNG==='ar' ? 'طلباتي' : 'My Requests')
+    : (LNG==='ar' ? 'الطلبات' : 'Requests');
 }
 
 // ══════════════════════════════════════
@@ -5511,6 +5687,7 @@ function updateClientStats(){
 // Delete a client together with all of its orders. Visits are deliberately
 // left alone — they store the client's NAME and remain valid history.
 async function deleteClient(id){
+  if(curUserRole !== 'manager'){ denyClientEdit(); return; }
   var cl = clientsData.find(function(c){ return String(c.id) === String(id); });
   if(!cl) return;
 
@@ -5580,6 +5757,8 @@ function agreementLabel(k){
 }
 
 function renderClientGrid(){
+  var isManagerRole   = (curUserRole === 'manager');
+  var canManageClients = isManagerRole || (curUserRole === 'data_entry');
   var g=document.getElementById('clientGrid');if(!g)return;g.innerHTML='';
   var fl=clientsData.filter(function(c){
     return(!cSrch|| c.name.toLowerCase().includes(cSrch.toLowerCase())
@@ -5617,9 +5796,10 @@ function renderClientGrid(){
       +'<div style="display:flex;gap:6px;padding:10px 14px;border-top:1px solid #D9E2EC">'
       +'<button onclick="viewClientReports('+c.id+')" style="flex:1;padding:6px;border-radius:6px;font-size:11px;font-weight:600;cursor:pointer;border:1px solid #D9E2EC;background:#F8FAFC;color:#718096;font-family:Tajawal,sans-serif">Reports</button>'
       +'<button onclick="viewClientHistory('+c.id+')" style="flex:1;padding:6px;border-radius:6px;font-size:11px;font-weight:600;cursor:pointer;border:1px solid #D9E2EC;background:#F8FAFC;color:#718096;font-family:Tajawal,sans-serif">History</button>'
-      +'<button onclick="editClient('+c.id+')" style="flex:1;padding:6px;border-radius:6px;font-size:11px;font-weight:600;cursor:pointer;border:1px solid #D9E2EC;background:#F8FAFC;color:#718096;font-family:Tajawal,sans-serif">Edit</button>'
-      +'<button onclick="openClientOrders('+c.id+')" title="الأوردرات والمشاريع / Orders & projects" style="flex:1.2;padding:6px;border-radius:6px;font-size:11px;font-weight:700;cursor:pointer;border:none;background:#1D4E89;color:#fff;font-family:Tajawal,sans-serif"><i class="ti ti-package"></i> Orders ('+ordersOfClient(c.id).length+')</button>'
-      +'<button onclick="deleteClient('+c.id+')" title="حذف العميل وكل أوردراته / Delete client and all its orders" style="padding:6px 9px;border-radius:6px;font-size:11px;cursor:pointer;border:1px solid #F5C6C6;background:#FCEBEB;color:#C0392B;font-family:Tajawal,sans-serif"><i class="ti ti-trash"></i></button></div>';
+      +(canManageClients ? '<button onclick="editClient('+c.id+')" style="flex:1;padding:6px;border-radius:6px;font-size:11px;font-weight:600;cursor:pointer;border:1px solid #D9E2EC;background:#F8FAFC;color:#718096;font-family:Tajawal,sans-serif">'+(LNG==='ar'?'تعديل':'Edit')+'</button>' : '')
+      +'<button onclick="openClientOrders('+c.id+')" title="'+(LNG==='ar'?'الأوردرات والمشاريع':'Orders & projects')+'" style="flex:1.2;padding:6px;border-radius:6px;font-size:11px;font-weight:700;cursor:pointer;border:none;background:#1D4E89;color:#fff;font-family:Tajawal,sans-serif"><i class="ti ti-package"></i> '+(LNG==='ar'?'الأوردرات':'Orders')+' ('+ordersOfClient(c.id).length+')</button>'
+      +(isManagerRole ? '<button onclick="deleteClient('+c.id+')" title="'+(LNG==='ar'?'حذف العميل وكل أوردراته':'Delete client and all its orders')+'" style="padding:6px 9px;border-radius:6px;font-size:11px;cursor:pointer;border:1px solid #F5C6C6;background:#FCEBEB;color:#C0392B;font-family:Tajawal,sans-serif"><i class="ti ti-trash"></i></button>' : '')
+      +'</div>';
     g.appendChild(card);
   });
   updateClientStats();
@@ -5650,6 +5830,7 @@ function viewClientHistory(id){
 }
 
 function editClient(id){
+  if(!canManageClientRecords()){ denyClientEdit(); return; }
   var cl = clientsData.find(function(x){ return x.id==id; });
   if(!cl) return;
   // Load client data into modal
@@ -5697,6 +5878,7 @@ function renderTopClients(){
   });
 }
 async function saveClient(){
+  if(!canManageClientRecords()){ denyClientEdit(); return; }
   var nameEl = document.getElementById('cl-name');
   var name = nameEl.value.trim();
   if(!name){alert('Enter client name');return;}
@@ -6177,6 +6359,7 @@ function resetNewVisitForm(){
   // Clear parts tags
   selParts=[];renderTags();
   // Reset checkboxes
+  if(typeof clearVisitItems === 'function') clearVisitItems();
   if(typeof selectTaskCat === 'function') selectTaskCat('kitchen');
   document.querySelectorAll('#tasklist input[type=checkbox]').forEach(function(cb){cb.checked=false;});
   // Stop mic if running
@@ -6318,6 +6501,7 @@ function collectVisitData() {
     map_url:       (typeof readMapField === 'function') ? readMapField('inp-map') : '',
     task_category: (typeof currentTaskCat !== 'undefined') ? currentTaskCat : '',
     order_id:      (document.getElementById('inp-order')||{}).value || null,
+    items:         JSON.stringify(Object.keys(visitSelectedItems).map(function(k){ return visitSelectedItems[k]; })),
     equipment:     document.getElementById('inp-equipment').value,
     serial_number: document.getElementById('inp-serial').value,
     model:         document.getElementById('inp-model').value,
@@ -6988,6 +7172,10 @@ async function showPublicReport(token){
           <div style="font-size:13px" id="vm-fault">—</div>
         </div>
       </div>
+      <div id="vm-items-box" style="background:#F8FAFC;border:1px solid #D9E2EC;border-radius:8px;padding:10px;margin-bottom:10px;display:none">
+        <div style="font-size:11px;color:#718096;margin-bottom:5px" data-en="Items Serviced" data-ar="الأصناف المشمولة">Items Serviced</div>
+        <div id="vm-items"></div>
+      </div>
       <div style="background:#F8FAFC;border:1px solid #D9E2EC;border-radius:8px;padding:10px;margin-bottom:10px">
         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:5px">
           <div style="font-size:11px;color:#718096">Technician Notes</div>
@@ -7022,8 +7210,8 @@ async function showPublicReport(token){
         <button class="btn btn-o" onclick="printVisit(currentViewId, true, _vmActiveNotesText, _vmActiveLang)" style="flex:1">
           <i class="ti ti-printer"></i> Print Report
         </button>
-        <button class="btn btn-p" onclick="editVisit(currentViewId)" style="flex:1">
-          <i class="ti ti-edit"></i> Edit Visit
+        <button class="btn btn-p" id="vm-edit-btn" onclick="editVisit(currentViewId)" style="flex:1">
+          <i class="ti ti-edit"></i> <span data-en="Edit Visit" data-ar="تعديل الزيارة">Edit Visit</span>
         </button>
         <button class="btn btn-o" onclick="closeMod('visitModal')" style="flex:1">
           <i class="ti ti-x"></i> Close
