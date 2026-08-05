@@ -493,6 +493,7 @@ html,body{height:100%;overflow:auto;font-family:Tajawal,sans-serif;font-size:14p
       <div class="ch"><div class="ct"><i class="ti ti-clipboard-list"></i><span id="t-summary">Visit Summary</span></div></div>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;padding:14px">
         <div style="background:#F8FAFC;border:1px solid #D9E2EC;border-radius:8px;padding:10px 14px"><div style="font-size:11px;color:#718096;margin-bottom:3px" id="t-sum-client">Client</div><div style="font-size:14px;font-weight:600" id="sum-client">—</div></div>
+        <div style="background:#F8FAFC;border:1px solid #D9E2EC;border-radius:8px;padding:10px 14px"><div style="font-size:11px;color:#718096;margin-bottom:3px" data-en="Order / Project" data-ar="الأوردر / المشروع">Order / Project</div><div style="font-size:14px;font-weight:600" id="sum-order">—</div><div style="font-size:11px;color:#718096;margin-top:3px" id="sum-order-items"></div></div>
         <div style="background:#F8FAFC;border:1px solid #D9E2EC;border-radius:8px;padding:10px 14px"><div style="font-size:11px;color:#718096;margin-bottom:3px" id="t-sum-tasks">Tasks Done</div><div style="font-size:15px;font-weight:700" id="sum-tasks">0 / 0</div></div>
         <div style="background:#F8FAFC;border:1px solid #D9E2EC;border-radius:8px;padding:10px 14px"><div style="font-size:11px;color:#718096;margin-bottom:3px" id="t-sum-dur">Duration</div><div style="font-size:15px;font-weight:700" id="sum-dur">—</div><div style="font-size:11px;color:#718096;margin-top:3px" id="sum-time">—</div></div>
         <div style="background:#F8FAFC;border:1px solid #D9E2EC;border-radius:8px;padding:10px 14px"><div style="font-size:11px;color:#718096;margin-bottom:3px" id="t-sum-parts">Missing Parts</div><div style="font-size:15px;font-weight:700;color:#C0392B" id="sum-parts">0</div><div id="sum-parts-list" style="margin-top:6px;display:flex;flex-wrap:wrap;gap:4px"></div></div>
@@ -1542,6 +1543,7 @@ function go(pg){
   if(pg==='reports') runReport();
   if(pg==='visits') renderVisits('all','');
   if(pg==='archive') loadArchive();
+  if(pg==='signature'){ try{ fillSummaryClient(); fillSummaryOrder(); }catch(e){} }
   if(pg==='client-orders'){ renderClientOrders(); }
   if(pg==='maint-requests'){ fillMaintClientList(); loadMaintRequests().then(renderMaintRequests); }
   if(pg==='settings'){renderTaskEditor();renderUsersList();try{checkDBStatus();}catch(e){}}
@@ -3112,6 +3114,37 @@ function clearMaintForm(){
 
 
 // ── New Visit: client + order pickers, coverage drives the visit type ─────
+
+// Client + order names for the visit summary. The client field became a
+// <select>, so read its value rather than assuming a text input.
+function fillSummaryClient(){
+  var el = document.getElementById('sum-client');
+  if(!el) return;
+  var sel = document.getElementById('inp-client');
+  var name = sel ? sel.value : '';
+  if(!name){ el.textContent = '—'; return; }
+  var cl = (clientsData||[]).find(function(c){ return c.name === name; });
+  el.textContent = (cl && cl.nickname) ? (cl.nickname + ' — ' + cl.name) : name;
+}
+
+// Order name (and how many of its items this visit covers) for the summary.
+function fillSummaryOrder(){
+  var el = document.getElementById('sum-order');
+  var sub = document.getElementById('sum-order-items');
+  if(!el) return;
+  var osel = document.getElementById('inp-order');
+  var o = (osel && osel.value)
+    ? clientOrders.find(function(x){ return String(x.id) === String(osel.value); })
+    : null;
+  el.textContent = o ? (o.name || '—') : '—';
+  if(sub){
+    var n = Object.keys(visitSelectedItems || {}).length;
+    sub.textContent = n
+      ? (LNG==='ar' ? (n + ' صنف مشمول') : (n + ' item(s) covered'))
+      : '';
+  }
+}
+
 function fillVisitClientSelect(){
   var sel = document.getElementById('inp-client');
   if(!sel) return;
@@ -6331,6 +6364,8 @@ function updateSignatureSummary(){
 
   var sc = document.getElementById('sum-client');
   if(sc) sc.textContent = s.client || '—';
+  if(!s.client) fillSummaryClient();
+  fillSummaryOrder();
 
   var stEl = document.getElementById('sum-tasks');
   if(stEl) stEl.textContent = (s.tasksDone||0) + ' / ' + (s.tasksTotal||0);
@@ -6457,7 +6492,8 @@ async function saveAndSign() {
 
   // Set values in summary BEFORE page switch
   var _nowTime = new Date().toLocaleTimeString('en-GB', {hour:'2-digit', minute:'2-digit'});
-  var _sc=document.getElementById('sum-client'); if(_sc) _sc.textContent=(_client&&_client.value)||'—';
+  try{ fillSummaryClient(); }catch(e){}
+  try{ fillSummaryOrder(); }catch(e){}
   var _stEl=document.getElementById('sum-time'); if(_stEl) _stEl.textContent=_nowTime;
   var _st=document.getElementById('sum-tasks');  if(_st) _st.textContent=_doneTasks.length+' / '+_allTasks.length;
   var _sd=document.getElementById('sum-dur');    if(_sd) _sd.textContent=_dur;
