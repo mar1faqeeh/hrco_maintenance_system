@@ -337,7 +337,7 @@ html,body{height:100%;overflow:auto;font-family:Tajawal,sans-serif;font-size:14p
         </div>
       </div>
       <div class="field">
-        <label id="t-lbl-order">Order / Project — الأوردر أو المشروع</label>
+        <label id="t-lbl-order" data-en="Order / Project" data-ar="الأوردر أو المشروع">Order / Project</label>
         <select id="inp-order" onchange="onVisitOrderChange()"></select>
         <div id="nv-coverage" style="font-size:11px;font-weight:700;margin-top:5px"></div>
       </div>
@@ -692,19 +692,19 @@ html,body{height:100%;overflow:auto;font-family:Tajawal,sans-serif;font-size:14p
 
   <!-- Request form -->
   <div class="card" id="mr-form-card" style="margin-bottom:16px">
-    <div class="ch"><div class="ct"><i class="ti ti-file-plus" style="color:#1D4E89"></i> New Maintenance Request / طلب صيانة جديد</div></div>
+    <div class="ch"><div class="ct"><i class="ti ti-file-plus" style="color:#1D4E89"></i> <span data-en="New Maintenance Request" data-ar="طلب صيانة جديد">New Maintenance Request</span></div></div>
     <div style="padding:16px">
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
 
         <div class="field" style="margin:0">
-          <label>Client Name / اسم العميل *</label>
+          <label data-en="Client Name *" data-ar="اسم العميل *">Client Name *</label>
           <input type="text" id="mr-client" list="mr-client-list" placeholder="e.g. Hilton Hotel">
           <datalist id="mr-client-list"></datalist>
         </div>
 
         <div class="field" style="margin:0">
-          <label>City / المدينة</label>
-          <input type="text" id="mr-city" list="mr-city-list" placeholder="e.g. Riyadh / الرياض">
+          <label data-en="City" data-ar="المدينة">City</label>
+          <input type="text" id="mr-city" list="mr-city-list" placeholder="e.g. Riyadh" data-ph-en="e.g. Riyadh" data-ph-ar="مثال: الرياض">
           <datalist id="mr-city-list">
             <option value="Riyadh / الرياض"><option value="Jeddah / جدة"><option value="Makkah / مكة المكرمة">
             <option value="Madinah / المدينة المنورة"><option value="Dammam / الدمام"><option value="Khobar / الخبر">
@@ -717,22 +717,22 @@ html,body{height:100%;overflow:auto;font-family:Tajawal,sans-serif;font-size:14p
         </div>
 
         <div class="field" style="margin:0">
-          <label>Branch / Location — الفرع / الموقع</label>
+          <label data-en="Branch / Location" data-ar="الفرع / الموقع">Branch / Location</label>
           <input type="text" id="mr-location" placeholder="e.g. Main kitchen, 2nd floor">
         </div>
 
         <div class="field" style="margin:0">
-          <label>Contact Person / الشخص المسؤول</label>
+          <label data-en="Contact Person" data-ar="الشخص المسؤول">Contact Person</label>
           <input type="text" id="mr-contact" placeholder="e.g. Chef Ahmed">
         </div>
 
         <div class="field" style="margin:0">
-          <label>Contact Phone / رقم التواصل</label>
+          <label data-en="Contact Phone" data-ar="رقم التواصل">Contact Phone</label>
           <input type="tel" id="mr-phone" placeholder="05xxxxxxxx" dir="ltr">
         </div>
 
         <div class="field" style="margin:0">
-          <label>Visit Type / نوع الزيارة *</label>
+          <label data-en="Visit Type *" data-ar="نوع الزيارة *">Visit Type *</label>
           <select id="mr-type">
             <option value="paid">Paid / مدفوعة</option>
             <option value="warranty">Under Warranty / تحت الضمان</option>
@@ -741,7 +741,7 @@ html,body{height:100%;overflow:auto;font-family:Tajawal,sans-serif;font-size:14p
         </div>
 
         <div class="field" style="margin:0">
-          <label>Priority / الأولوية</label>
+          <label data-en="Priority" data-ar="الأولوية">Priority</label>
           <select id="mr-priority">
             <option value="normal">Normal / عادية</option>
             <option value="urgent">Urgent / عاجلة</option>
@@ -750,42 +750,42 @@ html,body{height:100%;overflow:auto;font-family:Tajawal,sans-serif;font-size:14p
         </div>
 
         <div class="field" style="margin:0">
-          <label>Equipment / المعدة</label>
+          <label data-en="Equipment" data-ar="المعدة">Equipment</label>
           <input type="text" id="mr-equipment" placeholder="e.g. Combi Oven, Ice Maker">
         </div>
 
         <div class="field" style="margin:0">
-          <label>Brand &amp; Model / الماركة والموديل</label>
+          <label data-en="Brand &amp; Model" data-ar="الماركة والموديل">Brand &amp; Model</label>
           <input type="text" id="mr-model" placeholder="e.g. Rational SCC 61">
         </div>
 
         <div class="field" style="margin:0">
-          <label>Serial No. / الرقم التسلسلي</label>
+          <label data-en="Serial No." data-ar="الرقم التسلسلي">Serial No.</label>
           <input type="text" id="mr-serial" placeholder="From the rating plate" dir="ltr">
         </div>
 
         <div class="field" style="margin:0">
-          <label>Preferred Date / التاريخ المفضل</label>
+          <label data-en="Preferred Date" data-ar="التاريخ المفضل">Preferred Date</label>
           <input type="date" id="mr-date">
         </div>
 
         <div class="field" style="margin:0;grid-column:1/-1">
-          <label>Problem Description / وصف العطل *</label>
-          <textarea id="mr-problem" rows="3" placeholder="What is the customer reporting? / ما الذي يشتكي منه العميل؟" style="width:100%;padding:9px 12px;border:1.5px solid #D9E2EC;border-radius:8px;font-size:13px;font-family:inherit;outline:none;resize:vertical"></textarea>
+          <label data-en="Problem Description *" data-ar="وصف العطل *">Problem Description *</label>
+          <textarea id="mr-problem" rows="3" placeholder="What is the customer reporting?" data-ph-en="What is the customer reporting?" data-ph-ar="ما الذي يشتكي منه العميل؟" style="width:100%;padding:9px 12px;border:1.5px solid #D9E2EC;border-radius:8px;font-size:13px;font-family:inherit;outline:none;resize:vertical"></textarea>
         </div>
 
         <div class="field" style="margin:0;grid-column:1/-1">
-          <label>Location on Map / الموقع على الخريطة</label>
-          <div style="font-size:11px;color:#718096;margin-bottom:6px">الصق رابط الموقع الذي أرسله العميل على واتساب أو من خرائط جوجل / Paste the location link the customer sent on WhatsApp, or from Google Maps.</div>
+          <label data-en="Location on Map" data-ar="الموقع على الخريطة">Location on Map</label>
+          <div style="font-size:11px;color:#718096;margin-bottom:6px" data-en="Paste the location link the customer sent on WhatsApp, or from Google Maps." data-ar="الصق رابط الموقع الذي أرسله العميل على واتساب أو من خرائط جوجل">Paste the location link the customer sent on WhatsApp, or from Google Maps.</div>
           <div style="display:flex;gap:6px;flex-wrap:wrap">
-            <input type="text" id="mr-map" dir="ltr" oninput="onMapLinkInput('mr-map','mr-map-status')" placeholder="https://maps.app.goo.gl/... أو 24.7136, 46.6753" style="flex:1;min-width:220px;padding:9px 12px;border:1.5px solid #D9E2EC;border-radius:8px;font-size:13px;font-family:inherit;outline:none">
+            <input type="text" id="mr-map" dir="ltr" oninput="onMapLinkInput('mr-map','mr-map-status')" placeholder="https://maps.app.goo.gl/... or 24.7136, 46.6753" data-ph-en="https://maps.app.goo.gl/... or 24.7136, 46.6753" data-ph-ar="https://maps.app.goo.gl/... أو 24.7136, 46.6753" style="flex:1;min-width:220px;padding:9px 12px;border:1.5px solid #D9E2EC;border-radius:8px;font-size:13px;font-family:inherit;outline:none">
             <button type="button" id="mr-map-btn" onclick="captureCurrentLocation('mr-map','mr-map-status','mr-map-btn')" class="btn btn-o" style="white-space:nowrap"><i class="ti ti-current-location"></i> موقعي الحالي</button>
           </div>
           <div id="mr-map-status" style="font-size:11px;margin-top:5px;color:#718096"></div>
         </div>
 
         <div class="field" style="margin:0;grid-column:1/-1">
-          <label>Notes / ملاحظات إضافية</label>
+          <label data-en="Notes" data-ar="ملاحظات إضافية">Notes</label>
           <input type="text" id="mr-notes" placeholder="Access times, gate pass, contact preferences...">
         </div>
 
@@ -824,7 +824,7 @@ html,body{height:100%;overflow:auto;font-family:Tajawal,sans-serif;font-size:14p
     <div class="mb">
       <div class="mg2">
         <div class="field" style="margin-bottom:0"><label>Full Name</label><input type="text" id="m-name" placeholder="Full Name"></div>
-        <div class="field" style="margin-bottom:0"><label>Phone</label><input type="text" id="m-phone" placeholder="05xxxxxxxx"></div>
+        <div class="field" style="margin-bottom:0"><label data-en="Phone" data-ar="الجوال">Phone</label><input type="text" id="m-phone" placeholder="05xxxxxxxx"></div>
         <div class="field" style="margin-bottom:0"><label>Email</label><input type="text" id="m-email" placeholder="email@hrco.com"></div>
         <div class="field" style="margin-bottom:0"><label>Nationality</label><select id="m-nat"><option>Saudi</option><option>Egyptian</option><option>Pakistani</option><option>Filipino</option><option>Indian</option><option>Jordanian</option></select></div>
         <div class="field" style="margin-bottom:0"><label>Specialization</label><select id="m-spec"><option>Refrigeration & AC</option><option>Central Kitchens</option><option>Industrial Electrical</option></select></div>
@@ -864,13 +864,14 @@ html,body{height:100%;overflow:auto;font-family:Tajawal,sans-serif;font-size:14p
     <div class="mh"><div class="mhtitle">Add Client</div><button class="mclose" onclick="closeMod('clientModal')"><i class="ti ti-x"></i></button></div>
     <div class="mb">
       <div class="mg2">
-        <div class="field" style="margin-bottom:0"><label>Official Name — الاسم الرسمي *</label><input type="text" id="cl-name" placeholder="e.g. شركة المأكولات السريعة"></div>
-        <div class="field" style="margin-bottom:0"><label>Known As — اسم الشهرة</label><input type="text" id="cl-nickname" placeholder="e.g. البيك / Al Baik"></div>
-        <div class="field" style="margin-bottom:0"><label>Type</label><select id="cl-type"><option>Hotel</option><option>Restaurant</option><option>Restaurant Chain</option><option>Hospital</option><option>Airport</option></select></div>
-        <div class="field" style="margin-bottom:0"><label>Phone</label><input type="text" id="cl-phone" placeholder="Phone"></div>
-        <div class="field" style="margin-bottom:0"><label>Location</label><input type="text" id="cl-loc" placeholder="City / District"></div>
-        <div class="field" style="margin-bottom:0"><label>Agreement</label><select id="cl-contract"><option value="contract">Maintenance Contract</option><option value="warranty">Warranty</option><option value="paid">Paid</option></select></div>
-        <div class="field" style="margin-bottom:0"><label>Contract Expiry</label><input type="date" id="cl-expiry"></div>
+        <div class="field" style="margin-bottom:0"><label data-en="Official Name *" data-ar="الاسم الرسمي *">Official Name *</label><input type="text" id="cl-name" placeholder=""></div>
+        <div class="field" style="margin-bottom:0"><label data-en="Known As" data-ar="اسم الشهرة">Known As</label><input type="text" id="cl-nickname" placeholder=""></div>
+        <div class="field" style="margin-bottom:0"><label data-en="Type" data-ar="النوع">Type</label><select id="cl-type"><option>Hotel</option><option>Restaurant</option><option>Restaurant Chain</option><option>Hospital</option><option>Airport</option><option>Contractor</option></select></div>
+        <div class="field" style="margin-bottom:0"><label data-en="Phone" data-ar="الجوال">Phone</label><input type="text" id="cl-phone" placeholder="05xxxxxxxx" dir="ltr"></div>
+        <div class="field" style="margin-bottom:0"><label data-en="Email" data-ar="البريد الإلكتروني">Email</label><input type="email" id="cl-email" placeholder="name@company.com" dir="ltr"></div>
+        <div class="field" style="margin-bottom:0"><label data-en="Location" data-ar="الموقع">Location</label><input type="text" id="cl-loc" placeholder="City / District" data-ph-en="City / District" data-ph-ar="المدينة / الحي"></div>
+        <div class="field" style="margin-bottom:0"><label data-en="Agreement" data-ar="الاتفاقية">Agreement</label><select id="cl-contract"><option value="contract">Maintenance Contract</option><option value="warranty">Warranty</option><option value="paid">Paid</option></select></div>
+
       </div>
       <div style="display:flex;gap:8px;margin-top:16px">
         <button class="btn btn-o" onclick="closeMod('clientModal')" style="flex:1">Cancel</button>
@@ -904,10 +905,10 @@ html,body{height:100%;overflow:auto;font-family:Tajawal,sans-serif;font-size:14p
 
     <div class="card" id="tasks-mgmt-card" style="margin-bottom:14px">
       <div class="ch">
-        <div class="ct"><i class="ti ti-checklist" style="color:#1D4E89"></i> Maintenance Checklists / قوائم مهام الصيانة</div>
+        <div class="ct"><i class="ti ti-checklist" style="color:#1D4E89"></i> <span data-en="Maintenance Checklists" data-ar="قوائم مهام الصيانة">Maintenance Checklists</span></div>
       </div>
       <div style="padding:16px">
-        <div style="font-size:11px;color:#718096;margin-bottom:10px">عدّل المهام التي تظهر للفني حسب نوع المعدة / Edit the tasks technicians see for each equipment type.</div>
+        <div style="font-size:11px;color:#718096;margin-bottom:10px" data-en="Edit the tasks technicians see for each equipment type." data-ar="عدّل المهام التي تظهر للفني حسب نوع المعدة">Edit the tasks technicians see for each equipment type.</div>
         <div id="tt-cats" style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px"></div>
         <div id="tt-list" style="display:flex;flex-direction:column;gap:6px;margin-bottom:10px"></div>
         <div style="display:flex;gap:6px;flex-wrap:wrap">
@@ -1106,6 +1107,16 @@ function setLang(l){
   Object.keys(map).forEach(function(id){var el=document.getElementById(id);if(el)el.textContent=t(map[id]);});
   // Task checklists are stored per language — repaint them on a language switch
   var _ar = (LNG === 'ar');
+  // Anything tagged with data-en / data-ar follows the interface language,
+  // so labels never show both languages at once.
+  document.querySelectorAll('[data-en],[data-ar]').forEach(function(el){
+    var v = _ar ? el.getAttribute('data-ar') : el.getAttribute('data-en');
+    if(v) el.textContent = v;
+  });
+  document.querySelectorAll('[data-ph-en],[data-ph-ar]').forEach(function(el){
+    var v = _ar ? el.getAttribute('data-ph-ar') : el.getAttribute('data-ph-en');
+    if(v !== null && v !== undefined) el.placeholder = v;
+  });
   var _set = function(id, ar, en){ var e=document.getElementById(id); if(e) e.textContent = _ar ? ar : en; };
   _set('t-taskhint', 'اختر نوع المعدة لعرض مهامها', 'Pick the equipment type to load its checklist');
   _set('t-lbl-gps', 'الموقع الجغرافي', 'GPS Location');
@@ -1344,7 +1355,7 @@ async function loadAllFromDB(){
       // Always load from DB (even if empty - overrides hardcoded defaults)
       clientsData = r2.data.map(function(cl){
         return {
-          id: cl.id, name: cl.name, nickname: cl.nickname||'', type: cl.type||'',
+          id: cl.id, name: cl.name, nickname: cl.nickname||'', email: cl.email||'', type: cl.type||'',
           loc: cl.location||cl.loc||'', color: cl.color||'#1D4E89',
           bg: cl.bg||'#E6F1FB', init: cl.initials||cl.name.slice(0,2),
           contract: cl.contract==='عقد صيانة'?'contract':cl.contract==='ضمان'?'warranty':cl.contract==='مدفوع'?'paid':'paid',
@@ -5320,7 +5331,8 @@ function renderClientGrid(){
   var g=document.getElementById('clientGrid');if(!g)return;g.innerHTML='';
   var fl=clientsData.filter(function(c){
     return(!cSrch|| c.name.toLowerCase().includes(cSrch.toLowerCase())
-                 || String(c.nickname||'').toLowerCase().includes(cSrch.toLowerCase()))
+                 || String(c.nickname||'').toLowerCase().includes(cSrch.toLowerCase())
+                 || String(c.email||'').toLowerCase().includes(cSrch.toLowerCase()))
       &&(cFil==='all'||(cFil==='contract'&&c.contract==='contract')||(cFil==='warranty'&&c.warranty)||(cFil==='paid'&&c.contract==='paid'));
   });
   fl.forEach(function(c){
@@ -5335,6 +5347,10 @@ function renderClientGrid(){
       +'<div style="flex:1;min-width:0"><div style="font-size:14px;font-weight:700">'+(c.nickname || c.name)+'</div>'
       +(c.nickname ? '<div style="font-size:10px;color:#A0AEC0;margin-top:1px">'+c.name+'</div>' : '')
       +'<div style="font-size:11px;color:#718096;margin-top:2px">'+c.type+' · '+c.loc+'</div>'
+      +((c.phone || c.email) ? '<div style="font-size:10px;color:#A0AEC0;margin-top:2px;display:flex;flex-wrap:wrap;gap:8px">'
+          +(c.phone ? '<span dir="ltr"><i class="ti ti-phone"></i> '+c.phone+'</span>' : '')
+          +(c.email ? '<a href="mailto:'+c.email+'" onclick="event.stopPropagation()" dir="ltr" style="color:#1D4E89;text-decoration:none"><i class="ti ti-mail"></i> '+c.email+'</a>' : '')
+        +'</div>' : '')
       +'<div style="display:flex;gap:5px;margin-top:5px;flex-wrap:wrap"><span style="font-size:10px;padding:2px 7px;border-radius:99px;font-weight:700;display:inline-flex;align-items:center;gap:3px;'+ctag+'"><i class="ti ti-file-invoice" style="font-size:10px"></i>'+c.contract+'</span>'
       +(c.warranty?'<span style="font-size:10px;padding:2px 7px;border-radius:99px;font-weight:700;background:#DBEAFE;color:#1D4ED8">Warranty</span>':'')+'</div></div></div>'
       +'<div style="display:grid;grid-template-columns:repeat(4,1fr);border-bottom:1px solid #D9E2EC">'
@@ -5389,6 +5405,7 @@ function editClient(id){
   var nickEl = document.getElementById('cl-nickname'); if(nickEl) nickEl.value = cl.nickname || '';
   document.getElementById('cl-loc').value = cl.loc || '';
   document.getElementById('cl-phone').value = cl.phone || '';
+  var emEl = document.getElementById('cl-email'); if(emEl) emEl.value = cl.email || '';
   var typeEl = document.getElementById('cl-type');
   if(typeEl && cl.type) typeEl.value = cl.type;
   var contractEl = document.getElementById('cl-contract');
@@ -5442,12 +5459,13 @@ async function saveClient(){
       existing.nickname = (document.getElementById('cl-nickname')||{}).value.trim() || '';
       existing.loc = document.getElementById('cl-loc').value;
       existing.phone = document.getElementById('cl-phone').value;
+      existing.email = (document.getElementById('cl-email')||{}).value.trim() || '';
       existing.type = document.getElementById('cl-type').value;
       existing.contract = contractRawE;
       existing.warranty = contractRawE==='warranty';
       await dbSave('clients', {
         id: existing.id, name: existing.name, nickname: existing.nickname,
-        location: existing.loc, phone: existing.phone,
+        location: existing.loc, phone: existing.phone, email: existing.email,
         type: existing.type, contract: contractMapE[contractRawE]||'بدون عقد',
         warranty: existing.warranty
       });
@@ -5469,8 +5487,8 @@ async function saveClient(){
     type: document.getElementById('cl-type').value,
     location: document.getElementById('cl-loc').value,
     phone: document.getElementById('cl-phone').value,
+    email: (document.getElementById('cl-email')||{}).value.trim() || '',
     contract: contractDB,
-    expiry: document.getElementById('cl-expiry').value || null,
     warranty: contractRaw==='warranty',
     total_visits: 0, completed: 0, pending: 0, needs_parts: 0,
     warranty_visits: 0, paid_visits: 0, contract_visits: 0,
@@ -5486,6 +5504,7 @@ async function saveClient(){
     type: dbData.type,
     loc: dbData.location,
     phone: dbData.phone,
+    email: dbData.email,
     contract: contractRaw,
     warranty: dbData.warranty,
     color: '#1D4E89',
@@ -6774,15 +6793,15 @@ async function showPublicReport(token){
     </div>
     <div style="padding:20px">
       <div style="margin-bottom:14px">
-        <label style="font-size:12px;font-weight:700;color:#4A5568;display:block;margin-bottom:6px">إيميل المستلم / Recipient Email *</label>
+        <label style="font-size:12px;font-weight:700;color:#4A5568;display:block;margin-bottom:6px" data-en="Recipient Email *" data-ar="إيميل المستلم *">Recipient Email *</label>
         <input id="email-to" type="email" placeholder="example@company.com" style="width:100%;padding:10px 12px;border:1.5px solid #D9E2EC;border-radius:8px;font-size:14px;font-family:inherit;outline:none">
       </div>
       <div style="margin-bottom:14px">
-        <label style="font-size:12px;font-weight:700;color:#4A5568;display:block;margin-bottom:6px">اسم المستلم / Recipient Name</label>
+        <label style="font-size:12px;font-weight:700;color:#4A5568;display:block;margin-bottom:6px" data-en="Recipient Name" data-ar="اسم المستلم">Recipient Name</label>
         <input id="email-name" type="text" placeholder="اسم الشخص أو الشركة" style="width:100%;padding:10px 12px;border:1.5px solid #D9E2EC;border-radius:8px;font-size:14px;font-family:inherit;outline:none">
       </div>
       <div style="margin-bottom:14px">
-        <label style="font-size:12px;font-weight:700;color:#4A5568;display:block;margin-bottom:6px">موضوع الإيميل / Subject</label>
+        <label style="font-size:12px;font-weight:700;color:#4A5568;display:block;margin-bottom:6px" data-en="Subject" data-ar="موضوع الإيميل">Subject</label>
         <input id="email-subject" type="text" style="width:100%;padding:10px 12px;border:1.5px solid #D9E2EC;border-radius:8px;font-size:14px;font-family:inherit;outline:none">
       </div>
       <div style="margin-bottom:14px">
@@ -6872,7 +6891,7 @@ async function showPublicReport(token){
     <div style="flex:1"></div>
     <div style="position:relative;min-width:220px">
       <i class="ti ti-search" style="position:absolute;top:50%;transform:translateY(-50%);inset-inline-start:10px;color:#A0AEC0;font-size:14px;pointer-events:none"></i>
-      <input type="text" id="pr-equip-search" oninput="renderEquipGrid()" placeholder="Search equipment / بحث عن معدة..."
+      <input type="text" id="pr-equip-search" oninput="renderEquipGrid()" placeholder="Search equipment..." data-ph-en="Search equipment..." data-ph-ar="بحث عن معدة..."
              style="width:100%;padding:8px 32px;border:1.5px solid #D9E2EC;border-radius:8px;font-size:12px;font-family:inherit;outline:none">
       <button type="button" id="pr-equip-clear" onclick="clearEquipSearch()" title="Clear"
               style="display:none;position:absolute;top:50%;transform:translateY(-50%);inset-inline-end:6px;border:none;background:none;color:#A0AEC0;cursor:pointer;font-size:14px;padding:2px 4px"><i class="ti ti-x"></i></button>
@@ -6997,7 +7016,7 @@ async function showPublicReport(token){
       <div id="pr-request-summary" style="background:#F0F4F8;border-radius:8px;padding:12px;margin-bottom:12px;font-size:13px"></div>
       <div class="field"><label>Technician Name</label><input type="text" id="pr-req-tech" placeholder="Your name"></div>
       <div class="field"><label>Client / Equipment Location</label><input type="text" id="pr-req-client" placeholder="e.g. Ritz Carlton - Cold Room"></div>
-      <div class="field"><label>Notes</label><textarea id="pr-req-notes" rows="3" placeholder="Fault description or additional notes" style="width:100%;padding:8px 12px;border:1.5px solid #D9E2EC;border-radius:8px;font-size:13px;font-family:inherit;outline:none;resize:vertical"></textarea></div>
+      <div class="field"><label data-en="Notes" data-ar="ملاحظات">Notes</label><textarea id="pr-req-notes" rows="3" placeholder="Fault description or additional notes" style="width:100%;padding:8px 12px;border:1.5px solid #D9E2EC;border-radius:8px;font-size:13px;font-family:inherit;outline:none;resize:vertical"></textarea></div>
     </div>
     <div class="mf">
       <button onclick="closeMod('prRequestModal')" class="btn btn-o" style="flex:1">Cancel</button>
@@ -7071,10 +7090,10 @@ async function showPublicReport(token){
       <button class="mclose" onclick="closeMod('techWaModal')"><i class="ti ti-x"></i></button>
     </div>
     <div class="mb">
-      <div style="font-size:11px;color:#718096;margin-bottom:10px">اختر الفني لإرسال الطلب له عبر واتساب / Pick the technician to send this request to.</div>
+      <div style="font-size:11px;color:#718096;margin-bottom:10px" data-en="Pick the technician to send this request to." data-ar="اختر الفني لإرسال الطلب له عبر واتساب">Pick the technician to send this request to.</div>
       <div id="tw-list" style="display:flex;flex-direction:column;gap:6px;max-height:320px;overflow-y:auto"></div>
       <div style="border-top:1px solid #F0F4F8;margin-top:12px;padding-top:12px">
-        <label style="font-size:11px;font-weight:700;color:#718096;display:block;margin-bottom:4px">Or another number / أو رقم آخر</label>
+        <label style="font-size:11px;font-weight:700;color:#718096;display:block;margin-bottom:4px" data-en="Or another number" data-ar="أو رقم آخر">Or another number</label>
         <div style="display:flex;gap:6px">
           <input type="tel" id="tw-manual" placeholder="05xxxxxxxx" dir="ltr" style="flex:1;padding:9px 12px;border:1.5px solid #D9E2EC;border-radius:8px;font-size:13px;font-family:inherit;outline:none">
           <button onclick="sendReqToNumber(document.getElementById('tw-manual').value)" class="btn btn-p" style="padding:9px 16px">Send</button>
@@ -7095,27 +7114,27 @@ async function showPublicReport(token){
     <div class="mb">
 
       <div style="background:#F8FAFC;border:1.5px solid #D9E2EC;border-radius:10px;padding:14px;margin-bottom:14px">
-        <div style="font-size:12px;font-weight:700;color:#0F2D52;margin-bottom:10px"><i class="ti ti-plus"></i> <span id="co-form-title">New Order / Project — أوردر أو مشروع جديد</span></div>
+        <div style="font-size:12px;font-weight:700;color:#0F2D52;margin-bottom:10px"><i class="ti ti-plus"></i> <span id="co-form-title" data-en="New Order / Project" data-ar="أوردر أو مشروع جديد">New Order / Project</span></div>
         <input type="hidden" id="co-edit-id">
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
 
           <div class="field" style="margin:0">
-            <label>Order / Project Name — اسم الأوردر أو المشروع *</label>
+            <label data-en="Order / Project Name *" data-ar="اسم الأوردر أو المشروع *">Order / Project Name *</label>
             <input type="text" id="co-name" placeholder="e.g. Riyadh Park — Central Kitchen">
           </div>
 
           <div class="field" style="margin:0">
-            <label>PO / Reference — رقم الأمر</label>
+            <label data-en="PO / Reference" data-ar="رقم الأمر">PO / Reference</label>
             <input type="text" id="co-po" placeholder="e.g. PO-2026-114" dir="ltr">
           </div>
 
           <div class="field" style="margin:0">
-            <label>Handover Date — تاريخ تسليم المشروع</label>
+            <label data-en="Handover Date" data-ar="تاريخ تسليم المشروع">Handover Date</label>
             <input type="date" id="co-handover" onchange="updateOrderPreview()">
           </div>
 
           <div class="field" style="margin:0">
-            <label>Coverage — التغطية *</label>
+            <label data-en="Coverage *" data-ar="التغطية *">Coverage *</label>
             <select id="co-coverage" onchange="onCoverageTypeChange()">
               <option value="warranty">Warranty — ضمان</option>
               <option value="contract">Maintenance Contract — عقد صيانة</option>
@@ -7124,7 +7143,7 @@ async function showPublicReport(token){
           </div>
 
           <div class="field" style="margin:0" id="co-warranty-fields">
-            <label>Warranty Period — مدة الضمان</label>
+            <label data-en="Warranty Period" data-ar="مدة الضمان">Warranty Period</label>
             <select id="co-warranty-months" onchange="updateOrderPreview()">
               <option value="12">12 months — سنة</option>
               <option value="24">24 months — سنتان</option>
@@ -7134,7 +7153,7 @@ async function showPublicReport(token){
           </div>
 
           <div class="field" style="margin:0;grid-column:1/-1;display:none" id="co-contract-fields">
-            <label>Contract Period — مدة العقد</label>
+            <label data-en="Contract Period" data-ar="مدة العقد">Contract Period</label>
             <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
               <input type="date" id="co-contract-start" onchange="updateOrderPreview()" style="flex:1;min-width:150px">
               <span style="color:#718096">→</span>
@@ -7143,7 +7162,7 @@ async function showPublicReport(token){
           </div>
 
           <div class="field" style="margin:0;grid-column:1/-1">
-            <label>Notes — ملاحظات</label>
+            <label data-en="Notes" data-ar="ملاحظات">Notes</label>
             <input type="text" id="co-notes" placeholder="Scope, equipment covered, special terms…">
           </div>
         </div>
