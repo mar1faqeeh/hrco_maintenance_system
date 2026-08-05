@@ -190,6 +190,7 @@ html,body{height:100%;overflow:auto;font-family:Tajawal,sans-serif;font-size:14p
 @keyframes pulse{0%,100%{opacity:1}50%{opacity:.3}}
 @keyframes spin{to{transform:rotate(360deg)}}
 </style><script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script>
   if(window['pdfjsLib']) window['pdfjsLib'].GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
 </script>
@@ -2644,6 +2645,7 @@ function resetOrderForm(){
   ['co-name','co-handover','co-contract-start','co-contract-end','co-notes','co-po'].forEach(function(id){
     var e = document.getElementById(id); if(e) e.value = '';
   });
+  clearOrderItems();
   var ct = document.getElementById('co-coverage'); if(ct) ct.value = 'warranty';
   var wm = document.getElementById('co-warranty-months'); if(wm) wm.value = '12';
   document.getElementById('co-edit-id').value = '';
@@ -2695,6 +2697,7 @@ function readOrderForm(){
     warranty_months: parseInt(v('co-warranty-months'),10) || 12,
     contract_start: v('co-contract-start') || null,
     contract_end: v('co-contract-end') || null,
+    items: JSON.stringify(coItems || []),
     notes: v('co-notes')
   };
 }
@@ -2738,6 +2741,16 @@ function editClientOrder(id){
   set('co-contract-start', o.contract_start);
   set('co-contract-end', o.contract_end);
   set('co-notes', o.notes);
+  coItems = orderItems(o);
+  var f2 = document.getElementById('co-items-file'); if(f2) f2.value = '';
+  if(coItems.length){
+    coItemsMsg('<i class="ti ti-list-check"></i> ' + (LNG==='ar'
+      ? (coItems.length + ' صنف محفوظ — ارفع ملفاً جديداً لاستبدالها')
+      : (coItems.length + ' saved item(s) — upload a new file to replace them')), '#1D4E89');
+    renderOrderItemsPreview(coItems, 8);
+  } else {
+    coItemsMsg(''); document.getElementById('co-items-preview').innerHTML = '';
+  }
   var lbl = document.getElementById('co-save-label');
   if(lbl){
     lbl.setAttribute('data-en','Save Changes');
@@ -2767,6 +2780,146 @@ async function deleteClientOrder(id){
 
 
 var orderFilter = 'all';
+
+
+// ── Order items from a spreadsheet (optional) ────────────────────────────
+var coItems = [];   // [{sn, code, name, qty}]
+
+function clearOrderItems(){
+  coItems = [];
+  var f = document.getElementById('co-items-file'); if(f) f.value = '';
+  var st = document.getElementById('co-items-status'); if(st){ st.textContent = ''; }
+  var pv = document.getElementById('co-items-preview'); if(pv) pv.innerHTML = '';
+}
+
+function coItemsMsg(html, colour){
+  var st = document.getElementById('co-items-status');
+  if(st){ st.innerHTML = html; st.style.color = colour || '#718096'; }
+}
+
+// Reads an .xlsx/.xls/.csv file. Columns are taken by position
+// (1 serial · 2 code · 3 name · 4 qty); a header row is detected and skipped.
+async function onOrderItemsFile(input){
+  var file = input && input.files && input.files[0];
+  if(!file) return;
+  if(typeof XLSX === 'undefined'){
+    coItemsMsg('<i class="ti ti-alert-triangle"></i> ' + (LNG==='ar'
+      ? 'تعذّر تحميل قارئ الإكسل — تحقّق من الاتصال بالإنترنت'
+      : 'The spreadsheet reader failed to load — check your internet connection'), '#C0392B');
+    return;
+  }
+  if(!/\.(xlsx|xls|csv)$/i.test(file.name)){
+    coItems = [];
+    coItemsMsg('<i class="ti ti-alert-triangle"></i> ' + (LNG==='ar'
+      ? 'الرجاء اختيار ملف Excel أو CSV'
+      : 'Please choose an Excel or CSV file'), '#C0392B');
+    document.getElementById('co-items-preview').innerHTML = '';
+    return;
+  }
+  coItemsMsg('<i class="ti ti-loader"></i> ' + (LNG==='ar' ? 'جاري قراءة الملف…' : 'Reading the file…'));
+
+  try{
+    var buf = await file.arrayBuffer();
+    var wb = XLSX.read(buf, { type:'array' });
+    var sheet = wb.Sheets[wb.SheetNames[0]];
+    var rows = XLSX.utils.sheet_to_json(sheet, { header:1, blankrows:false, defval:'' });
+
+    var items = [];
+    rows.forEach(function(r, idx){
+      if(!r || !r.length) return;
+      var sn   = String(r[0]==null?'':r[0]).trim();
+      var code = String(r[1]==null?'':r[1]).trim();
+      var name = String(r[2]==null?'':r[2]).trim();
+      var qtyR = String(r[3]==null?'':r[3]).trim();
+
+      if(!sn && !code && !name && !qtyR) return;
+      // Skip a header row: first row whose "quantity" isn't a number
+      if(idx === 0 && qtyR !== '' && isNaN(parseFloat(qtyR))) return;
+      if(idx === 0 && /qty|quant|عدد|كمية/i.test(qtyR + ' ' + name + ' ' + code)) return;
+
+      // A usable row needs at least a code or a name — a stray line of prose
+      // in a mis-picked file shouldn't become an "item".
+      if(!code && !name) return;
+      var qty = parseFloat(qtyR.replace(/[^\d.\-]/g,''));
+      items.push({ sn: sn, code: code, name: name, qty: isNaN(qty) ? '' : qty });
+    });
+
+    if(!items.length){
+      coItems = [];
+      coItemsMsg('<i class="ti ti-alert-triangle"></i> ' + (LNG==='ar'
+        ? 'لم يتم العثور على أصناف في الملف'
+        : 'No items found in the file'), '#C4680A');
+      document.getElementById('co-items-preview').innerHTML = '';
+      return;
+    }
+
+    coItems = items;
+    coItemsMsg('<i class="ti ti-circle-check"></i> ' + (LNG==='ar'
+      ? ('تمت قراءة ' + items.length + ' صنف من "' + file.name + '"')
+      : (items.length + ' item(s) read from "' + file.name + '"')), '#2D7D3A');
+    renderOrderItemsPreview(items, 8);
+  }catch(e){
+    console.error('onOrderItemsFile:', e);
+    coItems = [];
+    coItemsMsg('<i class="ti ti-alert-triangle"></i> ' + (LNG==='ar'
+      ? ('تعذّرت قراءة الملف: ' + e.message)
+      : ('Could not read the file: ' + e.message)), '#C0392B');
+  }
+}
+
+function itemsTableHtml(items, limit){
+  var shown = limit ? items.slice(0, limit) : items;
+  var head = (LNG==='ar')
+    ? ['#','الكود / الموديل','اسم الصنف','العدد']
+    : ['Serial','Code / Model','Item Name','Qty'];
+  var html = '<div style="border:1.5px solid #D9E2EC;border-radius:8px;overflow:auto;max-height:320px">'
+    + '<table style="width:100%;border-collapse:collapse;font-size:12px">'
+    + '<thead><tr>' + head.map(function(h){
+        return '<th style="text-align:start;background:#F8FAFC;color:#4A5568;font-weight:700;padding:7px 10px;border-bottom:1px solid #D9E2EC;position:sticky;top:0">'+h+'</th>';
+      }).join('') + '</tr></thead><tbody>';
+  shown.forEach(function(it){
+    var esc = function(v){ return String(v==null?'':v).replace(/</g,'&lt;'); };
+    html += '<tr>'
+      + '<td style="padding:6px 10px;border-bottom:1px solid #F0F4F8;color:#718096">'+esc(it.sn)+'</td>'
+      + '<td style="padding:6px 10px;border-bottom:1px solid #F0F4F8" dir="ltr">'+esc(it.code)+'</td>'
+      + '<td style="padding:6px 10px;border-bottom:1px solid #F0F4F8">'+esc(it.name)+'</td>'
+      + '<td style="padding:6px 10px;border-bottom:1px solid #F0F4F8;font-weight:700">'+esc(it.qty)+'</td>'
+      + '</tr>';
+  });
+  html += '</tbody></table></div>';
+  if(limit && items.length > limit){
+    html += '<div style="font-size:11px;color:#A0AEC0;margin-top:5px">'
+      + (LNG==='ar' ? ('… و ' + (items.length - limit) + ' صنف آخر')
+                    : ('… and ' + (items.length - limit) + ' more'))
+      + '</div>';
+  }
+  return html;
+}
+
+function renderOrderItemsPreview(items, limit){
+  var pv = document.getElementById('co-items-preview');
+  if(pv) pv.innerHTML = itemsTableHtml(items, limit);
+}
+
+// Full item list for a saved order
+function viewOrderItems(id){
+  var o = clientOrders.find(function(x){ return String(x.id) === String(id); });
+  if(!o) return;
+  var items = orderItems(o);
+  if(!items.length) return;
+  document.getElementById('oi-title').textContent = o.name || '';
+  document.getElementById('oi-count').textContent = '(' + items.length + ')';
+  document.getElementById('oi-body').innerHTML = itemsTableHtml(items);
+  openMod('orderItemsModal');
+}
+
+// Items are stored as JSON text; accept an array too.
+function orderItems(o){
+  var v = o && o.items;
+  if(!v) return [];
+  if(Array.isArray(v)) return v;
+  try{ var a = JSON.parse(v); return Array.isArray(a) ? a : []; }catch(e){ return []; }
+}
 
 function showOrderForm(){
   resetOrderForm();
@@ -2818,8 +2971,9 @@ function renderClientOrders(){
     }
     if(!q) return true;
     // Search the name, PO, notes, dates and the coverage wording
+    var its = orderItems(o).map(function(it){ return [it.code, it.name].join(' '); }).join(' ');
     var hay = [o.name, o.po_number, o.notes, o.handover_date, o.contract_start, o.contract_end,
-               covLabel(orderCoverage(o).type), o.coverage_type].join(' ').toLowerCase();
+               covLabel(orderCoverage(o).type), o.coverage_type, its].join(' ').toLowerCase();
     return hay.indexOf(q) !== -1;
   });
 
@@ -2858,6 +3012,9 @@ function renderClientOrders(){
       +   '<span style="background:'+pal.bg+';color:'+pal.fg+';font-size:10px;font-weight:700;padding:2px 9px;border-radius:99px">'+covLabel(c.type)+'</span>'
       +   '<span style="font-size:10px;font-weight:700;padding:2px 9px;border-radius:99px;background:'+(c.active?'#DFF3E3':'#F1F5F9')+';color:'+(c.active?'#1E7A34':'#64748B')+'">'+status+'</span>'
       +   '<div style="flex:1"></div>'
+      +   (orderItems(o).length
+            ? '<button onclick="viewOrderItems(\''+o.id+'\')" title="'+(LNG==='ar'?'عرض الأصناف':'View items')+'" style="border:1px solid #D9E2EC;background:#fff;color:#1D4E89;cursor:pointer;font-size:11px;font-weight:700;border-radius:99px;padding:2px 10px;font-family:inherit"><i class="ti ti-list-details"></i> '+orderItems(o).length+' '+(LNG==='ar'?'صنف':'items')+'</button>'
+            : '')
       +   '<button onclick="editClientOrder(\''+o.id+'\')" style="border:none;background:none;color:#1D4E89;cursor:pointer;font-size:12px"><i class="ti ti-pencil"></i></button>'
       +   '<button onclick="deleteClientOrder(\''+o.id+'\')" style="border:none;background:none;color:#C0392B;cursor:pointer;font-size:12px"><i class="ti ti-trash"></i></button>'
       + '</div>'
@@ -7267,6 +7424,17 @@ async function showPublicReport(token){
         </div>
 
         <div class="field" style="margin:0;grid-column:1/-1">
+          <label data-en="Items List (Excel / CSV) — optional" data-ar="قائمة الأصناف (إكسل / CSV) — اختياري">Items List (Excel / CSV) — optional</label>
+          <div style="font-size:11px;color:#718096;margin-bottom:6px" data-en="Four columns: Serial No. · Code / Model · Item Name · Quantity" data-ar="أربعة أعمدة: الرقم التسلسلي · الكود أو الموديل · اسم الصنف · العدد">Four columns: Serial No. · Code / Model · Item Name · Quantity</div>
+          <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+            <input type="file" id="co-items-file" accept=".xlsx,.xls,.csv" onchange="onOrderItemsFile(this)" style="flex:1;min-width:220px;padding:8px;border:1.5px solid #D9E2EC;border-radius:8px;font-family:inherit;font-size:13px">
+            <button type="button" class="btn btn-o" onclick="clearOrderItems()"><i class="ti ti-x"></i> <span data-en="Remove" data-ar="إزالة">Remove</span></button>
+          </div>
+          <div id="co-items-status" style="font-size:11px;margin-top:6px;color:#718096"></div>
+          <div id="co-items-preview" style="margin-top:8px"></div>
+        </div>
+
+        <div class="field" style="margin:0;grid-column:1/-1">
           <label data-en="Notes" data-ar="ملاحظات">Notes</label>
           <input type="text" id="co-notes" data-ph-en="Scope, equipment covered, special terms…" data-ph-ar="النطاق، المعدات المشمولة، شروط خاصة…" placeholder="Scope, equipment covered, special terms…">
         </div>
@@ -7301,6 +7469,19 @@ async function showPublicReport(token){
     </div>
   </div>
   <div id="co-list" style="display:flex;flex-direction:column;gap:8px;margin-bottom:20px"></div>
+</div>
+
+
+<!-- ORDER ITEMS -->
+<div id="orderItemsModal" class="modal" style="display:none">
+  <div class="mbox" style="max-width:680px">
+    <div class="mh">
+      <div class="mhtitle"><i class="ti ti-list-details"></i> <span data-en="Items" data-ar="الأصناف">Items</span> — <span id="oi-title"></span> <span id="oi-count" style="opacity:.8;font-weight:600"></span></div>
+      <button class="mclose" onclick="closeMod('orderItemsModal')"><i class="ti ti-x"></i></button>
+    </div>
+    <div class="mb" id="oi-body"></div>
+    <div class="mf"><button onclick="closeMod('orderItemsModal')" class="btn btn-o" style="flex:1" data-en="Close" data-ar="إغلاق">Close</button></div>
+  </div>
 </div>
 
 <div id="loginScreen" style="position:fixed;inset:0;background:#0F2D52;z-index:9999;display:flex;align-items:center;justify-content:center;padding:16px;font-family:Tajawal,sans-serif">
