@@ -1480,7 +1480,7 @@ function logout(){
 // ══════════════════════════════════════
 // NAVIGATION
 // ══════════════════════════════════════
-var PAGES=['dashboard','visits','pending','newvisit','signature','technicians','parts','parts-request','parts-orders','maint-requests','clients','reports','archive','settings'];
+var PAGES=['dashboard','visits','pending','newvisit','signature','technicians','parts','parts-request','parts-orders','maint-requests','clients','client-orders','reports','archive','settings'];
 function go(pg){
   try{
   PAGES.forEach(function(p){var el=document.getElementById('pg-'+p);if(el){el.style.cssText='display:none';}});
@@ -1525,6 +1525,7 @@ function go(pg){
   if(pg==='reports') runReport();
   if(pg==='visits') renderVisits('all','');
   if(pg==='archive') loadArchive();
+  if(pg==='client-orders'){ renderClientOrders(); }
   if(pg==='maint-requests'){ fillMaintClientList(); loadMaintRequests().then(renderMaintRequests); }
   if(pg==='settings'){renderTaskEditor();renderUsersList();try{checkDBStatus();}catch(e){}}
 }
@@ -2630,7 +2631,9 @@ function openClientOrders(clientId){
   document.getElementById('co-client-name').textContent = cl.name;
   resetOrderForm();
   renderClientOrders();
-  openMod('clientOrdersModal');
+  var sub = document.getElementById('co-client-sub');
+  if(sub) sub.textContent = [cl.nickname, cl.type, cl.loc].filter(Boolean).join(' · ');
+  go('client-orders');
 }
 
 function resetOrderForm(){
@@ -2749,6 +2752,7 @@ async function deleteClientOrder(id){
 function renderClientOrders(){
   var el = document.getElementById('co-list');
   if(!el) return;
+  if(!_ordersClientId){ go('clients'); return; }
   var list = ordersOfClient(_ordersClientId);
   var cnt = document.getElementById('co-count');
   if(cnt) cnt.textContent = '(' + list.length + ')';
@@ -7116,85 +7120,86 @@ async function showPublicReport(token){
 
 
 <!-- CLIENT ORDERS / PROJECTS -->
-<div id="clientOrdersModal" class="modal" style="display:none">
-  <div class="mbox" style="max-width:720px">
-    <div class="mh">
-      <div class="mhtitle"><i class="ti ti-package"></i> Orders &amp; Projects — <span id="co-client-name"></span></div>
-      <button class="mclose" onclick="closeMod('clientOrdersModal')"><i class="ti ti-x"></i></button>
+
+<!-- ═══ CLIENT ORDERS / PROJECTS (full page) ═══ -->
+<div id="pg-client-orders" style="display:none">
+  <div class="ph">
+    <div>
+      <div class="pt"><span data-en="Orders &amp; Projects" data-ar="الأوردرات والمشاريع">Orders &amp; Projects</span> — <span id="co-client-name"></span></div>
+      <div class="ps" id="co-client-sub"></div>
     </div>
-    <div class="mb">
+    <button class="btn btn-o" onclick="go('clients')"><i class="ti ti-arrow-left"></i> <span data-en="Back to Clients" data-ar="رجوع إلى العملاء">Back to Clients</span></button>
+  </div>
 
-      <div style="background:#F8FAFC;border:1.5px solid #D9E2EC;border-radius:10px;padding:14px;margin-bottom:14px">
-        <div style="font-size:12px;font-weight:700;color:#0F2D52;margin-bottom:10px"><i class="ti ti-plus"></i> <span id="co-form-title" data-en="New Order / Project" data-ar="أوردر أو مشروع جديد">New Order / Project</span></div>
-        <input type="hidden" id="co-edit-id">
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+  <div class="card" style="margin-bottom:16px">
+    <div class="ch"><div class="ct"><i class="ti ti-plus" style="color:#1D4E89"></i> <span id="co-form-title" data-en="New Order / Project" data-ar="أوردر أو مشروع جديد">New Order / Project</span></div></div>
+    <div style="padding:16px">
+      <input type="hidden" id="co-edit-id">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
 
-          <div class="field" style="margin:0">
-            <label data-en="Order / Project Name *" data-ar="اسم الأوردر أو المشروع *">Order / Project Name *</label>
-            <input type="text" id="co-name" placeholder="e.g. Riyadh Park — Central Kitchen">
-          </div>
+        <div class="field" style="margin:0">
+          <label data-en="Order / Project Name *" data-ar="اسم الأوردر أو المشروع *">Order / Project Name *</label>
+          <input type="text" id="co-name" data-ph-en="e.g. Central Kitchen — Branch 12" data-ph-ar="مثال: المطبخ المركزي — فرع 12" placeholder="e.g. Central Kitchen — Branch 12">
+        </div>
 
-          <div class="field" style="margin:0">
-            <label data-en="PO / Reference" data-ar="رقم الأمر">PO / Reference</label>
-            <input type="text" id="co-po" placeholder="e.g. PO-2026-114" dir="ltr">
-          </div>
+        <div class="field" style="margin:0">
+          <label data-en="PO / Reference" data-ar="رقم الأمر">PO / Reference</label>
+          <input type="text" id="co-po" placeholder="PO-2026-114" dir="ltr">
+        </div>
 
-          <div class="field" style="margin:0">
-            <label data-en="Handover Date" data-ar="تاريخ تسليم المشروع">Handover Date</label>
-            <input type="date" id="co-handover" onchange="updateOrderPreview()">
-          </div>
+        <div class="field" style="margin:0">
+          <label data-en="Handover Date" data-ar="تاريخ تسليم المشروع">Handover Date</label>
+          <input type="date" id="co-handover" onchange="updateOrderPreview()">
+        </div>
 
-          <div class="field" style="margin:0">
-            <label data-en="Coverage *" data-ar="التغطية *">Coverage *</label>
-            <select id="co-coverage" onchange="onCoverageTypeChange()">
-              <option value="warranty">Warranty — ضمان</option>
-              <option value="contract">Maintenance Contract — عقد صيانة</option>
-              <option value="none">Out of warranty — خارج الضمان</option>
-            </select>
-          </div>
+        <div class="field" style="margin:0">
+          <label data-en="Coverage *" data-ar="التغطية *">Coverage *</label>
+          <select id="co-coverage" onchange="onCoverageTypeChange()">
+            <option value="warranty" data-en="Warranty" data-ar="ضمان">Warranty</option>
+            <option value="contract" data-en="Maintenance Contract" data-ar="عقد صيانة">Maintenance Contract</option>
+            <option value="none" data-en="Out of warranty" data-ar="خارج الضمان">Out of warranty</option>
+          </select>
+        </div>
 
-          <div class="field" style="margin:0" id="co-warranty-fields">
-            <label data-en="Warranty Period" data-ar="مدة الضمان">Warranty Period</label>
-            <select id="co-warranty-months" onchange="updateOrderPreview()">
-              <option value="12">12 months — سنة</option>
-              <option value="24">24 months — سنتان</option>
-              <option value="6">6 months — 6 أشهر</option>
-              <option value="36">36 months — 3 سنوات</option>
-            </select>
-          </div>
+        <div class="field" style="margin:0" id="co-warranty-fields">
+          <label data-en="Warranty Period" data-ar="مدة الضمان">Warranty Period</label>
+          <select id="co-warranty-months" onchange="updateOrderPreview()">
+            <option value="12" data-en="12 months" data-ar="12 شهراً (سنة)">12 months</option>
+            <option value="24" data-en="24 months" data-ar="24 شهراً (سنتان)">24 months</option>
+            <option value="6" data-en="6 months" data-ar="6 أشهر">6 months</option>
+            <option value="36" data-en="36 months" data-ar="36 شهراً (3 سنوات)">36 months</option>
+          </select>
+        </div>
 
-          <div class="field" style="margin:0;grid-column:1/-1;display:none" id="co-contract-fields">
-            <label data-en="Contract Period" data-ar="مدة العقد">Contract Period</label>
-            <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
-              <input type="date" id="co-contract-start" onchange="updateOrderPreview()" style="flex:1;min-width:150px">
-              <span style="color:#718096">→</span>
-              <input type="date" id="co-contract-end" onchange="updateOrderPreview()" style="flex:1;min-width:150px">
-            </div>
-          </div>
-
-          <div class="field" style="margin:0;grid-column:1/-1">
-            <label data-en="Notes" data-ar="ملاحظات">Notes</label>
-            <input type="text" id="co-notes" placeholder="Scope, equipment covered, special terms…">
+        <div class="field" style="margin:0;grid-column:1/-1;display:none" id="co-contract-fields">
+          <label data-en="Contract Period" data-ar="مدة العقد">Contract Period</label>
+          <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+            <input type="date" id="co-contract-start" onchange="updateOrderPreview()" style="flex:1;min-width:150px">
+            <span style="color:#718096">→</span>
+            <input type="date" id="co-contract-end" onchange="updateOrderPreview()" style="flex:1;min-width:150px">
           </div>
         </div>
 
-        <div id="co-preview" style="font-size:11px;font-weight:700;margin-top:8px"></div>
-
-        <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:12px">
-          <button class="btn btn-o" onclick="resetOrderForm()">Clear</button>
-          <button class="btn btn-p" onclick="saveClientOrder()"><i class="ti ti-device-floppy"></i> <span id="co-save-label">Add Order</span></button>
+        <div class="field" style="margin:0;grid-column:1/-1">
+          <label data-en="Notes" data-ar="ملاحظات">Notes</label>
+          <input type="text" id="co-notes" data-ph-en="Scope, equipment covered, special terms…" data-ph-ar="النطاق، المعدات المشمولة، شروط خاصة…" placeholder="Scope, equipment covered, special terms…">
         </div>
       </div>
 
-      <div style="font-size:12px;font-weight:700;color:#0F2D52;margin-bottom:8px">
-        <i class="ti ti-list"></i> Orders <span id="co-count" style="color:#718096;font-weight:600"></span>
+      <div id="co-preview" style="font-size:12px;font-weight:700;margin-top:10px"></div>
+
+      <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:14px">
+        <button class="btn btn-o" onclick="resetOrderForm()"><i class="ti ti-eraser"></i> <span data-en="Clear" data-ar="مسح">Clear</span></button>
+        <button class="btn btn-p" onclick="saveClientOrder()"><i class="ti ti-device-floppy"></i> <span id="co-save-label" data-en="Add Order" data-ar="إضافة أوردر">Add Order</span></button>
       </div>
-      <div id="co-list" style="display:flex;flex-direction:column;gap:8px;max-height:300px;overflow-y:auto"></div>
-    </div>
-    <div class="mf">
-      <button onclick="closeMod('clientOrdersModal')" class="btn btn-o" style="flex:1">Close</button>
     </div>
   </div>
+
+  <div style="font-size:13px;font-weight:700;color:#0F2D52;margin-bottom:10px;display:flex;align-items:center;gap:6px">
+    <i class="ti ti-list"></i> <span data-en="Orders" data-ar="الأوردرات">Orders</span>
+    <span id="co-count" style="color:#718096;font-weight:600;font-size:11px"></span>
+  </div>
+  <div id="co-list" style="display:flex;flex-direction:column;gap:8px;margin-bottom:20px"></div>
 </div>
 
 <div id="loginScreen" style="position:fixed;inset:0;background:#0F2D52;z-index:9999;display:flex;align-items:center;justify-content:center;padding:16px;font-family:Tajawal,sans-serif">
