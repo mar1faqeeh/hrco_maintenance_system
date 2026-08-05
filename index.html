@@ -4779,6 +4779,20 @@ async function ueOnFilesChange(){
   var input = document.getElementById('ue-files');
   var status = document.getElementById('ue-files-status');
   if(!input.files || !input.files.length){ return; }
+
+  // Suggest the equipment name from the uploaded file, so the technician
+  // doesn't retype what the file is already called. Only fills a blank field —
+  // anything typed by hand is left alone.
+  var nameEl = document.getElementById('ue-name');
+  if(nameEl && !nameEl.value.trim()){
+    var fname = input.files[0].name
+      .replace(/\.[^.]+$/, '')          // drop the extension
+      .replace(/[_]+/g, ' ')            // underscores → spaces
+      .replace(/\s{2,}/g, ' ')
+      .trim();
+    if(fname) nameEl.value = fname;
+  }
+
   status.textContent = 'Processing files...';
   uePages = [];
   for(var i=0;i<input.files.length;i++){
