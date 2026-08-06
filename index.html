@@ -606,7 +606,8 @@ html,body{height:100%;overflow:auto;font-family:Tajawal,sans-serif;font-size:14p
         <button class="ftab" onclick="setStockF('out',this)">Out</button>
       </div>
     </div>
-    <div class="tbl"><div class="thd" style="grid-template-columns:2fr 1fr 1fr 1fr 1fr 90px"><div>Part Name</div><div>Category</div><div>Qty</div><div>Min</div><div>Status</div><div></div></div><div id="invList"></div></div>
+    <div id="parts-cat-filter" style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px"></div>
+    <div class="tbl"><div class="thd" style="grid-template-columns:2fr 1fr 1fr 1fr 1fr 90px"><div data-en="Part Name" data-ar="اسم القطعة">Part Name</div><div data-en="Category" data-ar="الفئة">Category</div><div data-en="Qty" data-ar="الكمية">Qty</div><div data-en="Min" data-ar="الحد الأدنى">Min</div><div data-en="Status" data-ar="الحالة">Status</div><div></div></div><div id="invList"></div></div>
   </div>
   <div id="tab-hist" style="display:none">
     <div class="vtbar"><div class="sbox" style="max-width:300px"><i class="ti ti-search"></i><input type="text" placeholder="Search history..." oninput="filterHist(this.value)"></div></div>
@@ -870,7 +871,12 @@ html,body{height:100%;overflow:auto;font-family:Tajawal,sans-serif;font-size:14p
       <div class="mg2">
         <div class="field" style="margin-bottom:0"><label data-en="Part Name" data-ar="اسم القطعة">Part Name</label><input type="text" id="ap-name" data-ph-en="Part Name" data-ph-ar="اسم القطعة" placeholder="Part Name"></div>
         <div class="field" style="margin-bottom:0"><label data-en="Part Code" data-ar="كود القطعة">Part Code</label><input type="text" id="ap-code" dir="ltr" data-ph-en="e.g. CR0587230" data-ph-ar="مثال: CR0587230" placeholder="e.g. CR0587230"></div>
-        <div class="field" style="margin-bottom:0"><label data-en="Category" data-ar="الفئة">Category</label><select id="ap-cat"><option>Refrigerant Gases</option><option>Valves</option><option>Compressors</option><option>Controllers</option><option>Motors & Fans</option><option>Filters</option><option>Sensors</option><option>Other</option></select></div>
+        <div class="field" style="margin-bottom:0"><label data-en="Category" data-ar="الفئة">Category</label><select id="ap-cat">
+          <option value="KE" data-en="KE — Kitchen Equipment" data-ar="KE — معدات مطابخ">KE — Kitchen Equipment</option>
+          <option value="SS" data-en="SS — Stainless Steel" data-ar="SS — ستانلس ستيل">SS — Stainless Steel</option>
+          <option value="REF" data-en="REF — Refrigeration" data-ar="REF — التبريد">REF — Refrigeration</option>
+          <option value="DW/LDY" data-en="DW/LDY — Dishwash &amp; Laundry" data-ar="DW/LDY — غسيل الأطباق والملابس">DW/LDY — Dishwash &amp; Laundry</option>
+        </select></div>
         <div class="field" style="margin-bottom:0"><label data-en="Unit" data-ar="الوحدة">Unit</label><select id="ap-unit">
           <option value="Piece" data-en="Piece" data-ar="قطعة">Piece</option>
           <option value="Set" data-en="Set" data-ar="طقم">Set</option>
@@ -1558,7 +1564,7 @@ function go(pg){
     resetNewVisitForm();
   }
   if(pg==='technicians'){renderTechGrid();renderTechCharts();}
-  if(pg==='parts'){renderInvList();renderHistList();}
+  if(pg==='parts'){renderPartCatFilter();renderInvList();renderHistList();}
   if(pg==='parts-request'){loadEquipmentData().then(function(){renderEquipGrid();});}
   if(pg==='parts-orders'){loadPartsRequests();}
   if(pg==='clients'){renderClientGrid();renderDonut();renderTopClients();}
@@ -4271,6 +4277,34 @@ async function saveTech(){
 var partsData=[{id:1,name:'R410A Gas',cat:'Refrigerant Gases',unit:'KG',qty:45,min:10,supplier:'Gas Co.'},{id:2,name:'R404A Gas',cat:'Refrigerant Gases',unit:'KG',qty:22,min:8,supplier:'Gas Co.'},{id:3,name:'R22 Gas',cat:'Refrigerant Gases',unit:'KG',qty:3,min:5,supplier:'Gas Co.'},{id:4,name:'Danfoss T2 Expansion Valve',cat:'Valves',unit:'Piece',qty:0,min:3,supplier:'Danfoss KSA'},{id:5,name:'Solenoid Valve 24V',cat:'Valves',unit:'Piece',qty:8,min:4,supplier:'Danfoss KSA'},{id:6,name:'Embraco NT2192GK Compressor',cat:'Compressors',unit:'Piece',qty:2,min:2,supplier:'Embraco'},{id:7,name:'Carel pCO5 Controller',cat:'Controllers',unit:'Piece',qty:0,min:2,supplier:'Carel'},{id:8,name:'Fan Motor 220V',cat:'Motors & Fans',unit:'Piece',qty:6,min:3,supplier:'Mitsubishi'},{id:9,name:'35μF Capacitor',cat:'Other',unit:'Piece',qty:12,min:5,supplier:'General'},{id:10,name:'3/8 Filter Dryer',cat:'Filters',unit:'Piece',qty:2,min:5,supplier:'Danfoss KSA'}];
 var histData=[{id:1,partId:4,type:'out',qty:1,dest:'Ritz Carlton — B3',tech:'أحمد العتيبي',note:'Fault repair',date:'2026-05-10'},{id:2,partId:1,type:'out',qty:2,dest:'Al-Aseel Restaurant',tech:'محمد الحربي',note:'Gas recharge',date:'2026-05-10'},{id:3,partId:7,type:'out',qty:1,dest:'Hilton Hotel',tech:'خالد الرشيدي',note:'Controller replace',date:'2026-05-09'},{id:4,partId:1,type:'in',qty:20,dest:'—',tech:'—',note:'Supplier delivery',date:'2026-05-07'},{id:5,partId:3,type:'out',qty:3,dest:"McDonald's",tech:'أحمد العتيبي',note:'Gas recharge',date:'2026-05-06'}];
 var stF='all';
+var catF='all';
+
+function setPartCatFilter(k, el){
+  catF = k;
+  document.querySelectorAll('#parts-cat-filter button').forEach(function(b){
+    b.style.background = '#fff'; b.style.color = '#718096'; b.style.borderColor = '#D9E2EC';
+  });
+  if(el){ el.style.background = '#1D4E89'; el.style.color = '#fff'; el.style.borderColor = '#1D4E89'; }
+  renderInvList();
+}
+
+function renderPartCatFilter(){
+  var el = document.getElementById('parts-cat-filter');
+  if(!el) return;
+  el.innerHTML = '';
+  var mk = function(key, text){
+    var b = document.createElement('button');
+    b.type = 'button';
+    var on = (catF === key);
+    b.style.cssText = 'padding:5px 12px;border-radius:99px;font-size:11px;font-weight:700;cursor:pointer;font-family:inherit;border:1px solid '
+      + (on ? '#1D4E89' : '#D9E2EC') + ';background:' + (on ? '#1D4E89' : '#fff') + ';color:' + (on ? '#fff' : '#718096');
+    b.textContent = text;
+    b.onclick = function(){ setPartCatFilter(key, b); };
+    el.appendChild(b);
+  };
+  mk('all', (LNG === 'ar') ? 'الكل' : 'All');
+  PART_CATEGORIES.forEach(function(c){ mk(c.key, c.key); });
+}
 function stk(p){if(p.qty===0)return{l:t('stockOut'),c:'b-d'};if(p.qty<=p.min)return{l:t('stockLow'),c:'b-w'};return{l:t('stockOk'),c:'b-s'};}
 
 // ── Deleting spare parts ─────────────────────────────────────────────────
@@ -4297,13 +4331,31 @@ function normaliseUnit(v){
 // Keep the category to the known list; anything unrecognised becomes "Other".
 function normaliseCat(v){
   var t = String(v||'').trim().toLowerCase();
-  var opts = ['Refrigerant Gases','Valves','Compressors','Controllers','Motors & Fans','Filters','Sensors','Other'];
-  var found = opts.find(function(o){ return o.toLowerCase() === t; });
-  if(found) return found;
-  var ar = { 'غازات':'Refrigerant Gases','غاز':'Refrigerant Gases','صمامات':'Valves','كمبروسر':'Compressors',
-             'ضواغط':'Compressors','لوحات':'Controllers','تحكم':'Controllers','محركات':'Motors & Fans',
-             'مراوح':'Motors & Fans','فلاتر':'Filters','حساسات':'Sensors','أخرى':'Other','اخرى':'Other' };
-  return ar[t] || 'Other';
+  if(!t) return 'KE';
+
+  // The code itself, in any casing
+  var byKey = PART_CATEGORIES.find(function(c){ return c.key.toLowerCase() === t; });
+  if(byKey) return byKey.key;
+  // The full name, English or Arabic
+  var byName = PART_CATEGORIES.find(function(c){
+    return c.en.toLowerCase() === t || c.ar === String(v||'').trim();
+  });
+  if(byName) return byName.key;
+
+  // Common spellings, Arabic wording, and the categories used before this change
+  var map = {
+    'ke':'KE','kitchen':'KE','kitchen equipment':'KE','معدات مطابخ':'KE','مطابخ':'KE','مطبخ':'KE',
+    'ss':'SS','stainless':'SS','stainless steel':'SS','ستانلس':'SS','ستانلس ستيل':'SS','استانلس':'SS',
+    'ref':'REF','refrigeration':'REF','fridge':'REF','تبريد':'REF','التبريد':'REF','ثلاجات':'REF',
+    'refrigerant gases':'REF','غازات':'REF','غاز':'REF','compressors':'REF','كمبروسر':'REF','ضواغط':'REF',
+    'dw':'DW/LDY','ldy':'DW/LDY','dw/ldy':'DW/LDY','dishwash':'DW/LDY','dishwasher':'DW/LDY',
+    'laundry':'DW/LDY','dishwash & laundry':'DW/LDY','غسيل':'DW/LDY','غسالات':'DW/LDY',
+    'غسيل الاطباق':'DW/LDY','غسيل الأطباق':'DW/LDY','ملابس':'DW/LDY'
+  };
+  if(map[t]) return map[t];
+
+  // Anything still unrecognised lands in Kitchen Equipment, the broadest family
+  return 'KE';
 }
 
 // A part is the same part when the CODE matches — codes are reliable where
@@ -4401,7 +4453,7 @@ function renderPartsImportPreview(){
     html += '<tr>'
       + '<td style="padding:6px 10px;border-bottom:1px solid #F0F4F8;font-weight:600">'+esc(it.name)+'</td>'
       + '<td style="padding:6px 10px;border-bottom:1px solid #F0F4F8;color:#1D4E89;font-weight:600" dir="ltr">'+esc(it.code)+'</td>'
-      + '<td style="padding:6px 10px;border-bottom:1px solid #F0F4F8;color:#718096">'+esc(it.cat)+'</td>'
+      + '<td style="padding:6px 10px;border-bottom:1px solid #F0F4F8;color:#718096">'+esc(catLabel(it.cat))+'</td>'
       + '<td style="padding:6px 10px;border-bottom:1px solid #F0F4F8">'+esc(unitLabel(it.unit))+'</td>'
       + '<td style="padding:6px 10px;border-bottom:1px solid #F0F4F8;font-weight:700">'+esc(it.qty)+'</td>'
       + '<td style="padding:6px 10px;border-bottom:1px solid #F0F4F8;color:#718096">'+esc(it.min)+'</td>'
@@ -4501,6 +4553,20 @@ async function deleteAllParts(){
 
 // Units are stored in English (so the data stays consistent) but shown in
 // whichever language the interface is using.
+// The four equipment families used across the inventory. Stored as the short
+// code so the data stays stable; displayed with the name in the current language.
+var PART_CATEGORIES = [
+  { key:'KE',     en:'Kitchen Equipment',  ar:'معدات مطابخ' },
+  { key:'SS',     en:'Stainless Steel',    ar:'ستانلس ستيل' },
+  { key:'REF',    en:'Refrigeration',      ar:'التبريد' },
+  { key:'DW/LDY', en:'Dishwash & Laundry', ar:'غسيل الأطباق والملابس' }
+];
+function catLabel(k){
+  var c = PART_CATEGORIES.find(function(x){ return x.key === String(k||'').trim().toUpperCase(); });
+  if(!c) return k || '';
+  return c.key + ' — ' + ((LNG === 'ar') ? c.ar : c.en);
+}
+
 var UNIT_LABELS = {
   'piece':{en:'Piece', ar:'قطعة'}, 'set':{en:'Set', ar:'طقم'},
   'box':{en:'Box', ar:'كرتون'},   'roll':{en:'Roll', ar:'لفة'},
@@ -4516,8 +4582,8 @@ function unitLabel(u){
 function renderInvList(q,sf){
   sf=sf||stF;q=q||'';
   var el=document.getElementById('invList');if(!el)return;el.innerHTML='';
-  var fl=partsData.filter(function(p){return(!q||p.name.toLowerCase().includes(q.toLowerCase())||String(p.code||'').toLowerCase().includes(q.toLowerCase()))&&(sf==='all'||(sf==='ok'&&stk(p).c==='b-s')||(sf==='low'&&stk(p).c==='b-w')||(sf==='out'&&stk(p).c==='b-d'));});
-  fl.forEach(function(p){var s=stk(p);var r=document.createElement('div');r.className='trow';r.style.gridTemplateColumns='2fr 1fr 1fr 1fr 1fr 90px';r.innerHTML='<div class="tc"><div style="font-weight:500">'+p.name+'</div><div class="tc2">'+(p.code ? '<span dir="ltr" style="color:#1D4E89;font-weight:600">'+p.code+'</span> · ' : '')+p.supplier+'</div></div><div class="tc2">'+p.cat+'</div><div class="tc" style="font-weight:700">'+p.qty+' <span class="tc2">'+unitLabel(p.unit)+'</span></div><div class="tc2">'+p.min+' '+unitLabel(p.unit)+'</div><div><span class="bdg '+s.c+'">'+s.l+'</span></div><div style="display:flex;gap:4px"><button class="rbtn" onclick="quickAdd('+p.id+')" title="Add stock"><i class="ti ti-package-import"></i></button><button class="rbtn" onclick="showPH('+p.id+')" title="History"><i class="ti ti-history"></i></button>'+(curUserRole==='manager'?'<button class="rbtn" onclick="deletePart('+p.id+')" title="'+(LNG==='ar'?'حذف':'Delete')+'" style="color:#C0392B"><i class="ti ti-trash"></i></button>':'')+'</div>';el.appendChild(r);});
+  var fl=partsData.filter(function(p){return(catF==='all'||String(p.cat||'').toUpperCase()===catF)&&(!q||p.name.toLowerCase().includes(q.toLowerCase())||String(p.code||'').toLowerCase().includes(q.toLowerCase()))&&(sf==='all'||(sf==='ok'&&stk(p).c==='b-s')||(sf==='low'&&stk(p).c==='b-w')||(sf==='out'&&stk(p).c==='b-d'));});
+  fl.forEach(function(p){var s=stk(p);var r=document.createElement('div');r.className='trow';r.style.gridTemplateColumns='2fr 1fr 1fr 1fr 1fr 90px';r.innerHTML='<div class="tc"><div style="font-weight:500">'+p.name+'</div><div class="tc2">'+(p.code ? '<span dir="ltr" style="color:#1D4E89;font-weight:600">'+p.code+'</span> · ' : '')+p.supplier+'</div></div><div class="tc2">'+catLabel(p.cat)+'</div><div class="tc" style="font-weight:700">'+p.qty+' <span class="tc2">'+unitLabel(p.unit)+'</span></div><div class="tc2">'+p.min+' '+unitLabel(p.unit)+'</div><div><span class="bdg '+s.c+'">'+s.l+'</span></div><div style="display:flex;gap:4px"><button class="rbtn" onclick="quickAdd('+p.id+')" title="Add stock"><i class="ti ti-package-import"></i></button><button class="rbtn" onclick="showPH('+p.id+')" title="History"><i class="ti ti-history"></i></button>'+(curUserRole==='manager'?'<button class="rbtn" onclick="deletePart('+p.id+')" title="'+(LNG==='ar'?'حذف':'Delete')+'" style="color:#C0392B"><i class="ti ti-trash"></i></button>':'')+'</div>';el.appendChild(r);});
   var ok=partsData.filter(function(p){return stk(p).c==='b-s';}).length;
   var low=partsData.filter(function(p){return stk(p).c==='b-w';}).length;
   var out=partsData.filter(function(p){return stk(p).c==='b-d';}).length;
