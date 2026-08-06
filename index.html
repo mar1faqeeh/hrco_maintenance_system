@@ -384,7 +384,7 @@ html,body{height:100%;overflow:auto;font-family:Tajawal,sans-serif;font-size:14p
     <div class="fcard">
       <h3><i class="ti ti-tool"></i><span id="t-equip-info">Equipment Details</span></h3>
       <div class="field"><label id="t-lbl-equip">Equipment / Device</label>
-        <select id="inp-equipment">
+        <select id="inp-equipment" onchange="onEquipmentChange()">
           <option value="">-- Select Equipment --</option>
           <option>Cold Room</option>
           <option>Custom-fab</option>
@@ -394,7 +394,14 @@ html,body{height:100%;overflow:auto;font-family:Tajawal,sans-serif;font-size:14p
           <option>Kitchen Equipment</option>
           <option>Under Counter Refrigerator</option>
           <option>Upright Refrigerator</option>
+          <option value="__other__" data-en="+ Other — type a new one" data-ar="+ أخرى — اكتب معدة جديدة">+ Other — type a new one</option>
         </select>
+        <input type="text" id="inp-equipment-new" style="display:none;margin-top:6px"
+               data-ph-en="Type the equipment name…" data-ph-ar="اكتب اسم المعدة…"
+               placeholder="Type the equipment name…"
+               oninput="onNewEquipmentTyped()">
+        <div id="nv-equip-hint" style="font-size:11px;color:#718096;margin-top:4px;display:none"
+             data-en="It will be added to the list for next time." data-ar="ستُضاف إلى القائمة للمرات القادمة.">It will be added to the list for next time.</div>
       </div>
       <div class="field"><label id="t-lbl-serial">Serial Number</label>
         <div style="display:flex;gap:8px">
@@ -1561,7 +1568,7 @@ function go(pg){
   }catch(e){console.log('go() error:',e);}
   if(pg==='dashboard'){updateDashStats();renderDashTechs();renderDashRecent();renderDashPending();renderPending();}
   if(pg==='signature') setTimeout(function(){initSig('tech');initSig('client');},80);
-  if(pg==='newvisit'){ fillVisitClientSelect(); if(!document.querySelector('#taskcats button')) { renderTaskCats(); renderTaskList(); }
+  if(pg==='newvisit'){ loadExtraEquipmentOptions(); fillVisitClientSelect(); if(!document.querySelector('#taskcats button')) { renderTaskCats(); renderTaskList(); }
     window._visitStartTime = Date.now();
     populateTechSelect();
     resetNewVisitForm();
@@ -3406,6 +3413,58 @@ function fillSummaryOrder(){
       ? (LNG==='ar' ? (n + ' صنف مشمول') : (n + ' item(s) covered'))
       : '';
   }
+}
+
+
+// ── "Other" equipment: let the technician name a machine that isn't listed ──
+function onEquipmentChange(){
+  var sel = document.getElementById('inp-equipment');
+  var box = document.getElementById('inp-equipment-new');
+  var hint = document.getElementById('nv-equip-hint');
+  if(!sel || !box) return;
+  var other = (sel.value === '__other__');
+  box.style.display = other ? 'block' : 'none';
+  if(hint) hint.style.display = other ? 'block' : 'none';
+  if(other){ box.focus(); } else { box.value = ''; }
+}
+
+function onNewEquipmentTyped(){
+  // nothing to do while typing — the value is read on save
+}
+
+// Whatever is chosen (or typed), give back the equipment name.
+function currentEquipmentValue(){
+  var sel = document.getElementById('inp-equipment');
+  if(!sel) return '';
+  if(sel.value !== '__other__') return sel.value;
+  var box = document.getElementById('inp-equipment-new');
+  return box ? box.value.trim() : '';
+}
+
+// A newly typed machine joins the list so it can just be picked next time.
+function rememberEquipmentOption(name){
+  var sel = document.getElementById('inp-equipment');
+  if(!sel || !name) return;
+  var exists = Array.prototype.some.call(sel.options, function(o){
+    return o.value.toLowerCase() === name.toLowerCase() || o.text.toLowerCase() === name.toLowerCase();
+  });
+  if(exists) return;
+  var opt = document.createElement('option');
+  opt.value = name; opt.text = name;
+  var otherOpt = sel.querySelector('option[value="__other__"]');
+  if(otherOpt) sel.insertBefore(opt, otherOpt); else sel.appendChild(opt);
+  // Keep it across sessions on this device
+  try{
+    var saved = JSON.parse(localStorage_get('hrco_equipment_extra') || '[]');
+    if(saved.indexOf(name) === -1){ saved.push(name); localStorage_set('hrco_equipment_extra', JSON.stringify(saved)); }
+  }catch(e){}
+}
+
+function loadExtraEquipmentOptions(){
+  try{
+    var saved = JSON.parse(localStorage_get('hrco_equipment_extra') || '[]');
+    saved.forEach(function(n){ rememberEquipmentOption(n); });
+  }catch(e){}
 }
 
 function fillVisitClientSelect(){
@@ -7321,6 +7380,8 @@ function resetNewVisitForm(){
     var el=document.getElementById(id);if(el)el.value='';
   });
   var eq=document.getElementById('inp-equipment');if(eq)eq.value='';
+  var eqNew=document.getElementById('inp-equipment-new');if(eqNew){eqNew.value='';eqNew.style.display='none';}
+  var eqHint=document.getElementById('nv-equip-hint');if(eqHint)eqHint.style.display='none';
   var notes=document.getElementById('notesArea');if(notes)notes.value='';
   // Clear translation boxes
   ['tr-en','tr-ar','tr-ur'].forEach(function(id){
@@ -7385,6 +7446,7 @@ async function saveVisitDraft() {
 
 async function saveAndSign() {
   var visit = collectVisitData();
+  if(visit.equipment) { try{ rememberEquipmentOption(visit.equipment); }catch(e){} }
 
   // Whatever the technician typed (Arabic, nickname, partial), record the
   // client's official name so every visit for them groups together.
@@ -7484,7 +7546,7 @@ function collectVisitData() {
     task_category: (typeof currentTaskCat !== 'undefined') ? currentTaskCat : '',
     order_id:      (document.getElementById('inp-order')||{}).value || null,
     items:         JSON.stringify(Object.keys(visitSelectedItems).map(function(k){ return visitSelectedItems[k]; })),
-    equipment:     document.getElementById('inp-equipment').value,
+    equipment:     (typeof currentEquipmentValue === 'function') ? currentEquipmentValue() : document.getElementById('inp-equipment').value,
     serial_number: document.getElementById('inp-serial').value,
     model:         document.getElementById('inp-model').value,
     tech:          document.getElementById('sel-tech').value,
