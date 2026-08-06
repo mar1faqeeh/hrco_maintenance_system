@@ -607,7 +607,7 @@ html,body{height:100%;overflow:auto;font-family:Tajawal,sans-serif;font-size:14p
       </div>
     </div>
     <div id="parts-cat-filter" style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px"></div>
-    <div class="tbl"><div class="thd" style="grid-template-columns:2fr 1fr 1fr 1fr 1fr 90px"><div data-en="Part Name" data-ar="اسم القطعة">Part Name</div><div data-en="Category" data-ar="الفئة">Category</div><div data-en="Qty" data-ar="الكمية">Qty</div><div data-en="Min" data-ar="الحد الأدنى">Min</div><div data-en="Status" data-ar="الحالة">Status</div><div></div></div><div id="invList"></div></div>
+    <div class="tbl"><div class="thd" style="grid-template-columns:110px 2fr 1.1fr 0.9fr 0.9fr 1fr 118px"><div data-en="Code" data-ar="الكود">Code</div><div data-en="Part Name" data-ar="اسم القطعة">Part Name</div><div data-en="Category" data-ar="الفئة">Category</div><div data-en="Qty" data-ar="الكمية">Qty</div><div data-en="Min" data-ar="الحد الأدنى">Min</div><div data-en="Status" data-ar="الحالة">Status</div><div></div></div><div id="invList"></div></div>
   </div>
   <div id="tab-hist" style="display:none">
     <div class="vtbar"><div class="sbox" style="max-width:300px"><i class="ti ti-search"></i><input type="text" placeholder="Search history..." oninput="filterHist(this.value)"></div></div>
@@ -871,6 +871,7 @@ html,body{height:100%;overflow:auto;font-family:Tajawal,sans-serif;font-size:14p
       <div class="mg2">
         <div class="field" style="margin-bottom:0"><label data-en="Part Name" data-ar="اسم القطعة">Part Name</label><input type="text" id="ap-name" data-ph-en="Part Name" data-ph-ar="اسم القطعة" placeholder="Part Name"></div>
         <div class="field" style="margin-bottom:0"><label data-en="Part Code" data-ar="كود القطعة">Part Code</label><input type="text" id="ap-code" dir="ltr" data-ph-en="e.g. CR0587230" data-ph-ar="مثال: CR0587230" placeholder="e.g. CR0587230"></div>
+        <div class="field" style="margin-bottom:0;grid-column:1/-1"><label data-en="Arabic Name (optional — leave blank to translate automatically)" data-ar="الاسم بالعربية (اختياري — اتركه فارغاً للترجمة التلقائية)">Arabic Name (optional — leave blank to translate automatically)</label><input type="text" id="ap-name-ar" data-ph-en="Leave blank to use the automatic technical translation" data-ph-ar="اتركه فارغاً لاستخدام الترجمة الفنية التلقائية" placeholder="Leave blank to use the automatic technical translation"></div>
         <div class="field" style="margin-bottom:0"><label data-en="Category" data-ar="الفئة">Category</label><select id="ap-cat">
           <option value="KE" data-en="KE — Kitchen Equipment" data-ar="KE — معدات مطابخ">KE — Kitchen Equipment</option>
           <option value="SS" data-en="SS — Stainless Steel" data-ar="SS — ستانلس ستيل">SS — Stainless Steel</option>
@@ -1163,6 +1164,7 @@ function setLang(l){
   _set('t-mybtn', 'موقعي الحالي', 'My location');
   var _mapInp = document.getElementById('inp-map');
   if(_mapInp) _mapInp.placeholder = _ar ? 'أو الصق رابط موقع' : 'or paste a map link';
+  try{ if(typeof renderInvList === 'function' && document.getElementById('invList')){ renderPartCatFilter(); renderInvList(); renderHistList(); } }catch(e){}
   try{ if(typeof renderTaskCats === 'function'){ renderTaskCats(); renderTaskList(true); } }catch(e){}
   try{ if(typeof renderTaskEditor === 'function' && document.getElementById('tt-cats')) renderTaskEditor(); }catch(e){}
   // Account name/role reflect the actual logged-in user, never the static translation dictionary
@@ -4406,7 +4408,8 @@ async function onPartsFileChosen(input){
         unit: normaliseUnit(r[3]),
         qty: parseInt(String(r[4]).replace(/[^\d-]/g,''), 10) || 0,
         min: parseInt(String(r[5]).replace(/[^\d-]/g,''), 10) || 2,
-        supplier: String(r[6]==null?'':r[6]).trim() || '—'
+        supplier: String(r[6]==null?'':r[6]).trim() || '—',
+        name_ar: String(r[7]==null?'':r[7]).trim()
       });
     });
 
@@ -4483,7 +4486,7 @@ async function confirmPartsImport(){
         await dbSave('parts', upd);
         topped++;
       } else {
-        var np = { name: it.name, code: it.code||'', cat: it.cat, unit: it.unit, qty: it.qty, min: it.min, supplier: it.supplier };
+        var np = { name: it.name, code: it.code||'', name_ar: it.name_ar||'', cat: it.cat, unit: it.unit, qty: it.qty, min: it.min, supplier: it.supplier };
         var saved = await dbSave('parts', np);
         np.id = (saved && saved[0] && saved[0].id != null) ? saved[0].id : Date.now() + i;
         partsData.push(np);
@@ -4573,6 +4576,130 @@ var UNIT_LABELS = {
   'kg':{en:'KG', ar:'كيلو'},      'gram':{en:'Gram', ar:'جرام'},
   'meter':{en:'Meter', ar:'متر'}, 'liter':{en:'Liter', ar:'لتر'}
 };
+
+// ══════════════════════════════════════
+// TECHNICAL PART-NAME TRANSLATION (EN → AR)
+// A trade glossary, not a literal dictionary: "Expansion Valve" becomes
+// "صمام تمدد" (the term technicians actually use), not a word-by-word gloss.
+// Longest phrases are matched first so "Fan Motor" wins over "Fan" + "Motor".
+// Codes, voltages, sizes and refrigerant names are deliberately left untouched.
+// ══════════════════════════════════════
+var PART_TERMS = {
+  // ── Refrigeration ────────────────────────────────
+  'axial fan motor':'محرك مروحة محورية', 'axial fan':'مروحة محورية',
+  'centrifugal fan':'مروحة طرد مركزي', 'blower motor':'محرك نافخ',
+  'capillary tube':'أنبوب شعري', 'capillary':'أنبوب شعري',
+  'charging valve':'صمام شحن', 'ball valve':'صمام كروي',
+  'schrader valve':'صمام شريدر', 'access valve':'صمام خدمة',
+  'pressure gauge':'مانومتر', 'gauge':'مانومتر', 'manifold':'مانيفولد',
+  'suction line':'خط السحب', 'discharge line':'خط الطرد',
+  'liquid line':'خط السائل', 'drain pan':'صينية تصريف', 'drain hose':'خرطوم تصريف',
+  'expansion valve':'صمام تمدد', 'solenoid valve':'صمام سولينويد',
+  'service valve':'صمام خدمة', 'check valve':'صمام عدم رجوع',
+  'pressure switch':'مفتاح ضغط', 'high pressure':'ضغط عالي', 'low pressure':'ضغط منخفض',
+  'filter dryer':'فلتر مجفف', 'sight glass':'عين زجاجية',
+  'condenser coil':'ملف مكثف', 'evaporator coil':'ملف مبخر',
+  'condenser':'مكثف', 'evaporator':'مبخر', 'compressor':'كمبروسر',
+  'condensing unit':'وحدة تكثيف', 'refrigerant':'غاز تبريد', 'gas':'غاز',
+  'defrost heater':'سخان إذابة الثلج', 'defrost timer':'مؤقت إذابة الثلج',
+  'capillary tube':'أنبوب شعري', 'accumulator':'مجمع سائل', 'receiver':'خزان سائل',
+  'copper pipe':'أنبوب نحاس', 'copper tube':'أنبوب نحاس', 'insulation':'عازل',
+
+  // ── Motors, fans, electrical ─────────────────────
+  'fan motor':'محرك مروحة', 'fan blade':'ريشة مروحة', 'condenser fan':'مروحة مكثف',
+  'evaporator fan':'مروحة مبخر', 'motor':'محرك', 'fan':'مروحة',
+  'capacitor':'مكثف كهربائي', 'contactor':'كونتاكتور', 'relay':'ريلاي',
+  'overload':'حماية حرارية', 'thermostat':'ثرموستات', 'thermistor':'حساس حرارة',
+  'sensor':'حساس', 'probe':'مجس', 'controller':'لوحة تحكم', 'control board':'لوحة تحكم',
+  'display board':'لوحة عرض', 'transformer':'محول', 'terminal block':'قاعدة توصيل',
+  'cable':'كيبل', 'wire':'سلك', 'fuse':'فيوز', 'switch':'مفتاح',
+  'circuit breaker':'قاطع كهربائي', 'power supply':'مصدر طاقة', 'wiring harness':'ضفيرة أسلاك',
+
+  // ── Kitchen equipment ────────────────────────────
+  'heating element':'عنصر تسخين', 'burner head':'رأس شعلة', 'burner':'شعلة',
+  'pilot burner':'شعلة تجريبية', 'thermocouple':'ثرموكبل', 'gas valve':'صمام غاز',
+  'safety valve':'صمام أمان', 'ignition electrode':'قطب إشعال', 'igniter':'مشعل',
+  'oven door':'باب فرن', 'door gasket':'جوان باب', 'door seal':'حشوة باب',
+  'door hinge':'مفصلة باب', 'door handle':'مقبض باب', 'door switch':'مفتاح باب',
+  'griddle plate':'صاج شواء', 'grill':'شواية', 'oven':'فرن', 'fryer':'قلاية',
+  'hot plate':'سخان مسطح', 'steam generator':'مولد بخار', 'boiler':'غلاية',
+  'water inlet':'مدخل مياه', 'drain valve':'صمام تصريف', 'flue grid':'شبكة عادم',
+
+  // ── Dishwash & laundry ───────────────────────────
+  'wash pump':'مضخة غسيل', 'drain pump':'مضخة تصريف', 'rinse arm':'ذراع شطف',
+  'wash arm':'ذراع غسيل', 'spray arm':'ذراع رش', 'rinse nozzle':'بخاخ شطف',
+  'nozzle':'بخاخ', 'detergent pump':'مضخة منظف', 'rinse aid pump':'مضخة ملمع',
+  'water pump':'مضخة مياه', 'pump':'مضخة', 'drum bearing':'رولمان حلة',
+  'door lock':'قفل باب', 'belt':'سير', 'drum':'حلة', 'filter':'فلتر', 'strainer':'مصفاة',
+
+  // ── Stainless & general hardware ─────────────────
+  'stainless steel':'ستانلس ستيل', 'stainless':'ستانلس',
+  'work table':'طاولة عمل', 'sheet':'لوح', 'leg':'رجل', 'castor':'عجلة', 'wheel':'عجلة',
+  'shelf':'رف', 'hinge':'مفصلة', 'handle':'مقبض', 'knob':'مفتاح دوار',
+  'gasket':'جوان', 'seal':'حشوة', 'o-ring':'حلقة مطاطية', 'washer':'وردة',
+  'screw':'برغي', 'bolt':'مسمار', 'nut':'صامولة', 'bracket':'حامل',
+  'spring':'زنبرك', 'bearing':'رولمان', 'bush':'جلبة', 'clamp':'مشبك',
+  'hose':'خرطوم', 'tube':'أنبوب', 'pipe':'ماسورة', 'valve':'صمام',
+  'plate':'لوح', 'panel':'لوحة', 'cover':'غطاء', 'lamp':'لمبة', 'light':'إنارة',
+  'oil':'زيت', 'grease':'شحم', 'tape':'شريط', 'kit':'طقم', 'set':'طقم'
+};
+
+// Sorted once: longest first, so multi-word terms win over their parts.
+var _partTermsSorted = Object.keys(PART_TERMS).sort(function(a,b){ return b.length - a.length; });
+
+function translatePartName(name){
+  var src = String(name||'').trim();
+  if(!src) return src;
+
+  // Walk the name once, longest term first, recording what each stretch is.
+  var lower = src.toLowerCase();
+  var marks = new Array(src.length).fill(null);   // index → term matched here
+  _partTermsSorted.forEach(function(term){
+    var from = 0, i;
+    while((i = lower.indexOf(term, from)) !== -1){
+      var end = i + term.length;
+      var beforeOk = (i === 0) || !/[a-z0-9]/i.test(src[i-1]);
+      var afterOk  = (end >= src.length) || !/[a-z0-9]/i.test(src[end]);
+      var free = true;
+      for(var k=i;k<end;k++){ if(marks[k] !== null){ free = false; break; } }
+      if(beforeOk && afterOk && free){
+        for(var k2=i;k2<end;k2++) marks[k2] = term;
+      }
+      from = i + 1;
+    }
+  });
+
+  // Split into translated segments and untouched ones (brands, codes, sizes)
+  var arSegs = [], rawSegs = [], cur = null, curTerm = null;
+  var flush = function(){
+    if(cur === null) return;
+    if(curTerm) arSegs.push(PART_TERMS[curTerm]);
+    else { var t = cur.trim(); if(t) rawSegs.push(t); }
+    cur = null; curTerm = null;
+  };
+  for(var i=0;i<src.length;i++){
+    if(cur === null || marks[i] !== curTerm){ flush(); cur = ''; curTerm = marks[i]; }
+    cur += src[i];
+  }
+  flush();
+
+  if(!arSegs.length) return src;   // nothing recognised — leave it as it is
+
+  // Arabic noun phrases run head-first, the reverse of English modifier order:
+  // "Stainless Steel Work Table Leg" → "رجل طاولة عمل ستانلس ستيل".
+  // Brand names, codes and ratings stay at the end where they read naturally.
+  return arSegs.slice().reverse().concat(rawSegs).join(' ').replace(/\s{2,}/g,' ').trim();
+}
+
+// What to show for a part: a manual Arabic name wins, then the glossary,
+// then the original English.
+function partName(p){
+  if(!p) return '';
+  if(LNG !== 'ar') return p.name || '';
+  if(p.name_ar && String(p.name_ar).trim()) return p.name_ar;
+  return translatePartName(p.name || '');
+}
+
 function unitLabel(u){
   var m = UNIT_LABELS[String(u||'').trim().toLowerCase()];
   if(!m) return u || '';
@@ -4582,8 +4709,29 @@ function unitLabel(u){
 function renderInvList(q,sf){
   sf=sf||stF;q=q||'';
   var el=document.getElementById('invList');if(!el)return;el.innerHTML='';
-  var fl=partsData.filter(function(p){return(catF==='all'||String(p.cat||'').toUpperCase()===catF)&&(!q||p.name.toLowerCase().includes(q.toLowerCase())||String(p.code||'').toLowerCase().includes(q.toLowerCase()))&&(sf==='all'||(sf==='ok'&&stk(p).c==='b-s')||(sf==='low'&&stk(p).c==='b-w')||(sf==='out'&&stk(p).c==='b-d'));});
-  fl.forEach(function(p){var s=stk(p);var r=document.createElement('div');r.className='trow';r.style.gridTemplateColumns='2fr 1fr 1fr 1fr 1fr 90px';r.innerHTML='<div class="tc"><div style="font-weight:500">'+p.name+'</div><div class="tc2">'+(p.code ? '<span dir="ltr" style="color:#1D4E89;font-weight:600">'+p.code+'</span> · ' : '')+p.supplier+'</div></div><div class="tc2">'+catLabel(p.cat)+'</div><div class="tc" style="font-weight:700">'+p.qty+' <span class="tc2">'+unitLabel(p.unit)+'</span></div><div class="tc2">'+p.min+' '+unitLabel(p.unit)+'</div><div><span class="bdg '+s.c+'">'+s.l+'</span></div><div style="display:flex;gap:4px"><button class="rbtn" onclick="quickAdd('+p.id+')" title="Add stock"><i class="ti ti-package-import"></i></button><button class="rbtn" onclick="showPH('+p.id+')" title="History"><i class="ti ti-history"></i></button>'+(curUserRole==='manager'?'<button class="rbtn" onclick="deletePart('+p.id+')" title="'+(LNG==='ar'?'حذف':'Delete')+'" style="color:#C0392B"><i class="ti ti-trash"></i></button>':'')+'</div>';el.appendChild(r);});
+  var fl=partsData.filter(function(p){return(catF==='all'||String(p.cat||'').toUpperCase()===catF)&&(!q||p.name.toLowerCase().includes(q.toLowerCase())||String(p.code||'').toLowerCase().includes(q.toLowerCase())||partName(p).toLowerCase().includes(q.toLowerCase()))&&(sf==='all'||(sf==='ok'&&stk(p).c==='b-s')||(sf==='low'&&stk(p).c==='b-w')||(sf==='out'&&stk(p).c==='b-d'));});
+  fl.forEach(function(p){
+    var st = stk(p);
+    var r = document.createElement('div');
+    r.className = 'trow';
+    r.style.gridTemplateColumns = '110px 2fr 1.1fr 0.9fr 0.9fr 1fr 118px';
+    r.innerHTML =
+        '<div class="tc" style="font-weight:700;color:#1D4E89" dir="ltr">' + (p.code || '—') + '</div>'
+      + '<div class="tc"><div style="font-weight:500">' + partName(p) + '</div>'
+      +   '<div class="tc2">' + (p.supplier || '—') + '</div></div>'
+      + '<div class="tc2">' + catLabel(p.cat) + '</div>'
+      + '<div class="tc" style="font-weight:700">' + p.qty + ' <span class="tc2">' + unitLabel(p.unit) + '</span></div>'
+      + '<div class="tc2">' + p.min + ' ' + unitLabel(p.unit) + '</div>'
+      + '<div><span class="bdg ' + st.c + '">' + st.l + '</span></div>'
+      + '<div style="display:flex;gap:2px;justify-content:flex-end">'
+      +   '<button class="rbtn" onclick="quickAdd(' + p.id + ')" title="' + (LNG==='ar'?'إضافة كمية':'Add stock') + '"><i class="ti ti-package-import"></i></button>'
+      +   '<button class="rbtn" onclick="showPH(' + p.id + ')" title="' + (LNG==='ar'?'السجل':'History') + '"><i class="ti ti-history"></i></button>'
+      +   (curUserRole === 'manager'
+            ? '<button class="rbtn" onclick="deletePart(' + p.id + ')" title="' + (LNG==='ar'?'حذف':'Delete') + '" style="color:#C0392B"><i class="ti ti-trash"></i></button>'
+            : '')
+      + '</div>';
+    el.appendChild(r);
+  });
   var ok=partsData.filter(function(p){return stk(p).c==='b-s';}).length;
   var low=partsData.filter(function(p){return stk(p).c==='b-w';}).length;
   var out=partsData.filter(function(p){return stk(p).c==='b-d';}).length;
@@ -4596,7 +4744,7 @@ function renderHistList(q,hf){
   histData.filter(function(h){var p=partsData.find(function(x){return x.id===h.partId;})||{name:''};return(!q||p.name.toLowerCase().includes(q.toLowerCase())||h.dest.includes(q))&&(hf==='all'||h.type===hf);}).forEach(function(h){
     var p=partsData.find(function(x){return x.id===h.partId;})||{name:'Unknown',unit:''};
     var r=document.createElement('div');r.className='trow';r.style.gridTemplateColumns='1.5fr 0.8fr 0.8fr 1.5fr 1fr 0.9fr';
-    r.innerHTML='<div class="tc"><div style="font-weight:500">'+p.name+'</div><div class="tc2">'+h.note+'</div></div><div>'+(h.type==='in'?'<span style="color:#2D7D3A;font-weight:700;font-size:12px">▼ '+t('movIn')+'</span>':'<span style="color:#C0392B;font-weight:700;font-size:12px">▲ '+t('movOut')+'</span>')+'</div><div style="font-weight:700">'+(h.type==='in'?'+':'-')+h.qty+' '+unitLabel(p.unit)+'</div><div class="tc2">'+h.dest+'</div><div class="tc2">'+h.tech+'</div><div class="tc2">'+h.date+'</div>';
+    r.innerHTML='<div class="tc"><div style="font-weight:500">'+partName(p)+'</div><div class="tc2">'+h.note+'</div></div><div>'+(h.type==='in'?'<span style="color:#2D7D3A;font-weight:700;font-size:12px">▼ '+t('movIn')+'</span>':'<span style="color:#C0392B;font-weight:700;font-size:12px">▲ '+t('movOut')+'</span>')+'</div><div style="font-weight:700">'+(h.type==='in'?'+':'-')+h.qty+' '+unitLabel(p.unit)+'</div><div class="tc2">'+h.dest+'</div><div class="tc2">'+h.tech+'</div><div class="tc2">'+h.date+'</div>';
     el.appendChild(r);
   });
 }
@@ -4614,6 +4762,7 @@ async function savePart(){
   var np={
     name: name,
     code: (document.getElementById('ap-code')||{}).value.trim() || '',
+    name_ar: (document.getElementById('ap-name-ar')||{}).value.trim() || '',
     cat: document.getElementById('ap-cat').value,
     unit: document.getElementById('ap-unit').value,
     qty: qty,
@@ -8365,7 +8514,7 @@ async function showPublicReport(token){
       <button class="mclose" onclick="closeMod('partsImportModal')"><i class="ti ti-x"></i></button>
     </div>
     <div class="mb">
-      <div style="font-size:11px;color:#718096;margin-bottom:10px" data-en="Seven columns: Part Name · Part Code · Category · Unit · Quantity · Minimum Level · Supplier" data-ar="سبعة أعمدة: اسم القطعة · كود القطعة · الفئة · الوحدة · الكمية · الحد الأدنى · المورّد">Seven columns: Part Name · Part Code · Category · Unit · Quantity · Minimum Level · Supplier</div>
+      <div style="font-size:11px;color:#718096;margin-bottom:10px" data-en="Columns: Part Name · Part Code · Category · Unit · Quantity · Minimum Level · Supplier · Arabic Name (optional)" data-ar="الأعمدة: اسم القطعة · كود القطعة · الفئة · الوحدة · الكمية · الحد الأدنى · المورّد · الاسم بالعربية (اختياري)">Columns: Part Name · Part Code · Category · Unit · Quantity · Minimum Level · Supplier · Arabic Name (optional)</div>
       <div id="pi-status" style="font-size:12px;font-weight:700;margin-bottom:10px"></div>
       <div id="pi-preview"></div>
     </div>
