@@ -581,6 +581,8 @@ html,body{height:100%;overflow:auto;font-family:Tajawal,sans-serif;font-size:14p
     <div style="display:flex;gap:8px">
       <button class="btn btn-o" onclick="openMod('partModal')"><i class="ti ti-package-import"></i><span id="t-add-inv">Add Inventory</span></button>
       <button class="btn btn-p" onclick="openMod('partModal')"><i class="ti ti-plus"></i><span id="t-new-part">New Part</span></button>
+      <button class="btn btn-o" id="parts-import-btn" onclick="document.getElementById('parts-import-file').click()"><i class="ti ti-file-spreadsheet"></i> <span data-en="Import Excel" data-ar="استيراد إكسل">Import Excel</span></button>
+      <input type="file" id="parts-import-file" accept=".xlsx,.xls,.csv" style="display:none" onchange="onPartsFileChosen(this)">
       <button class="btn btn-o" id="parts-clear-btn" onclick="deleteAllParts()" style="color:#C0392B;border-color:#F5C6C6"><i class="ti ti-trash"></i> <span data-en="Delete All" data-ar="حذف الكل">Delete All</span></button>
     </div>
   </div>
@@ -866,9 +868,19 @@ html,body{height:100%;overflow:auto;font-family:Tajawal,sans-serif;font-size:14p
     <div class="mh"><div class="mhtitle">Add Part</div><button class="mclose" onclick="closeMod('partModal')"><i class="ti ti-x"></i></button></div>
     <div class="mb">
       <div class="mg2">
-        <div class="field" style="margin-bottom:0;grid-column:1/-1"><label>Part Name</label><input type="text" id="ap-name" placeholder="Part Name"></div>
-        <div class="field" style="margin-bottom:0"><label>Category</label><select id="ap-cat"><option>Refrigerant Gases</option><option>Valves</option><option>Compressors</option><option>Controllers</option><option>Motors & Fans</option><option>Filters</option><option>Sensors</option><option>Other</option></select></div>
-        <div class="field" style="margin-bottom:0"><label>Unit</label><select id="ap-unit"><option>Piece</option><option>KG</option><option>Meter</option><option>Liter</option></select></div>
+        <div class="field" style="margin-bottom:0"><label data-en="Part Name" data-ar="اسم القطعة">Part Name</label><input type="text" id="ap-name" data-ph-en="Part Name" data-ph-ar="اسم القطعة" placeholder="Part Name"></div>
+        <div class="field" style="margin-bottom:0"><label data-en="Part Code" data-ar="كود القطعة">Part Code</label><input type="text" id="ap-code" dir="ltr" data-ph-en="e.g. CR0587230" data-ph-ar="مثال: CR0587230" placeholder="e.g. CR0587230"></div>
+        <div class="field" style="margin-bottom:0"><label data-en="Category" data-ar="الفئة">Category</label><select id="ap-cat"><option>Refrigerant Gases</option><option>Valves</option><option>Compressors</option><option>Controllers</option><option>Motors & Fans</option><option>Filters</option><option>Sensors</option><option>Other</option></select></div>
+        <div class="field" style="margin-bottom:0"><label data-en="Unit" data-ar="الوحدة">Unit</label><select id="ap-unit">
+          <option value="Piece" data-en="Piece" data-ar="قطعة">Piece</option>
+          <option value="Set" data-en="Set" data-ar="طقم">Set</option>
+          <option value="Box" data-en="Box" data-ar="كرتون">Box</option>
+          <option value="Roll" data-en="Roll" data-ar="لفة">Roll</option>
+          <option value="KG" data-en="KG" data-ar="كيلو">KG</option>
+          <option value="Gram" data-en="Gram" data-ar="جرام">Gram</option>
+          <option value="Meter" data-en="Meter" data-ar="متر">Meter</option>
+          <option value="Liter" data-en="Liter" data-ar="لتر">Liter</option>
+        </select></div>
         <div class="field" style="margin-bottom:0"><label>Quantity</label><input type="number" id="ap-qty" placeholder="0" min="0"></div>
         <div class="field" style="margin-bottom:0"><label>Min Alert Level</label><input type="number" id="ap-min" placeholder="2" min="0"></div>
         <div class="field" style="margin-bottom:0"><label>Supplier</label><input type="text" id="ap-sup" placeholder="Supplier"></div>
@@ -4113,6 +4125,8 @@ function applyRolePermissions(){
   // Visits are read-only for data entry — they may look and print, not create.
   var clearParts = document.getElementById('parts-clear-btn');
   if(clearParts) clearParts.style.display = (curUserRole === 'manager') ? '' : 'none';
+  var importParts = document.getElementById('parts-import-btn');
+  if(importParts) importParts.style.display = (curUserRole === 'manager') ? '' : 'none';
   var newVisitBtn = document.querySelector('#pg-visits .ph button');
   if(newVisitBtn) newVisitBtn.style.display = dataEntry ? 'none' : '';
   var vmEdit = document.getElementById('vm-edit-btn');
@@ -4260,6 +4274,183 @@ var stF='all';
 function stk(p){if(p.qty===0)return{l:t('stockOut'),c:'b-d'};if(p.qty<=p.min)return{l:t('stockLow'),c:'b-w'};return{l:t('stockOk'),c:'b-s'};}
 
 // ── Deleting spare parts ─────────────────────────────────────────────────
+
+// ── Importing spare parts from a spreadsheet ─────────────────────────────
+var _partsImport = [];
+
+// Accept the unit however it was written — English, Arabic, or a short form.
+function normaliseUnit(v){
+  var t = String(v||'').trim().toLowerCase();
+  if(!t) return 'Piece';
+  var map = {
+    'piece':'Piece','pcs':'Piece','pc':'Piece','ea':'Piece','قطعة':'Piece','قطعه':'Piece','حبة':'Piece','حبه':'Piece',
+    'set':'Set','طقم':'Set','box':'Box','ctn':'Box','carton':'Box','كرتون':'Box','علبة':'Box','علبه':'Box',
+    'roll':'Roll','لفة':'Roll','لفه':'Roll',
+    'kg':'KG','kgs':'KG','kilo':'KG','كيلو':'KG','كجم':'KG',
+    'gram':'Gram','g':'Gram','gm':'Gram','جرام':'Gram','غرام':'Gram',
+    'meter':'Meter','metre':'Meter','m':'Meter','mtr':'Meter','متر':'Meter',
+    'liter':'Liter','litre':'Liter','l':'Liter','ltr':'Liter','لتر':'Liter'
+  };
+  return map[t] || 'Piece';
+}
+
+// Keep the category to the known list; anything unrecognised becomes "Other".
+function normaliseCat(v){
+  var t = String(v||'').trim().toLowerCase();
+  var opts = ['Refrigerant Gases','Valves','Compressors','Controllers','Motors & Fans','Filters','Sensors','Other'];
+  var found = opts.find(function(o){ return o.toLowerCase() === t; });
+  if(found) return found;
+  var ar = { 'غازات':'Refrigerant Gases','غاز':'Refrigerant Gases','صمامات':'Valves','كمبروسر':'Compressors',
+             'ضواغط':'Compressors','لوحات':'Controllers','تحكم':'Controllers','محركات':'Motors & Fans',
+             'مراوح':'Motors & Fans','فلاتر':'Filters','حساسات':'Sensors','أخرى':'Other','اخرى':'Other' };
+  return ar[t] || 'Other';
+}
+
+// A part is the same part when the CODE matches — codes are reliable where
+// names vary in spelling. Falls back to the name when no code is given.
+function findExistingPart(it){
+  var code = String(it.code||'').trim().toLowerCase();
+  if(code){
+    var byCode = partsData.find(function(p){ return String(p.code||'').trim().toLowerCase() === code; });
+    if(byCode) return byCode;
+  }
+  return partsData.find(function(p){ return String(p.name).toLowerCase() === String(it.name).toLowerCase(); });
+}
+
+async function onPartsFileChosen(input){
+  var file = input && input.files && input.files[0];
+  if(!file) return;
+  input.value = '';                       // let the same file be picked again
+
+  if(!/\.(xlsx|xls|csv)$/i.test(file.name)){
+    alert(LNG==='ar' ? 'الرجاء اختيار ملف Excel أو CSV' : 'Please choose an Excel or CSV file');
+    return;
+  }
+  if(typeof XLSX === 'undefined'){
+    alert(LNG==='ar' ? 'تعذّر تحميل قارئ الإكسل — تحقّق من الاتصال بالإنترنت'
+                     : 'The spreadsheet reader failed to load — check your internet connection');
+    return;
+  }
+
+  try{
+    var buf = await file.arrayBuffer();
+    var wb = XLSX.read(buf, { type:'array' });
+    var rows = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { header:1, blankrows:false, defval:'' });
+
+    var items = [];
+    rows.forEach(function(r, idx){
+      if(!r || !r.length) return;
+      var name = String(r[0]==null?'':r[0]).trim();
+      if(!name) return;
+      // Skip a header row: the quantity column won't be a number on it
+      var qtyRaw = String(r[4]==null?'':r[4]).trim();
+      if(idx === 0 && qtyRaw !== '' && isNaN(parseFloat(qtyRaw))) return;
+      if(idx === 0 && /part\s*name|اسم/i.test(name)) return;
+
+      items.push({
+        name: name,
+        code: String(r[1]==null?'':r[1]).trim(),
+        cat: normaliseCat(r[2]),
+        unit: normaliseUnit(r[3]),
+        qty: parseInt(String(r[4]).replace(/[^\d-]/g,''), 10) || 0,
+        min: parseInt(String(r[5]).replace(/[^\d-]/g,''), 10) || 2,
+        supplier: String(r[6]==null?'':r[6]).trim() || '—'
+      });
+    });
+
+    if(!items.length){
+      alert(LNG==='ar' ? 'لم يتم العثور على قطع في الملف' : 'No parts found in the file');
+      return;
+    }
+
+    _partsImport = items;
+    // Flag the ones that already exist — those add to stock rather than duplicate
+    var existing = 0;
+    items.forEach(function(it){
+      it._exists = !!findExistingPart(it);
+      if(it._exists) existing++;
+    });
+
+    var st = document.getElementById('pi-status');
+    if(st){
+      st.innerHTML = '<i class="ti ti-circle-check"></i> ' + (LNG==='ar'
+        ? (items.length + ' قطعة في الملف' + (existing ? ' · ' + existing + ' منها موجودة مسبقاً وسيتم إضافة كمياتها' : ''))
+        : (items.length + ' part(s) in the file' + (existing ? ' · ' + existing + ' already exist and will have their stock topped up' : '')));
+      st.style.color = '#2D7D3A';
+    }
+    renderPartsImportPreview();
+    openMod('partsImportModal');
+  }catch(e){
+    console.error('onPartsFileChosen:', e);
+    alert((LNG==='ar' ? 'تعذّرت قراءة الملف: ' : 'Could not read the file: ') + e.message);
+  }
+}
+
+function renderPartsImportPreview(){
+  var el = document.getElementById('pi-preview');
+  if(!el) return;
+  var head = (LNG==='ar')
+    ? ['اسم القطعة','كود القطعة','الفئة','الوحدة','الكمية','الحد الأدنى','المورّد','']
+    : ['Part Name','Part Code','Category','Unit','Qty','Min','Supplier',''];
+  var esc = function(v){ return String(v==null?'':v).replace(/</g,'&lt;'); };
+  var html = '<div style="border:1.5px solid #D9E2EC;border-radius:8px;overflow:auto;max-height:340px">'
+    + '<table style="width:100%;border-collapse:collapse;font-size:12px"><thead><tr>'
+    + head.map(function(h){ return '<th style="text-align:start;background:#F8FAFC;color:#4A5568;font-weight:700;padding:7px 10px;border-bottom:1px solid #D9E2EC;position:sticky;top:0">'+h+'</th>'; }).join('')
+    + '</tr></thead><tbody>';
+  _partsImport.forEach(function(it){
+    html += '<tr>'
+      + '<td style="padding:6px 10px;border-bottom:1px solid #F0F4F8;font-weight:600">'+esc(it.name)+'</td>'
+      + '<td style="padding:6px 10px;border-bottom:1px solid #F0F4F8;color:#1D4E89;font-weight:600" dir="ltr">'+esc(it.code)+'</td>'
+      + '<td style="padding:6px 10px;border-bottom:1px solid #F0F4F8;color:#718096">'+esc(it.cat)+'</td>'
+      + '<td style="padding:6px 10px;border-bottom:1px solid #F0F4F8">'+esc(unitLabel(it.unit))+'</td>'
+      + '<td style="padding:6px 10px;border-bottom:1px solid #F0F4F8;font-weight:700">'+esc(it.qty)+'</td>'
+      + '<td style="padding:6px 10px;border-bottom:1px solid #F0F4F8;color:#718096">'+esc(it.min)+'</td>'
+      + '<td style="padding:6px 10px;border-bottom:1px solid #F0F4F8;color:#718096">'+esc(it.supplier)+'</td>'
+      + '<td style="padding:6px 10px;border-bottom:1px solid #F0F4F8">'
+        + (it._exists ? '<span style="background:#FDF0E0;color:#C4680A;font-size:10px;font-weight:700;padding:2px 8px;border-radius:99px">'+(LNG==='ar'?'موجودة':'exists')+'</span>' : '')
+      + '</td></tr>';
+  });
+  html += '</tbody></table></div>';
+  el.innerHTML = html;
+}
+
+async function confirmPartsImport(){
+  if(!_partsImport.length) return;
+  var btn = document.getElementById('pi-confirm');
+  if(btn) btn.disabled = true;
+
+  var added = 0, topped = 0, failed = 0;
+  for(var i=0;i<_partsImport.length;i++){
+    var it = _partsImport[i];
+    var ex = findExistingPart(it);
+    try{
+      if(ex){
+        ex.qty = (parseInt(ex.qty,10)||0) + it.qty;
+        var upd = { id: ex.id, qty: ex.qty };
+        if(!ex.code && it.code){ ex.code = it.code; upd.code = it.code; }
+        await dbSave('parts', upd);
+        topped++;
+      } else {
+        var np = { name: it.name, code: it.code||'', cat: it.cat, unit: it.unit, qty: it.qty, min: it.min, supplier: it.supplier };
+        var saved = await dbSave('parts', np);
+        np.id = (saved && saved[0] && saved[0].id != null) ? saved[0].id : Date.now() + i;
+        partsData.push(np);
+        added++;
+      }
+    }catch(e){ console.error('import row failed:', it.name, e); failed++; }
+  }
+
+  if(btn) btn.disabled = false;
+  _partsImport = [];
+  closeMod('partsImportModal');
+  renderInvList();
+  renderHistList();
+  alert((LNG==='ar'
+    ? ('✅ تم الاستيراد\n' + added + ' قطعة جديدة · ' + topped + ' تم تحديث كميتها')
+    : ('✅ Import complete\n' + added + ' new part(s) · ' + topped + ' stock updated'))
+    + (failed ? ('\n' + failed + (LNG==='ar' ? ' فشلت' : ' failed')) : ''));
+}
+
 async function deletePart(id){
   var p = partsData.find(function(x){ return String(x.id) === String(id); });
   if(!p) return;
@@ -4308,11 +4499,25 @@ async function deleteAllParts(){
   alert('✅ تم حذف جميع قطع الغيار.\nAll spare parts deleted.');
 }
 
+// Units are stored in English (so the data stays consistent) but shown in
+// whichever language the interface is using.
+var UNIT_LABELS = {
+  'piece':{en:'Piece', ar:'قطعة'}, 'set':{en:'Set', ar:'طقم'},
+  'box':{en:'Box', ar:'كرتون'},   'roll':{en:'Roll', ar:'لفة'},
+  'kg':{en:'KG', ar:'كيلو'},      'gram':{en:'Gram', ar:'جرام'},
+  'meter':{en:'Meter', ar:'متر'}, 'liter':{en:'Liter', ar:'لتر'}
+};
+function unitLabel(u){
+  var m = UNIT_LABELS[String(u||'').trim().toLowerCase()];
+  if(!m) return u || '';
+  return (LNG === 'ar') ? m.ar : m.en;
+}
+
 function renderInvList(q,sf){
   sf=sf||stF;q=q||'';
   var el=document.getElementById('invList');if(!el)return;el.innerHTML='';
-  var fl=partsData.filter(function(p){return(!q||p.name.toLowerCase().includes(q.toLowerCase()))&&(sf==='all'||(sf==='ok'&&stk(p).c==='b-s')||(sf==='low'&&stk(p).c==='b-w')||(sf==='out'&&stk(p).c==='b-d'));});
-  fl.forEach(function(p){var s=stk(p);var r=document.createElement('div');r.className='trow';r.style.gridTemplateColumns='2fr 1fr 1fr 1fr 1fr 90px';r.innerHTML='<div class="tc"><div style="font-weight:500">'+p.name+'</div><div class="tc2">'+p.supplier+'</div></div><div class="tc2">'+p.cat+'</div><div class="tc" style="font-weight:700">'+p.qty+' <span class="tc2">'+p.unit+'</span></div><div class="tc2">'+p.min+' '+p.unit+'</div><div><span class="bdg '+s.c+'">'+s.l+'</span></div><div style="display:flex;gap:4px"><button class="rbtn" onclick="quickAdd('+p.id+')" title="Add stock"><i class="ti ti-package-import"></i></button><button class="rbtn" onclick="showPH('+p.id+')" title="History"><i class="ti ti-history"></i></button>'+(curUserRole==='manager'?'<button class="rbtn" onclick="deletePart('+p.id+')" title="'+(LNG==='ar'?'حذف':'Delete')+'" style="color:#C0392B"><i class="ti ti-trash"></i></button>':'')+'</div>';el.appendChild(r);});
+  var fl=partsData.filter(function(p){return(!q||p.name.toLowerCase().includes(q.toLowerCase())||String(p.code||'').toLowerCase().includes(q.toLowerCase()))&&(sf==='all'||(sf==='ok'&&stk(p).c==='b-s')||(sf==='low'&&stk(p).c==='b-w')||(sf==='out'&&stk(p).c==='b-d'));});
+  fl.forEach(function(p){var s=stk(p);var r=document.createElement('div');r.className='trow';r.style.gridTemplateColumns='2fr 1fr 1fr 1fr 1fr 90px';r.innerHTML='<div class="tc"><div style="font-weight:500">'+p.name+'</div><div class="tc2">'+(p.code ? '<span dir="ltr" style="color:#1D4E89;font-weight:600">'+p.code+'</span> · ' : '')+p.supplier+'</div></div><div class="tc2">'+p.cat+'</div><div class="tc" style="font-weight:700">'+p.qty+' <span class="tc2">'+unitLabel(p.unit)+'</span></div><div class="tc2">'+p.min+' '+unitLabel(p.unit)+'</div><div><span class="bdg '+s.c+'">'+s.l+'</span></div><div style="display:flex;gap:4px"><button class="rbtn" onclick="quickAdd('+p.id+')" title="Add stock"><i class="ti ti-package-import"></i></button><button class="rbtn" onclick="showPH('+p.id+')" title="History"><i class="ti ti-history"></i></button>'+(curUserRole==='manager'?'<button class="rbtn" onclick="deletePart('+p.id+')" title="'+(LNG==='ar'?'حذف':'Delete')+'" style="color:#C0392B"><i class="ti ti-trash"></i></button>':'')+'</div>';el.appendChild(r);});
   var ok=partsData.filter(function(p){return stk(p).c==='b-s';}).length;
   var low=partsData.filter(function(p){return stk(p).c==='b-w';}).length;
   var out=partsData.filter(function(p){return stk(p).c==='b-d';}).length;
@@ -4325,7 +4530,7 @@ function renderHistList(q,hf){
   histData.filter(function(h){var p=partsData.find(function(x){return x.id===h.partId;})||{name:''};return(!q||p.name.toLowerCase().includes(q.toLowerCase())||h.dest.includes(q))&&(hf==='all'||h.type===hf);}).forEach(function(h){
     var p=partsData.find(function(x){return x.id===h.partId;})||{name:'Unknown',unit:''};
     var r=document.createElement('div');r.className='trow';r.style.gridTemplateColumns='1.5fr 0.8fr 0.8fr 1.5fr 1fr 0.9fr';
-    r.innerHTML='<div class="tc"><div style="font-weight:500">'+p.name+'</div><div class="tc2">'+h.note+'</div></div><div>'+(h.type==='in'?'<span style="color:#2D7D3A;font-weight:700;font-size:12px">▼ '+t('movIn')+'</span>':'<span style="color:#C0392B;font-weight:700;font-size:12px">▲ '+t('movOut')+'</span>')+'</div><div style="font-weight:700">'+(h.type==='in'?'+':'-')+h.qty+' '+p.unit+'</div><div class="tc2">'+h.dest+'</div><div class="tc2">'+h.tech+'</div><div class="tc2">'+h.date+'</div>';
+    r.innerHTML='<div class="tc"><div style="font-weight:500">'+p.name+'</div><div class="tc2">'+h.note+'</div></div><div>'+(h.type==='in'?'<span style="color:#2D7D3A;font-weight:700;font-size:12px">▼ '+t('movIn')+'</span>':'<span style="color:#C0392B;font-weight:700;font-size:12px">▲ '+t('movOut')+'</span>')+'</div><div style="font-weight:700">'+(h.type==='in'?'+':'-')+h.qty+' '+unitLabel(p.unit)+'</div><div class="tc2">'+h.dest+'</div><div class="tc2">'+h.tech+'</div><div class="tc2">'+h.date+'</div>';
     el.appendChild(r);
   });
 }
@@ -4333,7 +4538,7 @@ function filterParts(q){renderInvList(q,stF);}
 function filterHist(q){renderHistList(q,'all');}
 function setStockF(f,b){stF=f;document.querySelectorAll('#tab-inv .ftab').forEach(function(x){x.style.background='';x.style.color='#718096';});b.style.background='#1D4E89';b.style.color='#fff';renderInvList('',f);}
 function switchPTab(tab,el){document.querySelectorAll('.ptab').forEach(function(t){t.style.color='#718096';t.style.borderBottomColor='transparent';t.style.fontWeight='';});el.style.color='#1D4E89';el.style.borderBottomColor='#1D4E89';el.style.fontWeight='600';document.getElementById('tab-inv').style.display=tab==='inv'?'block':'none';document.getElementById('tab-hist').style.display=tab==='hist'?'block':'none';}
-function quickAdd(id){var p=partsData.find(function(x){return x.id===id;});if(!p)return;var qty=parseInt(prompt('Add stock for: '+p.name+'\nCurrent: '+p.qty+' '+p.unit));if(isNaN(qty)||qty<=0)return;p.qty+=qty;histData.unshift({id:Date.now(),partId:p.id,type:'in',qty:qty,dest:'—',tech:'Manager',note:'Stock added',date:new Date().toISOString().split('T')[0]});renderInvList();}
+function quickAdd(id){var p=partsData.find(function(x){return x.id===id;});if(!p)return;var qty=parseInt(prompt((LNG==='ar'?'إضافة كمية إلى: ':'Add stock for: ')+p.name+'\n'+(LNG==='ar'?'الحالي: ':'Current: ')+p.qty+' '+unitLabel(p.unit)));if(isNaN(qty)||qty<=0)return;p.qty+=qty;histData.unshift({id:Date.now(),partId:p.id,type:'in',qty:qty,dest:'—',tech:'Manager',note:'Stock added',date:new Date().toISOString().split('T')[0]});renderInvList();}
 function showPH(id){switchPTab('hist',document.getElementById('ptab-hist'));renderHistList(partsData.find(function(x){return x.id===id;})||{name:''}.name,'all');}
 async function savePart(){
   var name=document.getElementById('ap-name').value.trim();
@@ -4342,16 +4547,19 @@ async function savePart(){
   var min2=parseInt(document.getElementById('ap-min').value)||2;
   var np={
     name: name,
+    code: (document.getElementById('ap-code')||{}).value.trim() || '',
     cat: document.getElementById('ap-cat').value,
     unit: document.getElementById('ap-unit').value,
     qty: qty,
     min: min2,
     supplier: document.getElementById('ap-sup').value||'—'
   };
-  var ex=partsData.find(function(p){return p.name.toLowerCase()===name.toLowerCase();});
+  var ex=findExistingPart(np);
   if(ex){
     ex.qty+=qty;
-    await dbSave('parts',{id:ex.id,qty:ex.qty});
+    var updP={id:ex.id,qty:ex.qty};
+    if(!ex.code && np.code){ ex.code=np.code; updP.code=np.code; }
+    await dbSave('parts',updP);
   } else {
     var saved=await dbSave('parts',np);
     if(saved&&saved[0]) np.id=saved[0].id;
@@ -8079,6 +8287,26 @@ async function showPublicReport(token){
     </div>
     <div class="mb" id="oi-body"></div>
     <div class="mf"><button onclick="closeMod('orderItemsModal')" class="btn btn-o" style="flex:1" data-en="Close" data-ar="إغلاق">Close</button></div>
+  </div>
+</div>
+
+
+<!-- IMPORT SPARE PARTS FROM A SPREADSHEET -->
+<div id="partsImportModal" class="modal" style="display:none">
+  <div class="mbox" style="max-width:760px">
+    <div class="mh">
+      <div class="mhtitle"><i class="ti ti-file-spreadsheet"></i> <span data-en="Import Spare Parts" data-ar="استيراد قطع الغيار">Import Spare Parts</span></div>
+      <button class="mclose" onclick="closeMod('partsImportModal')"><i class="ti ti-x"></i></button>
+    </div>
+    <div class="mb">
+      <div style="font-size:11px;color:#718096;margin-bottom:10px" data-en="Seven columns: Part Name · Part Code · Category · Unit · Quantity · Minimum Level · Supplier" data-ar="سبعة أعمدة: اسم القطعة · كود القطعة · الفئة · الوحدة · الكمية · الحد الأدنى · المورّد">Seven columns: Part Name · Part Code · Category · Unit · Quantity · Minimum Level · Supplier</div>
+      <div id="pi-status" style="font-size:12px;font-weight:700;margin-bottom:10px"></div>
+      <div id="pi-preview"></div>
+    </div>
+    <div class="mf">
+      <button onclick="closeMod('partsImportModal')" class="btn btn-o" style="flex:1" data-en="Cancel" data-ar="إلغاء">Cancel</button>
+      <button onclick="confirmPartsImport()" class="btn btn-p" style="flex:2" id="pi-confirm"><i class="ti ti-database-import"></i> <span data-en="Import" data-ar="استيراد">Import</span></button>
+    </div>
   </div>
 </div>
 
