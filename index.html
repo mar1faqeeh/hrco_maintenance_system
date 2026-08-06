@@ -332,7 +332,14 @@ html,body{height:100%;overflow:auto;font-family:Tajawal,sans-serif;font-size:14p
       <h3><i class="ti ti-building"></i><span id="t-client-info">Client Information</span></h3>
       <div class="field">
         <label id="t-lbl-client">Client Name</label>
-        <select id="inp-client" onchange="onVisitClientChange()"></select>
+        <div style="position:relative">
+          <input type="text" id="inp-client" autocomplete="off"
+                 oninput="onClientTyped()" onfocus="onClientTyped()" onblur="onClientBlur()"
+                 data-ph-en="Type the client name (Arabic or English)…" data-ph-ar="اكتب اسم العميل (عربي أو إنجليزي)…"
+                 placeholder="Type the client name (Arabic or English)…">
+          <div id="nv-client-sugg" style="display:none;position:absolute;inset-inline-start:0;inset-inline-end:0;top:100%;margin-top:2px;background:#fff;border:1.5px solid #D9E2EC;border-radius:8px;box-shadow:0 6px 20px rgba(0,0,0,.12);z-index:60;max-height:230px;overflow-y:auto"></div>
+        </div>
+        <div id="nv-client-status" style="font-size:11px;margin-top:5px;color:#718096"></div>
         <div id="nv-noclients" style="font-size:11px;color:#C4680A;margin-top:5px;display:none">
           <i class="ti ti-alert-triangle"></i> <span id="t-noclients">No clients yet — add one in the Clients page first.</span>
         </div>
@@ -3117,14 +3124,219 @@ function clearMaintForm(){
 
 // Client + order names for the visit summary. The client field became a
 // <select>, so read its value rather than assuming a text input.
+
+// ══════════════════════════════════════
+// CLIENT NAME MATCHING (Arabic ⇄ English)
+// The technician types freely in either script; we work out which registered
+// client they mean, so orders can be loaded and the visit stays linked to a
+// real client record. Nothing new is ever created from here.
+// ══════════════════════════════════════
+var _visitClientId = null;
+
+// Strip diacritics, unify the letters Arabic writers vary on, drop "ال".
+function normAr(v){
+  return String(v||'')
+    .replace(/[\u064B-\u0652\u0670\u0640]/g, '')   // tashkeel & tatweel
+    .replace(/[أإآٱ]/g, 'ا')
+    .replace(/[ىئ]/g, 'ي')
+    .replace(/ؤ/g, 'و')
+    .replace(/ة/g, 'ه')
+    .replace(/\bال/g, '')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .toLowerCase();
+}
+
+// Rough Arabic → Latin sounds, enough to match a name written either way.
+var AR2LAT = {
+  'ا':'a','ب':'b','ت':'t','ث':'th','ج':'j','ح':'h','خ':'kh','د':'d','ذ':'th',
+  'ر':'r','ز':'z','س':'s','ش':'sh','ص':'s','ض':'d','ط':'t','ظ':'z','ع':'a',
+  'غ':'gh','ف':'f','ق':'q','ك':'k','ل':'l','م':'m','ن':'n','ه':'h','و':'w',
+  'ي':'y','ء':'','ﻻ':'la','چ':'ch','پ':'p','ﭪ':'v','ژ':'zh'
+};
+
+function translit(v){
+  var t = normAr(v);
+  var out = '';
+  for(var i=0;i<t.length;i++){
+    var ch = t[i];
+    out += (AR2LAT[ch] !== undefined) ? AR2LAT[ch] : ch;
+  }
+  return out.replace(/[^a-z0-9]/g,'');
+}
+
+function latinKey(v){
+  return String(v||'').toLowerCase().replace(/[^a-z0-9]/g,'');
+}
+
+// Arabic writes long vowels with و/ي and drops short ones, so "هيلتون"
+// transliterates to "hyltwn" while the stored name is "hilton". Comparing the
+// CONSONANT SKELETON (vowels removed, doubles collapsed) makes the two meet.
+function skeleton(v){
+  return latinKey(v)
+    .replace(/[aeiouwy]/g, '')      // drop vowels and the vowel-carriers و/ي
+    .replace(/(.)\1+/g, '$1');      // collapse repeats
+}
+
+// Every spelling we know a client by: official name, nickname, and the
+// transliteration of each.
+function clientKeys(c){
+  var keys = [];
+  [c.name, c.nickname].forEach(function(v){
+    if(!v) return;
+    keys.push(latinKey(v));
+    keys.push(translit(v));
+    keys.push(normAr(v));
+    keys.push(skeleton(v));
+  });
+  return keys.filter(Boolean);
+}
+
+// Score how well a typed query matches a client. 0 = no match.
+function scoreClient(c, q){
+  if(!q) return 0;
+  var qLat = latinKey(q), qTr = translit(q), qAr = normAr(q);
+  var qSk = skeleton(q), qTrSk = skeleton(translit(q));
+  var best = 0;
+  clientKeys(c).forEach(function(k){
+    [qLat, qTr, qAr].forEach(function(needle){
+      if(!needle || !k) return;
+      if(k === needle) best = Math.max(best, 100);
+      else if(k.indexOf(needle) === 0) best = Math.max(best, 80);
+      else if(k.indexOf(needle) !== -1) best = Math.max(best, 60);
+      else if(needle.length >= 4 && needle.indexOf(k) !== -1) best = Math.max(best, 50);
+    });
+  });
+
+  // Phonetic fallback: compare consonant skeletons, e.g. هيلتون → hltn
+  // against Hilton Hotel → hltnhtl.
+  if(best < 60 && qTrSk.length >= 2){
+    var nameSk = skeleton(c.name), nickSk = skeleton(c.nickname);
+    [nameSk, nickSk].forEach(function(k){
+      if(!k) return;
+      [qSk, qTrSk].forEach(function(needle){
+        if(!needle) return;
+        if(k === needle) best = Math.max(best, 90);
+        else if(k.indexOf(needle) === 0) best = Math.max(best, 75);
+        else if(k.indexOf(needle) !== -1) best = Math.max(best, 65);
+      });
+    });
+    // and against each word of the official name
+    String(c.name||'').split(/\s+/).forEach(function(w){
+      var ws = skeleton(w);
+      if(ws && (ws === qSk || ws === qTrSk)) best = Math.max(best, 85);
+    });
+  }
+  // Also match on individual words of the official name
+  var words = String(c.name||'').toLowerCase().split(/\s+/).map(latinKey).filter(Boolean);
+  words.forEach(function(w){
+    if(w && (w === qLat || w === qTr)) best = Math.max(best, 70);
+  });
+  return best;
+}
+
+function matchClients(q){
+  return (clientsData||[])
+    .map(function(c){ return { c:c, score:scoreClient(c, q) }; })
+    .filter(function(x){ return x.score > 0; })
+    .sort(function(a,b){ return b.score - a.score; });
+}
+
+function setClientStatus(html, colour){
+  var el = document.getElementById('nv-client-status');
+  if(el){ el.innerHTML = html; el.style.color = colour || '#718096'; }
+}
+
+function onClientTyped(){
+  var inp = document.getElementById('inp-client');
+  var box = document.getElementById('nv-client-sugg');
+  if(!inp || !box) return;
+  var q = inp.value.trim();
+
+  var warn = document.getElementById('nv-noclients');
+  if(warn) warn.style.display = (clientsData||[]).length ? 'none' : 'block';
+
+  if(!q){
+    box.style.display = 'none';
+    _visitClientId = null;
+    setClientStatus('');
+    onVisitClientChange();
+    return;
+  }
+
+  var hits = matchClients(q);
+
+  // A single confident hit resolves silently — no need to make them pick.
+  if(hits.length === 1 && hits[0].score >= 60){
+    resolveClient(hits[0].c, false);
+  } else {
+    var exact = hits.filter(function(h){ return h.score === 100; });
+    if(exact.length === 1) resolveClient(exact[0].c, false);
+    else { _visitClientId = null; setClientStatus(''); onVisitClientChange(); }
+  }
+
+  if(!hits.length){
+    box.style.display = 'block';
+    box.innerHTML = '<div style="padding:10px 12px;font-size:12px;color:#C4680A">'
+      + (LNG==='ar' ? 'لا يوجد عميل بهذا الاسم — أضِفه من صفحة العملاء أولاً'
+                    : 'No client by that name — add it in the Clients page first')
+      + '</div>';
+    return;
+  }
+
+  box.style.display = 'block';
+  box.innerHTML = '';
+  hits.slice(0, 8).forEach(function(h){
+    var c = h.c;
+    var row = document.createElement('div');
+    row.style.cssText = 'padding:8px 12px;cursor:pointer;border-bottom:1px solid #F0F4F8';
+    row.onmouseover = function(){ this.style.background = '#F8FAFC'; };
+    row.onmouseout  = function(){ this.style.background = '#fff'; };
+    row.onmousedown = function(ev){ ev.preventDefault(); resolveClient(c, true); };
+    row.innerHTML = '<div style="font-size:13px;font-weight:600;color:#1a202c">' + (c.nickname || c.name) + '</div>'
+      + (c.nickname ? '<div style="font-size:11px;color:#718096">' + c.name + '</div>' : '')
+      + '<div style="font-size:10px;color:#A0AEC0">' + [c.type, c.loc].filter(Boolean).join(' · ') + '</div>';
+    box.appendChild(row);
+  });
+}
+
+// Lock the field to the official name and load that client's orders.
+function resolveClient(c, fillField){
+  _visitClientId = c.id;
+  var inp = document.getElementById('inp-client');
+  if(fillField && inp) inp.value = c.name;
+  var box = document.getElementById('nv-client-sugg');
+  if(fillField && box) box.style.display = 'none';
+
+  var shown = c.nickname ? (c.nickname + ' — ' + c.name) : c.name;
+  setClientStatus('<i class="ti ti-circle-check"></i> ' + shown, '#2D7D3A');
+  onVisitClientChange();
+}
+
+function onClientBlur(){
+  // Give the click on a suggestion time to land
+  setTimeout(function(){
+    var box = document.getElementById('nv-client-sugg');
+    if(box) box.style.display = 'none';
+    var inp = document.getElementById('inp-client');
+    var q = inp ? inp.value.trim() : '';
+    if(!q){ setClientStatus(''); return; }
+    if(_visitClientId == null){
+      setClientStatus('<i class="ti ti-alert-triangle"></i> ' + (LNG==='ar'
+        ? 'لم يتم التعرف على العميل — اختره من القائمة'
+        : 'Client not recognised — pick one from the list'), '#C4680A');
+    }
+  }, 180);
+}
+
 function fillSummaryClient(){
   var el = document.getElementById('sum-client');
   if(!el) return;
-  var sel = document.getElementById('inp-client');
-  var name = sel ? sel.value : '';
-  if(!name){ el.textContent = '—'; return; }
-  var cl = (clientsData||[]).find(function(c){ return c.name === name; });
-  el.textContent = (cl && cl.nickname) ? (cl.nickname + ' — ' + cl.name) : name;
+  var inp = document.getElementById('inp-client');
+  var typed = inp ? inp.value.trim() : '';
+  var cl = (clientsData||[]).find(function(c){ return String(c.id) === String(_visitClientId); });
+  if(cl) el.textContent = cl.nickname ? (cl.nickname + ' — ' + cl.name) : cl.name;
+  else el.textContent = typed || '—';
 }
 
 // Order name (and how many of its items this visit covers) for the summary.
@@ -3146,28 +3358,15 @@ function fillSummaryOrder(){
 }
 
 function fillVisitClientSelect(){
-  var sel = document.getElementById('inp-client');
-  if(!sel) return;
-  var prev = sel.value;
-  var list = (clientsData||[]).slice().sort(function(a,b){
-    return String(a.name||'').localeCompare(String(b.name||''));
-  });
-  sel.innerHTML = '<option value="">' + (LNG==='ar' ? '— اختر العميل —' : '— Select client —') + '</option>'
-    + list.map(function(c){
-        var shown = c.nickname ? (c.nickname + ' — ' + c.name) : c.name;
-        return '<option value="'+String(c.name).replace(/"/g,'&quot;')+'" data-id="'+c.id+'">'+shown+'</option>';
-      }).join('');
-  if(prev) sel.value = prev;
+  // The client field is a free-text input now; nothing to populate, but keep
+  // the "no clients yet" hint and the order list in step.
   var warn = document.getElementById('nv-noclients');
-  if(warn) warn.style.display = list.length ? 'none' : 'block';
+  if(warn) warn.style.display = (clientsData||[]).length ? 'none' : 'block';
   onVisitClientChange(true);
 }
 
 function selectedVisitClientId(){
-  var sel = document.getElementById('inp-client');
-  if(!sel) return null;
-  var opt = sel.options[sel.selectedIndex];
-  return opt ? opt.getAttribute('data-id') : null;
+  return _visitClientId;
 }
 
 function onVisitClientChange(keepOrder){
@@ -3773,6 +3972,10 @@ async function scheduleMaintRequest(id){
   setTimeout(function(){
     var set = function(elId, v){ var e=document.getElementById(elId); if(e && v) e.value = v; };
     set('inp-client', r.client);
+    if(typeof onClientTyped === 'function'){
+      onClientTyped();
+      var sg = document.getElementById('nv-client-sugg'); if(sg) sg.style.display = 'none';
+    }
     set('inp-location', [r.city, r.location].filter(Boolean).join(' — '));
     if(r.map_url){ set('inp-map', r.map_url); onMapLinkInput('inp-map','nv-map-status'); }
     // Equipment is a <select>; add the requested one if it isn't listed yet
@@ -6499,6 +6702,8 @@ function resetNewVisitForm(){
   // Clear parts tags
   selParts=[];renderTags();
   // Reset checkboxes
+  _visitClientId = null;
+  var _cs = document.getElementById('nv-client-status'); if(_cs) _cs.innerHTML = '';
   if(typeof clearVisitItems === 'function') clearVisitItems();
   if(typeof selectTaskCat === 'function') selectTaskCat('kitchen');
   document.querySelectorAll('#tasklist input[type=checkbox]').forEach(function(cb){cb.checked=false;});
@@ -6554,8 +6759,17 @@ async function saveVisitDraft() {
 async function saveAndSign() {
   var visit = collectVisitData();
 
+  // Whatever the technician typed (Arabic, nickname, partial), record the
+  // client's official name so every visit for them groups together.
+  var _resolved = (clientsData||[]).find(function(c){ return String(c.id) === String(_visitClientId); });
+  if(_resolved) visit.client = _resolved.name;
+
   // Clients are created only from the Clients section — a visit must reference
   // one that already exists, so nothing is auto-created here any more.
+  if(!_resolved){
+    alert('لم يتم التعرف على العميل. اختر عميلاً مسجلاً من قائمة الاقتراحات.\nClient not recognised — pick a registered client from the suggestions.\n\nإذا لم يكن مسجلاً، أضِفه من صفحة العملاء أولاً.\nIf they are not registered yet, add them in the Clients page first.');
+    return;
+  }
   if(!visit.client || visit.client === 'Unknown'){
     alert('الرجاء اختيار العميل من القائمة\nPlease pick a client from the list.\n\nإذا لم يكن مسجلاً، أضِفه من صفحة العملاء أولاً.\nIf they are not registered yet, add them in the Clients page first.');
     return;
