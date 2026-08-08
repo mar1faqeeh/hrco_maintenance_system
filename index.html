@@ -349,6 +349,7 @@ html,body{height:100%;overflow:auto;font-family:Tajawal,sans-serif;font-size:14p
         <label id="t-lbl-order" data-en="Order / Project" data-ar="الأوردر أو المشروع">Order / Project</label>
         <select id="inp-order" onchange="onVisitOrderChange()"></select>
         <div id="nv-coverage" style="font-size:11px;font-weight:700;margin-top:5px"></div>
+        <div id="nv-exception" style="display:none;font-size:11px;font-weight:700;margin-top:5px;color:#6D28D9;background:#F3EDFF;border-radius:6px;padding:5px 9px"></div>
       </div>
 
       <div class="field" id="nv-items-field" style="display:none">
@@ -732,8 +733,14 @@ html,body{height:100%;overflow:auto;font-family:Tajawal,sans-serif;font-size:14p
 
         <div class="field" style="margin:0">
           <label data-en="Client Name *" data-ar="اسم العميل *">Client Name *</label>
-          <input type="text" id="mr-client" list="mr-client-list" placeholder="e.g. Hilton Hotel">
+          <input type="text" id="mr-client" list="mr-client-list" placeholder="e.g. Hilton Hotel" oninput="onRequestClientTyped()">
           <datalist id="mr-client-list"></datalist>
+        </div>
+
+        <div class="field" style="margin:0">
+          <label data-en="Order / Project (optional)" data-ar="الأوردر أو المشروع (اختياري)">Order / Project (optional)</label>
+          <select id="mr-order" onchange="onRequestOrderChange()"></select>
+          <div id="mr-coverage" style="font-size:11px;font-weight:700;margin-top:5px"></div>
         </div>
 
         <div class="field" style="margin:0">
@@ -1607,7 +1614,7 @@ function go(pg){
   if(pg==='archive') loadArchive();
   if(pg==='signature'){ try{ fillSummaryClient(); fillSummaryOrder(); }catch(e){} }
   if(pg==='client-orders'){ renderClientOrders(); attachCityAutocomplete('co-city','co-city-dd','co-city-zone'); }
-  if(pg==='maint-requests'){ fillMaintClientList(); attachCityAutocomplete('mr-city','mr-city-dd','mr-city-zone'); loadMaintRequests().then(renderMaintRequests); }
+  if(pg==='maint-requests'){ fillMaintClientList(); fillRequestOrders(); attachCityAutocomplete('mr-city','mr-city-dd','mr-city-zone'); loadMaintRequests().then(renderMaintRequests); }
   if(pg==='settings'){renderTaskEditor();renderUsersList();try{checkDBStatus();}catch(e){}}
 }
 function setBn(b){document.querySelectorAll('.bn').forEach(function(x){x.style.color='#A0AEC0';});b.style.color='#1D4E89';}
@@ -3213,6 +3220,9 @@ function clearMaintForm(){
     .forEach(function(id){ var e=document.getElementById(id); if(e) e.value=''; });
   setMapStatus('mr-map-status','');
   var _mz = document.getElementById('mr-city-zone'); if(_mz) _mz.innerHTML = '';
+  _mrClientId = null;
+  var _mo = document.getElementById('mr-order'); if(_mo) _mo.innerHTML = '';
+  var _mc = document.getElementById('mr-coverage'); if(_mc) _mc.innerHTML = '';
   var t=document.getElementById('mr-type'); if(t) t.value='paid';
   var pr=document.getElementById('mr-priority'); if(pr) pr.value='normal';
 }
@@ -4558,6 +4568,26 @@ function clearVisitItems(){
   renderVisitItems();
 }
 
+
+// A visit created from an exception carries that fact with it, so the report
+// shows why a chargeable job was covered.
+var _visitException = null;
+
+function showVisitException(){
+  var el = document.getElementById('nv-exception');
+  if(!el) return;
+  if(_visitException){
+    el.style.display = 'block';
+    el.innerHTML = '<i class="ti ti-shield-check"></i> '
+      + ((LNG==='ar')
+          ? ('استثناء معتمد — ' + (_visitException.reason||'') + (_visitException.by ? ' · ' + _visitException.by : ''))
+          : ('Exception granted — ' + (_visitException.reason||'') + (_visitException.by ? ' · ' + _visitException.by : '')));
+  } else {
+    el.style.display = 'none';
+    el.innerHTML = '';
+  }
+}
+
 function onVisitOrderChange(){
   visitSelectedItems = {};
   var isearch = document.getElementById('nv-items-search'); if(isearch) isearch.value = '';
@@ -4572,9 +4602,10 @@ function onVisitOrderChange(){
   var vtype = coverageVisitType(o);
 
   // Set the visit type from the order's coverage — that's the whole point.
+  // A manager-granted exception overrides it for this visit.
   var vsel = document.getElementById('sel-vtype');
   if(vsel){
-    vsel.value = vtype;
+    vsel.value = (typeof _visitException !== 'undefined' && _visitException) ? 'warranty' : vtype;
     try{ vsel.dispatchEvent(new Event('change')); }catch(e){}
   }
 
@@ -4608,6 +4639,75 @@ function fillMaintClientList(){
   }).join('');
 }
 
+
+// ── Sales request: client → order → coverage ─────────────────────────────
+// The salesperson picks the project, and the system works out the real
+// coverage instead of letting them guess the visit type.
+var _mrClientId = null;
+
+function onRequestClientTyped(){
+  var inp = document.getElementById('mr-client');
+  var q = inp ? inp.value.trim() : '';
+  _mrClientId = null;
+  if(q){
+    var hits = (typeof matchClients === 'function') ? matchClients(q) : [];
+    if(hits.length && hits[0].score >= 60) _mrClientId = hits[0].c.id;
+  }
+  fillRequestOrders();
+}
+
+function fillRequestOrders(){
+  var sel = document.getElementById('mr-order');
+  if(!sel) return;
+  var list = _mrClientId ? ordersOfClient(_mrClientId) : [];
+  sel.innerHTML = '<option value="">' + ((LNG==='ar') ? '— بدون أوردر —' : '— No order —') + '</option>'
+    + list.map(function(o){
+        var c = orderCoverage(o);
+        var tag = covLabel(c.type) + (c.active ? '' : ((LNG==='ar') ? ' — منتهٍ' : ' — expired'));
+        return '<option value="' + o.id + '">' + (o.name || '') + ' · ' + tag + '</option>';
+      }).join('');
+  onRequestOrderChange();
+}
+
+function onRequestOrderChange(){
+  var sel = document.getElementById('mr-order');
+  var info = document.getElementById('mr-coverage');
+  if(!sel || !info) return;
+  var o = clientOrders.find(function(x){ return String(x.id) === String(sel.value); });
+  if(!o){ info.innerHTML = ''; return; }
+
+  // Coverage decides the visit type — the salesperson no longer guesses it.
+  var vtype = coverageVisitType(o);
+  var tsel = document.getElementById('mr-type');
+  if(tsel) tsel.value = vtype;
+
+  // The order already knows where it is, so take the city from it.
+  if(o.city){
+    var cityEl = document.getElementById('mr-city');
+    if(cityEl && !cityEl.value.trim()){
+      cityEl.value = o.city;
+      if(typeof showCityZone === 'function') showCityZone('mr-city','mr-city-zone');
+    }
+  }
+
+  var c = orderCoverage(o);
+  var ends = fmtDate(c.endDate);
+  if(c.active){
+    info.innerHTML = '<i class="ti ti-shield-check"></i> ' + ((LNG==='ar')
+      ? ('مغطى (' + covLabel(c.type) + ') حتى ' + ends + ' — ' + c.daysLeft + ' يوم متبقٍ')
+      : ('Covered (' + covLabel(c.type) + ') until ' + ends + ' — ' + c.daysLeft + ' days left'));
+    info.style.color = '#2D7D3A';
+  } else if(c.endDate){
+    info.innerHTML = '<i class="ti ti-shield-off"></i> ' + ((LNG==='ar')
+      ? ('انتهت التغطية في ' + ends + ' — الزيارة مدفوعة')
+      : ('Coverage ended ' + ends + ' — this visit is chargeable'));
+    info.style.color = '#C0392B';
+  } else {
+    info.innerHTML = '<i class="ti ti-cash"></i> ' + ((LNG==='ar') ? 'خارج الضمان — زيارة مدفوعة' : 'Out of warranty — chargeable visit');
+    info.style.color = '#C4680A';
+  }
+}
+
 async function submitMaintRequest(){
   var val = function(id){ var e=document.getElementById(id); return e ? e.value.trim() : ''; };
   var client = val('mr-client');
@@ -4618,7 +4718,11 @@ async function submitMaintRequest(){
   var req = {
     client: client,
     city: val('mr-city'),
-    zone: cityZone(val('mr-city')),
+    zone: (function(){
+      var _o = clientOrders.find(function(x){ return String(x.id) === String(val('mr-order')); });
+      return (_o && _o.zone) ? _o.zone : cityZone(val('mr-city'));
+    })(),
+    order_id: val('mr-order') || null,
     location: val('mr-location'),
     map_url: readMapField('mr-map'),
     contact_person: val('mr-contact'),
@@ -4740,6 +4844,10 @@ function renderMaintRequests(){
       var place = [r.city, r.location].filter(Boolean).join(' — ');
     if(place) meta.push('<i class="ti ti-map-pin"></i> ' + place
       + (r.city ? ' <b style="color:#1D4E89">· ' + zoneLabel(r.zone || cityZone(r.city)) + '</b>' : ''));
+    if(r.order_id){
+      var _ro = clientOrders.find(function(x){ return String(x.id) === String(r.order_id); });
+      if(_ro) meta.push('<i class="ti ti-package"></i> ' + (_ro.name || ''));
+    }
     if(r.equipment) meta.push('<i class="ti ti-tool"></i> ' + r.equipment + (r.model ? ' — ' + r.model : ''));
     if(r.serial_no) meta.push('<i class="ti ti-hash"></i> ' + r.serial_no);
     if(r.contact_person) meta.push('<i class="ti ti-user"></i> ' + r.contact_person + (r.contact_phone ? ' · ' + r.contact_phone : ''));
@@ -4755,13 +4863,23 @@ function renderMaintRequests(){
                         'border:none;background:#1E7A34;color:#fff', 'إنهاء الطلب / Mark as done');
       var holdBtn = btn('holdMaintRequest', '<i class="ti ti-player-pause"></i> Hold',
                         'border:1px solid #F5D5AE;background:#FDF0E0;color:#C4680A', 'تعليق الطلب / Put on hold');
+      // The exception only makes sense on a visit the system would charge for.
+      var excBtn = '';
+      if(requestIsChargeable(r) || r.is_exception){
+        excBtn = r.is_exception
+          ? btn('revokeException', '<i class="ti ti-shield-off"></i> ' + (LNG==='ar'?'إلغاء الاستثناء':'Revoke exception'),
+                'border:1px solid #D9C7F5;background:#F3EDFF;color:#6D28D9')
+          : btn('grantException', '<i class="ti ti-shield-check"></i> ' + (LNG==='ar'?'استثناء':'Exception'),
+                'border:1px solid #D9C7F5;background:#F3EDFF;color:#6D28D9',
+                'تغطية هذا الطلب استثناءً / Cover this request as an exception');
+      }
       var st2 = r.status || 'new';
       if(st2 === 'new'){
         actions = btn('scheduleMaintRequest', '<i class="ti ti-calendar-plus"></i> Schedule Visit', 'border:none;background:#2D7D3A;color:#fff')
-                + doneBtn + holdBtn
+                + excBtn + doneBtn + holdBtn
                 + btn('rejectMaintRequest', 'Reject', 'border:1px solid #FCEBEB;background:#FCEBEB;color:#C0392B');
       } else if(st2 === 'scheduled'){
-        actions = doneBtn + holdBtn;
+        actions = excBtn + doneBtn + holdBtn;
       } else if(st2 === 'onhold'){
         actions = btn('resumeMaintRequest', '<i class="ti ti-player-play"></i> Resume', 'border:1px solid #D9E2EC;background:#fff;color:#1D4E89')
                 + doneBtn
@@ -4779,10 +4897,15 @@ function renderMaintRequests(){
       +     '<span style="background:'+st.bg+';color:'+st.fg+';font-size:10px;font-weight:700;padding:2px 8px;border-radius:99px">'+st.label+'</span>'
       +     '<span style="background:'+pr.bg+';color:'+pr.fg+';font-size:10px;font-weight:700;padding:2px 8px;border-radius:99px">'+pr.label+'</span>'
       +     '<span style="background:#E6F1FB;color:#1D4E89;font-size:10px;font-weight:700;padding:2px 8px;border-radius:99px">'+(MR_TYPE_LABEL[r.visit_type]||r.visit_type||'')+'</span>'
+      +     (r.is_exception ? '<span style="background:#F3EDFF;color:#6D28D9;font-size:10px;font-weight:700;padding:2px 9px;border-radius:99px"><i class="ti ti-shield-check"></i> '+(LNG==='ar'?'استثناء':'Exception')+'</span>' : '')
       +   '</div>'
       +   (meta.length ? '<div style="font-size:11px;color:#718096;margin-top:5px;display:flex;flex-wrap:wrap;gap:10px">'+meta.join('')+'</div>' : '')
       +   '<div style="font-size:12px;color:#1a202c;margin-top:7px;white-space:pre-wrap">'+(r.problem||'')+'</div>'
       +   (r.notes ? '<div style="font-size:11px;color:#A0AEC0;margin-top:4px">'+r.notes+'</div>' : '')
+      +   (r.is_exception && r.exception_reason
+            ? '<div style="font-size:11px;color:#6D28D9;margin-top:5px;background:#F3EDFF;border-radius:6px;padding:4px 8px;display:inline-block"><i class="ti ti-shield-check"></i> '
+              + r.exception_reason + ' — <span style="opacity:.75">' + (r.exception_by||'') + '</span></div>'
+            : '')
       +   ((r.status==='onhold' && r.hold_reason) ? '<div style="font-size:11px;color:#C4680A;margin-top:5px;background:#FDF0E0;border-radius:6px;padding:4px 8px;display:inline-block"><i class="ti ti-player-pause"></i> '+r.hold_reason+'</div>' : '')
       +   '<div style="font-size:10px;color:#A0AEC0;margin-top:6px">Requested by '+(r.requested_by||'—')+' · '+(r.date||'')+(r.visit_id?' · visit #'+r.visit_id:'')+'</div>'
       + '</div>'
@@ -4828,6 +4951,10 @@ function openMaintDetails(id){
     + '<div style="font-size:11px;font-weight:700;color:#0F2D52;margin:4px 0 2px">Customer / العميل</div>'
     + row('Client / العميل', r.client)
     + row('City / المدينة', r.city ? (r.city + '  —  ' + zoneLabel(r.zone || cityZone(r.city))) : '')
+    + row('Order / الأوردر', (function(){
+        var _o = clientOrders.find(function(x){ return String(x.id) === String(r.order_id); });
+        return _o ? _o.name : '';
+      })())
     + row('Branch / الفرع', r.location)
     + (r.map_url
         ? '<div style="display:flex;gap:10px;padding:7px 0;border-bottom:1px solid #F0F4F8">'
@@ -4849,6 +4976,9 @@ function openMaintDetails(id){
     + row('Preferred Date / التاريخ المفضل', r.preferred_date)
     + row('Requested by / مقدّم الطلب', r.requested_by)
     + row('Submitted / تاريخ الطلب', r.date)
+    + (r.is_exception ? row('Exception / استثناء',
+        (r.exception_reason || '') + (r.exception_by ? '  —  ' + r.exception_by : '')
+        + (r.exception_at ? '  ·  ' + r.exception_at : ''), {pre:true}) : '')
     + (r.hold_reason ? row('Hold reason / سبب التعليق', r.hold_reason, {pre:true}) : '')
     + (r.closed_on ? row('Completed on / تاريخ الإنهاء', r.closed_on) : '')
     + (r.visit_id ? row('Linked Visit / الزيارة', '#'+r.visit_id) : '');
@@ -5052,6 +5182,70 @@ function printMaintRequest(id){
   setTimeout(function(){ try{ w.focus(); w.print(); }catch(e){} }, 400);
 }
 
+
+// ── Warranty exception ───────────────────────────────────────────────────
+// The salesperson never sees this. Once a request reaches the maintenance
+// manager, HE decides whether to cover a chargeable job as a goodwill
+// exception — with a reason, so the decision is always accountable.
+function requestIsChargeable(r){
+  if(!r) return false;
+  if(r.order_id){
+    var o = clientOrders.find(function(x){ return String(x.id) === String(r.order_id); });
+    if(o) return coverageVisitType(o) === 'paid';
+  }
+  return (r.visit_type === 'paid');
+}
+
+async function grantException(id){
+  var ar = (LNG === 'ar');
+  var r = maintRequests.find(function(x){ return x.id == id; });
+  if(!r) return;
+  if(!(curUserRole === 'manager' || isSysAdmin())){
+    alert(ar ? 'الاستثناء من صلاحية مدير الصيانة فقط.' : 'Only a maintenance manager can grant an exception.');
+    return;
+  }
+  var why = prompt(ar ? 'سبب الاستثناء (إلزامي):' : 'Reason for the exception (required):', '');
+  if(why === null) return;
+  why = String(why).trim();
+  if(!why){
+    alert(ar ? 'يجب ذكر سبب الاستثناء.' : 'A reason is required for an exception.');
+    return;
+  }
+
+  var before = { is_exception:'false', visit_type: r.visit_type };
+  r.is_exception = true;
+  r.exception_reason = why;
+  r.exception_by = curUser || curUserLogin || '';
+  r.exception_at = new Date().toISOString().split('T')[0];
+
+  await dbSave('maintenance_requests', {
+    id: r.id, is_exception: true, exception_reason: r.exception_reason,
+    exception_by: r.exception_by, exception_at: r.exception_at
+  });
+  logActivity('status', 'maintenance request', (ar?'استثناء: ':'Exception: ') + (r.client||''),
+              before, { is_exception:'true', reason: why, by: r.exception_by });
+  renderMaintRequests();
+}
+
+async function revokeException(id){
+  var ar = (LNG === 'ar');
+  var r = maintRequests.find(function(x){ return x.id == id; });
+  if(!r) return;
+  if(!(curUserRole === 'manager' || isSysAdmin())){
+    alert(ar ? 'الاستثناء من صلاحية مدير الصيانة فقط.' : 'Only a maintenance manager can change an exception.');
+    return;
+  }
+  if(!confirm(ar ? 'إلغاء الاستثناء؟ ستعود الزيارة مدفوعة.' : 'Revoke the exception? The visit goes back to chargeable.')) return;
+
+  var before = { is_exception:'true', reason: r.exception_reason || '' };
+  r.is_exception = false;
+  r.exception_reason = '';
+  await dbSave('maintenance_requests', { id: r.id, is_exception: false, exception_reason: '' });
+  logActivity('status', 'maintenance request', (ar?'إلغاء استثناء: ':'Exception revoked: ') + (r.client||''),
+              before, { is_exception:'false' });
+  renderMaintRequests();
+}
+
 // Manager turns an approved request into a real visit, pre-filled.
 async function scheduleMaintRequest(id){
   var r = maintRequests.find(function(x){ return x.id == id; });
@@ -5068,6 +5262,21 @@ async function scheduleMaintRequest(id){
     }
     set('inp-location', [r.city, r.location].filter(Boolean).join(' — '));
     if(r.map_url){ set('inp-map', r.map_url); onMapLinkInput('inp-map','nv-map-status'); }
+    // Link the visit to the same order the request was raised against
+    // Set the exception FIRST so the order's coverage calculation respects it.
+    _visitException = r.is_exception
+      ? { reason: r.exception_reason || '', by: r.exception_by || '' }
+      : null;
+    showVisitException();
+
+    if(r.order_id){
+      var osel = document.getElementById('inp-order');
+      if(osel){ osel.value = String(r.order_id); onVisitOrderChange(); }
+    }
+    if(_visitException){
+      var vs = document.getElementById('sel-vtype');
+      if(vs) vs.value = 'warranty';
+    }
     // Equipment is a <select>; add the requested one if it isn't listed yet
     if(r.equipment){
       var eqSel = document.getElementById('inp-equipment');
@@ -5088,7 +5297,11 @@ async function scheduleMaintRequest(id){
     set('inp-serial', r.serial_no);
     set('inp-fault', r.problem);
     var vsel2 = document.getElementById('sel-vtype');
-    if(vsel2 && r.visit_type) vsel2.value = r.visit_type;
+    // The exception (set above) outranks the type recorded on the request.
+    if(vsel2){
+      if(_visitException) vsel2.value = 'warranty';
+      else if(r.visit_type) vsel2.value = r.visit_type;
+    }
   }, 250);
 
   r.status = 'scheduled';
@@ -8387,6 +8600,8 @@ function resetNewVisitForm(){
   selParts=[];renderTags();
   // Reset checkboxes
   _visitClientId = null;
+  _visitException = null;
+  try{ showVisitException(); }catch(e){}
   var _cs = document.getElementById('nv-client-status'); if(_cs) _cs.innerHTML = '';
   if(typeof clearVisitItems === 'function') clearVisitItems();
   if(typeof selectTaskCat === 'function') selectTaskCat('kitchen');
@@ -8544,6 +8759,8 @@ function collectVisitData() {
     map_url:       (typeof readMapField === 'function') ? readMapField('inp-map') : '',
     task_category: (typeof currentTaskCat !== 'undefined') ? currentTaskCat : '',
     order_id:      (document.getElementById('inp-order')||{}).value || null,
+    is_exception:  !!_visitException,
+    exception_reason: _visitException ? _visitException.reason : '',
     items:         JSON.stringify(Object.keys(visitSelectedItems).map(function(k){ return visitSelectedItems[k]; })),
     equipment:     (typeof currentEquipmentValue === 'function') ? currentEquipmentValue() : document.getElementById('inp-equipment').value,
     serial_number: document.getElementById('inp-serial').value,
