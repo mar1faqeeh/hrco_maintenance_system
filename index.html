@@ -4306,24 +4306,23 @@ function makeTicketToken(){
 // ── The public page ──────────────────────────────────────────────────────
 async function showTicketPortal(token){
   document.body.innerHTML = '<div id="tp-root" style="min-height:100vh;background:#F1F5F9;'
-    + 'font-family:Tajawal,Arial,sans-serif;display:flex;align-items:center;justify-content:center;padding:20px">'
-    + '<div style="color:#64748B;font-size:14px">جاري التحميل… / Loading…</div></div>';
+    + 'font-family:Tajawal,Arial,sans-serif;display:flex;align-items:flex-start;justify-content:center;padding:20px">'
+    + '<div style="color:#64748B;font-size:14px;padding:40px">Loading…</div></div>';
 
   try{ await loadAppSettings(); }catch(e){}
 
   var root = document.getElementById('tp-root');
-  var ar = true; // customers are addressed in Arabic first, with English beneath
 
   var shell = function(inner){
-    return '<div style="background:#fff;max-width:620px;width:100%;border-radius:14px;'
-      + 'box-shadow:0 4px 24px rgba(15,45,82,.10);overflow:hidden">' + inner + '</div>';
+    return '<div style="background:#fff;max-width:640px;width:100%;border-radius:14px;'
+      + 'box-shadow:0 4px 24px rgba(15,45,82,.10);overflow:hidden;margin:auto">' + inner + '</div>';
   };
   var head = function(){
     var logo = companyLogo();
     return '<div style="background:#0F2D52;color:#fff;padding:20px 24px;display:flex;align-items:center;gap:14px">'
       + (logo ? '<img src="' + logo + '" style="width:46px;height:46px;object-fit:contain;background:#fff;border-radius:9px;padding:4px">' : '')
-      + '<div><div style="font-size:17px;font-weight:800">' + companyName() + '</div>'
-      + '<div style="font-size:12px;opacity:.85;margin-top:2px">طلب صيانة / Maintenance Request</div></div></div>';
+      + '<div><div style="font-size:17px;font-weight:800">' + (company('name_en') || companyName()) + '</div>'
+      + '<div style="font-size:12px;opacity:.85;margin-top:2px">Maintenance Request</div></div></div>';
   };
   var message = function(icon, colour, title, text){
     return shell(head() + '<div style="padding:34px 26px;text-align:center">'
@@ -4332,15 +4331,12 @@ async function showTicketPortal(token){
       + '<div style="font-size:13px;color:#64748B;margin-top:6px;line-height:1.7">' + text + '</div></div>');
   };
 
-  // The switch in the control panel closes the door for everyone at once.
   if(!featureOn('customer_tickets')){
-    root.innerHTML = message('ti-lock', '#C4680A',
-      'الخدمة غير متاحة حالياً',
-      'Service temporarily unavailable.<br>يرجى التواصل مع الشركة مباشرة.');
+    root.innerHTML = message('ti-lock', '#C4680A', 'Service unavailable',
+      'This service is temporarily unavailable.<br>Please contact us directly.');
     return;
   }
 
-  // Resolve the link to its client
   var client = null;
   if(_initSb()){
     try{
@@ -4349,13 +4345,11 @@ async function showTicketPortal(token){
     }catch(e){ console.log('ticket lookup:', e); }
   }
   if(!client){
-    root.innerHTML = message('ti-link-off', '#C0392B',
-      'هذا الرابط غير صالح',
+    root.innerHTML = message('ti-link-off', '#C0392B', 'Invalid link',
       'This link is not valid or has been revoked.');
     return;
   }
 
-  // The client's projects give us the city — and therefore the right manager
   var orders = [];
   if(_initSb()){
     try{
@@ -4364,44 +4358,208 @@ async function showTicketPortal(token){
     }catch(e){}
   }
 
+  // A simple arithmetic challenge — no third-party service, works offline, and
+  // stops the scripted submissions a public form attracts.
+  _tpChallenge = { a: 2 + Math.floor(Math.random() * 8), b: 1 + Math.floor(Math.random() * 8) };
+  _tpFiles = [];
+
   var fld = 'width:100%;padding:11px 13px;border:1.5px solid #D9E2EC;border-radius:9px;'
     + 'font-size:14px;font-family:inherit;outline:none;box-sizing:border-box';
+  var lbl = function(t, req){
+    return '<label style="display:block;font-size:12px;font-weight:700;color:#4A5568;margin-bottom:5px;margin-top:14px">'
+      + t + (req ? ' <span style="color:#C0392B">*</span>' : '') + '</label>';
+  };
 
   root.innerHTML = shell(head()
-    + '<div style="padding:22px 24px">'
-    +   '<div style="background:#E6F1FB;color:#1D4E89;border-radius:9px;padding:10px 13px;font-size:13px;margin-bottom:18px">'
-    +     '<i class="ti ti-building"></i> ' + (client.nickname || client.name) + '</div>'
+    + '<div style="padding:20px 24px 26px">'
+    +   '<div style="background:#E6F1FB;color:#1D4E89;border-radius:9px;padding:10px 13px;font-size:13px">'
+    +     '<i class="ti ti-building"></i> ' + (client.name || client.nickname || '') + '</div>'
 
+    +   lbl('Project / Order')
     +   (orders.length
-          ? '<label style="display:block;font-size:12px;font-weight:700;color:#4A5568;margin-bottom:5px">الفرع أو المشروع / Branch or project</label>'
-            + '<select id="tp-order" style="' + fld + ';margin-bottom:14px">'
-            + '<option value="">— اختر / select —</option>'
+          ? '<select id="tp-order" onchange="tpOrderChanged()" style="' + fld + '">'
+            + '<option value="">— Select —</option>'
             + orders.map(function(o){
                 return '<option value="' + o.id + '">' + (o.name || '') + (o.city ? ' — ' + o.city : '') + '</option>';
               }).join('')
-            + '</select>'
-          : '<label style="display:block;font-size:12px;font-weight:700;color:#4A5568;margin-bottom:5px">المدينة / City</label>'
-            + '<input type="text" id="tp-city" style="' + fld + ';margin-bottom:14px" placeholder="مثال: الرياض">')
+            + '<option value="__other__">+ Other — not listed</option></select>'
+          : '<div style="font-size:12px;color:#A0AEC0;padding:4px 0">No projects registered — please fill in the branch below.</div>')
 
-    +   '<label style="display:block;font-size:12px;font-weight:700;color:#4A5568;margin-bottom:5px">اسم المسؤول / Contact name *</label>'
-    +   '<input type="text" id="tp-contact" style="' + fld + ';margin-bottom:14px">'
+    +   '<div id="tp-branch-wrap" style="display:' + (orders.length ? 'none' : 'block') + '">'
+    +     lbl('Branch / Site')
+    +     '<input type="text" id="tp-location" style="' + fld + '" placeholder="Branch or site name">'
+    +     lbl('City')
+    +     '<input type="text" id="tp-city" style="' + fld + '" placeholder="e.g. Riyadh">'
+    +   '</div>'
 
-    +   '<label style="display:block;font-size:12px;font-weight:700;color:#4A5568;margin-bottom:5px">رقم الجوال / Mobile *</label>'
-    +   '<input type="tel" id="tp-phone" dir="ltr" style="' + fld + ';margin-bottom:14px" placeholder="05XXXXXXXX">'
+    +   lbl('Location link')
+    +   '<div style="display:flex;gap:8px;flex-wrap:wrap">'
+    +     '<input type="text" id="tp-map" dir="ltr" style="' + fld + ';flex:1;min-width:180px" placeholder="Paste a Google Maps link">'
+    +     '<button type="button" onclick="tpUseMyLocation()" style="padding:11px 15px;border:none;border-radius:9px;background:#1D4E89;color:#fff;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;white-space:nowrap">'
+    +       '<i class="ti ti-current-location"></i> Use my location</button>'
+    +   '</div>'
+    +   '<div id="tp-map-status" style="font-size:11px;color:#718096;margin-top:5px"></div>'
 
-    +   '<label style="display:block;font-size:12px;font-weight:700;color:#4A5568;margin-bottom:5px">المعدة / Equipment</label>'
-    +   '<input type="text" id="tp-equipment" style="' + fld + ';margin-bottom:14px" placeholder="مثال: فرن، ثلاجة، غسالة أطباق">'
+    +   lbl('Contact name', true)
+    +   '<input type="text" id="tp-contact" style="' + fld + '">'
 
-    +   '<label style="display:block;font-size:12px;font-weight:700;color:#4A5568;margin-bottom:5px">وصف العطل / Problem *</label>'
-    +   '<textarea id="tp-problem" rows="4" style="' + fld + ';resize:vertical;margin-bottom:6px"></textarea>'
+    +   lbl('Mobile (WhatsApp)', true)
+    +   '<input type="tel" id="tp-phone" dir="ltr" style="' + fld + '" placeholder="05XXXXXXXX">'
+    +   '<div style="font-size:11px;color:#A0AEC0;margin-top:4px">We may contact you on WhatsApp about this request.</div>'
 
-    +   '<div id="tp-err" style="display:none;font-size:12px;color:#C0392B;margin-bottom:10px"></div>'
+    +   lbl('Email')
+    +   '<input type="email" id="tp-email" dir="ltr" style="' + fld + '" placeholder="name@company.com">'
+
+    +   lbl('Equipment')
+    +   '<input type="text" id="tp-equipment" style="' + fld + '" placeholder="e.g. Combi oven, display fridge">'
+
+    +   lbl('Problem description', true)
+    +   '<textarea id="tp-problem" rows="4" style="' + fld + ';resize:vertical"></textarea>'
+
+    +   lbl('Photos or video')
+    +   '<input type="file" id="tp-files" accept="image/*,video/*" multiple onchange="tpFilesChosen(this)" style="' + fld + ';padding:9px">'
+    +   '<div style="font-size:11px;color:#A0AEC0;margin-top:4px">Up to 4 files · photos are compressed automatically · 12 MB per file</div>'
+    +   '<div id="tp-files-list" style="display:flex;gap:8px;flex-wrap:wrap;margin-top:9px"></div>'
+
+    +   '<div style="margin-top:18px;background:#F8FAFC;border:1.5px solid #D9E2EC;border-radius:9px;padding:13px">'
+    +     '<div style="font-size:12px;font-weight:700;color:#4A5568;margin-bottom:7px">Security check <span style="color:#C0392B">*</span></div>'
+    +     '<div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">'
+    +       '<span style="font-size:15px;font-weight:700;color:#1a202c">' + _tpChallenge.a + ' + ' + _tpChallenge.b + ' = </span>'
+    +       '<input type="text" id="tp-captcha" inputmode="numeric" dir="ltr" style="width:90px;padding:9px 11px;border:1.5px solid #D9E2EC;border-radius:8px;font-size:15px;font-family:inherit;outline:none;text-align:center">'
+    +     '</div></div>'
+
+    +   '<input type="text" id="tp-website" tabindex="-1" autocomplete="off" style="position:absolute;left:-9999px;opacity:0;height:0" aria-hidden="true">'
+
+    +   '<div id="tp-err" style="display:none;font-size:12px;color:#C0392B;margin-top:12px;background:#FCEBEB;border-radius:8px;padding:9px 11px"></div>'
 
     +   '<button id="tp-send" onclick="submitTicket(\'' + token + '\',' + client.id + ')" '
-    +     'style="width:100%;padding:13px;border:none;border-radius:9px;background:#1D4E89;color:#fff;'
-    +     'font-size:15px;font-weight:700;cursor:pointer;font-family:inherit;margin-top:8px">'
-    +     '<i class="ti ti-send"></i> إرسال الطلب / Submit</button>'
+    +     'style="width:100%;padding:14px;border:none;border-radius:9px;background:#1D4E89;color:#fff;'
+    +     'font-size:15px;font-weight:700;cursor:pointer;font-family:inherit;margin-top:16px">'
+    +     '<i class="ti ti-send"></i> Submit request</button>'
     + '</div>');
+}
+
+// ── Portal helpers ───────────────────────────────────────────────────────
+var _tpChallenge = { a:0, b:0 };
+var _tpOpenedAt = 0;
+var _tpFiles = [];
+
+// "Other" reveals a free-text branch box; a listed order fills the city.
+function tpOrderChanged(){
+  var sel = document.getElementById('tp-order');
+  var branch = document.getElementById('tp-branch');
+  var city = document.getElementById('tp-city');
+  if(!sel) return;
+  var other = (sel.value === '__other__');
+  if(branch){
+    branch.style.display = other ? 'block' : 'none';
+    if(other) branch.focus(); else branch.value = '';
+  }
+  if(city && !other){
+    var opt = sel.options[sel.selectedIndex];
+    var c = opt ? opt.getAttribute('data-city') : '';
+    if(c) city.value = c;
+  }
+}
+
+function tpGrabLocation(){
+  var out = document.getElementById('tp-loc-status');
+  var btn = document.getElementById('tp-loc-btn');
+  var map = document.getElementById('tp-map');
+  if(!navigator.geolocation){
+    if(out){ out.textContent = 'This browser does not support location.'; out.style.color = '#C0392B'; }
+    return;
+  }
+  if(out){ out.textContent = 'Getting your location…'; out.style.color = '#718096'; }
+  if(btn) btn.disabled = true;
+  navigator.geolocation.getCurrentPosition(function(pos){
+    var lat = pos.coords.latitude.toFixed(6), lng = pos.coords.longitude.toFixed(6);
+    if(map) map.value = 'https://www.google.com/maps?q=' + lat + ',' + lng;
+    if(out){ out.innerHTML = '<i class="ti ti-map-pin-check"></i> Location captured'; out.style.color = '#2D7D3A'; }
+    if(btn) btn.disabled = false;
+  }, function(err){
+    if(out){
+      out.textContent = (err && err.code === 1)
+        ? 'Location permission denied — you can paste a map link instead.'
+        : 'Could not get your location — you can paste a map link instead.';
+      out.style.color = '#C4680A';
+    }
+    if(btn) btn.disabled = false;
+  }, { enableHighAccuracy:true, timeout:10000 });
+}
+
+// Photos are shrunk in the browser so a phone snapshot doesn't become a 6 MB
+// upload; video passes through with a hard size cap.
+function tpShrinkImage(file){
+  return new Promise(function(resolve){
+    var rd = new FileReader();
+    rd.onload = function(){
+      var img = new Image();
+      img.onload = function(){
+        var max = 1400, w = img.width, h = img.height;
+        if(w > max || h > max){
+          if(w >= h){ h = Math.round(h * max / w); w = max; }
+          else { w = Math.round(w * max / h); h = max; }
+        }
+        var cv = document.createElement('canvas');
+        cv.width = w; cv.height = h;
+        cv.getContext('2d').drawImage(img, 0, 0, w, h);
+        resolve(cv.toDataURL('image/jpeg', 0.72));
+      };
+      img.onerror = function(){ resolve(rd.result); };
+      img.src = rd.result;
+    };
+    rd.onerror = function(){ resolve(null); };
+    rd.readAsDataURL(file);
+  });
+}
+
+function tpReadFile(file){
+  return new Promise(function(resolve){
+    var rd = new FileReader();
+    rd.onload = function(){ resolve(rd.result); };
+    rd.onerror = function(){ resolve(null); };
+    rd.readAsDataURL(file);
+  });
+}
+
+async function tpFilesChosen(input){
+  var files = Array.prototype.slice.call((input && input.files) || []);
+  for(var i = 0; i < files.length; i++){
+    if(_tpFiles.length >= 4){ alert('Up to 4 files, please.'); break; }
+    var f = files[i];
+    var isVideo = /^video\//.test(f.type);
+    if(isVideo && f.size > 8 * 1024 * 1024){
+      alert('"' + f.name + '" is larger than 8 MB. Please send a shorter clip or share it on WhatsApp.');
+      continue;
+    }
+    if(!isVideo && !/^image\//.test(f.type)){
+      alert('"' + f.name + '" is not a photo or video.');
+      continue;
+    }
+    var data = isVideo ? await tpReadFile(f) : await tpShrinkImage(f);
+    if(data) _tpFiles.push({ name: f.name, type: isVideo ? 'video' : 'image', data: data });
+  }
+  if(input) input.value = '';
+  tpDrawFiles();
+}
+
+function tpDrawFiles(){
+  var list = document.getElementById('tp-files-list');
+  if(!list) return;
+  list.innerHTML = _tpFiles.map(function(f, idx){
+    return '<div style="position:relative;width:74px;height:74px;border-radius:8px;overflow:hidden;border:1px solid #D9E2EC;background:#F8FAFC">'
+      + (f.type === 'image'
+          ? '<img src="' + f.data + '" style="width:100%;height:100%;object-fit:cover">'
+          : '<div style="display:flex;align-items:center;justify-content:center;height:100%;color:#1D4E89"><i class="ti ti-video" style="font-size:26px"></i></div>')
+      + '<button type="button" onclick="tpRemoveFile(' + idx + ')" style="position:absolute;top:2px;right:2px;width:20px;height:20px;border-radius:50%;border:none;background:rgba(192,57,43,.92);color:#fff;cursor:pointer;font-size:11px;line-height:1">✕</button>'
+      + '</div>';
+  }).join('');
+}
+
+function tpRemoveFile(i){
+  _tpFiles.splice(i, 1);
+  tpDrawFiles();
 }
 
 async function submitTicket(token, clientId){
@@ -4409,22 +4567,28 @@ async function submitTicket(token, clientId){
   var btn = document.getElementById('tp-send');
   var val = function(id){ var e = document.getElementById(id); return e ? e.value.trim() : ''; };
   var fail = function(msg){
-    if(err){ err.style.display = 'block'; err.innerHTML = msg; }
-    if(btn){ btn.disabled = false; btn.style.opacity = '1'; }
+    if(err){ err.style.display = 'block'; err.innerHTML = msg; err.scrollIntoView({ block:'nearest' }); }
+    if(btn){ btn.disabled = false; btn.style.opacity = '1'; btn.innerHTML = '<i class="ti ti-send"></i> Submit request'; }
   };
 
-  var contact = val('tp-contact'), phone = val('tp-phone'), problem = val('tp-problem');
-  if(!contact || !phone || !problem){
-    fail('الرجاء تعبئة الحقول المطلوبة (*).<br>Please fill in the required fields.'); return;
-  }
-  if(phone.replace(/\D/g,'').length < 9){
-    fail('رقم الجوال غير صحيح.<br>That mobile number is not valid.'); return;
+  // A bot fills every field it finds, including the one people cannot see.
+  if(val('tp-website')){ fail('Submission blocked.'); return; }
+
+  if(!_tpChallenge || parseInt(val('tp-captcha'), 10) !== (_tpChallenge.a + _tpChallenge.b)){
+    fail('The security check answer is not correct.'); return;
   }
 
-  if(btn){ btn.disabled = true; btn.style.opacity = '.6'; btn.innerHTML = 'جاري الإرسال… / Sending…'; }
+  var contact = val('tp-contact'), phone = val('tp-phone'), problem = val('tp-problem'), email = val('tp-email');
+  if(!contact || !phone || !problem){ fail('Please fill in every field marked with *.'); return; }
+  if(phone.replace(/\D/g,'').length < 9){ fail('That mobile number does not look valid.'); return; }
+  if(email && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)){ fail('That email address does not look valid.'); return; }
 
-  var orderId = val('tp-order') || null;
+  if(btn){ btn.disabled = true; btn.style.opacity = '.6'; btn.innerHTML = 'Sending…'; }
+
+  var orderSel = val('tp-order');
+  var orderId = (orderSel && orderSel !== '__other__') ? orderSel : null;
   var city = val('tp-city');
+  var location = val('tp-location');
   var zone = 'other';
   var clientName = '';
 
@@ -4439,20 +4603,19 @@ async function submitTicket(token, clientId){
       if(ro.data && ro.data.length){
         city = ro.data[0].city || city;
         zone = ro.data[0].zone || cityZone(city);
+        if(!location) location = ro.data[0].name || '';
       }
     }catch(e){}
   } else if(city){
     zone = cityZone(city);
   }
 
-  // A public form needs a ceiling, or one bad actor floods the manager's page.
   try{
     var since = new Date(Date.now() - 24*3600*1000).toISOString().split('T')[0];
     var rl = await _sb.from('maintenance_requests').select('id')
       .eq('client_id', clientId).eq('source', 'customer').gte('date', since);
     if(rl.data && rl.data.length >= 10){
-      fail('تم استلام عدد كبير من الطلبات اليوم. يرجى التواصل معنا هاتفياً.'
-         + '<br>Too many requests today — please call us instead.');
+      fail('We have received several requests from you today. Please call us instead.');
       return;
     }
   }catch(e){}
@@ -4463,10 +4626,14 @@ async function submitTicket(token, clientId){
     order_id: orderId,
     city: city,
     zone: zone,
+    location: location,
+    map_url: val('tp-map'),
     contact_person: contact,
     contact_phone: phone,
+    contact_email: email,
     equipment: val('tp-equipment'),
     problem: problem,
+    attachments: _tpFiles.length ? JSON.stringify(_tpFiles) : null,
     visit_type: 'paid',
     priority: 'normal',
     status: 'new',
@@ -4479,13 +4646,13 @@ async function submitTicket(token, clientId){
   try{
     var res = await _sb.from('maintenance_requests').insert(req).select();
 
-    // If the database is missing an optional column (the portal SQL not run
-    // yet), drop the extras and file the ticket anyway rather than losing it.
+    // If a column is missing (the SQL has not been run yet), file the ticket
+    // with the core fields rather than losing the customer's report.
     if(res.error && /column|schema cache/i.test(res.error.message || '')){
       console.log('ticket insert retry without optional columns:', res.error.message);
       var lean = {};
-      ['client','city','zone','contact_person','contact_phone','equipment','problem',
-       'visit_type','priority','status','date','requested_by'].forEach(function(k){
+      ['client','city','zone','location','map_url','contact_person','contact_phone',
+       'equipment','problem','visit_type','priority','status','date','requested_by'].forEach(function(k){
         if(req[k] !== undefined && req[k] !== null && req[k] !== '') lean[k] = req[k];
       });
       res = await _sb.from('maintenance_requests').insert(lean).select();
@@ -4493,27 +4660,129 @@ async function submitTicket(token, clientId){
 
     if(res.error) throw new Error(res.error.message);
     var id = (res.data && res.data[0]) ? res.data[0].id : '';
+    _tpFiles = [];
     document.getElementById('tp-root').innerHTML =
-        '<div style="background:#fff;max-width:620px;width:100%;border-radius:14px;box-shadow:0 4px 24px rgba(15,45,82,.10);overflow:hidden">'
-      + '<div style="padding:38px 26px;text-align:center">'
+        '<div style="background:#fff;max-width:640px;width:100%;border-radius:14px;box-shadow:0 4px 24px rgba(15,45,82,.10);overflow:hidden;margin:auto">'
+      + '<div style="padding:40px 26px;text-align:center">'
       +   '<i class="ti ti-circle-check" style="font-size:46px;color:#2D7D3A"></i>'
-      +   '<div style="font-size:18px;font-weight:800;color:#1a202c;margin-top:14px">تم استلام طلبك</div>'
-      +   '<div style="font-size:13px;color:#64748B;margin-top:8px;line-height:1.8">'
-      +     'Your request has been received.<br>'
-      +     (id ? 'رقم الطلب / Reference: <b style="color:#1D4E89">#' + id + '</b><br>' : '')
-      +     'سيتواصل معك فريق الصيانة قريباً.</div>'
+      +   '<div style="font-size:19px;font-weight:800;color:#1a202c;margin-top:14px">Request received</div>'
+      +   '<div style="font-size:13px;color:#64748B;margin-top:10px;line-height:1.9">'
+      +     (id ? 'Reference: <b style="color:#1D4E89">#' + id + '</b><br>' : '')
+      +     'Our maintenance team will contact you shortly.</div>'
       + '</div></div>';
   }catch(e){
     var msg = String((e && e.message) || e || '');
     var hint = /permission|policy|row-level|RLS/i.test(msg)
-      ? 'صلاحيات قاعدة البيانات تمنع الإرسال — شغّل ملف ticket_portal.sql.<br>Database policy blocked the insert — run ticket_portal.sql.'
+      ? 'The request could not be saved (database policy). Please run run_all_columns.sql.'
       : (/column|schema cache/i.test(msg)
-          ? 'قاعدة البيانات تنقصها أعمدة — شغّل ملف ticket_portal.sql.<br>Missing columns — run ticket_portal.sql.'
-          : 'تعذّر إرسال الطلب. حاول مرة أخرى.<br>Could not submit — please try again.');
+          ? 'The request could not be saved (missing columns). Please run run_all_columns.sql.'
+          : (/payload|too large|entity/i.test(msg)
+              ? 'The attachments are too large. Please remove a file and try again.'
+              : 'Could not submit your request. Please try again.'));
     fail(hint + '<div style="font-size:10px;color:#A0AEC0;margin-top:6px" dir="ltr">' + msg + '</div>');
     console.log('ticket submit failed:', e);
   }
 }
+
+// ── Portal helpers ───────────────────────────────────────────────────────
+var _tpChallenge = null;
+var _tpFiles = [];
+
+function tpOrderChanged(){
+  var sel = document.getElementById('tp-order');
+  var wrap = document.getElementById('tp-branch-wrap');
+  if(!sel || !wrap) return;
+  // "Other" lets the customer name a branch we have not registered yet.
+  wrap.style.display = (sel.value === '__other__') ? 'block' : 'none';
+}
+
+function tpUseMyLocation(){
+  var st = document.getElementById('tp-map-status');
+  var inp = document.getElementById('tp-map');
+  if(!navigator.geolocation){
+    if(st){ st.textContent = 'This browser cannot share a location.'; st.style.color = '#C0392B'; }
+    return;
+  }
+  if(st){ st.textContent = 'Getting your location…'; st.style.color = '#718096'; }
+  navigator.geolocation.getCurrentPosition(function(pos){
+    var lat = pos.coords.latitude.toFixed(6), lng = pos.coords.longitude.toFixed(6);
+    if(inp) inp.value = 'https://www.google.com/maps?q=' + lat + ',' + lng;
+    if(st){ st.innerHTML = '<i class="ti ti-map-pin-check"></i> Location captured'; st.style.color = '#2D7D3A'; }
+  }, function(){
+    if(st){ st.textContent = 'Location permission denied — please paste a link instead.'; st.style.color = '#C4680A'; }
+  }, { enableHighAccuracy: true, timeout: 10000 });
+}
+
+// Photos are shrunk in the browser: a phone photo is several MB, and four of
+// them would be too heavy to store or email.
+function tpCompressImage(file){
+  return new Promise(function(resolve){
+    var rd = new FileReader();
+    rd.onload = function(){
+      var img = new Image();
+      img.onload = function(){
+        var max = 1400;
+        var w = img.width, h = img.height;
+        if(w > max || h > max){
+          if(w > h){ h = Math.round(h * max / w); w = max; }
+          else { w = Math.round(w * max / h); h = max; }
+        }
+        var c = document.createElement('canvas');
+        c.width = w; c.height = h;
+        c.getContext('2d').drawImage(img, 0, 0, w, h);
+        resolve(c.toDataURL('image/jpeg', 0.72));
+      };
+      img.onerror = function(){ resolve(rd.result); };
+      img.src = rd.result;
+    };
+    rd.onerror = function(){ resolve(null); };
+    rd.readAsDataURL(file);
+  });
+}
+
+function tpReadFile(file){
+  return new Promise(function(resolve){
+    var rd = new FileReader();
+    rd.onload = function(){ resolve(rd.result); };
+    rd.onerror = function(){ resolve(null); };
+    rd.readAsDataURL(file);
+  });
+}
+
+async function tpFilesChosen(input){
+  var files = Array.prototype.slice.call((input && input.files) || []);
+  if(input && input.value !== undefined) input.value = '';
+
+  for(var i = 0; i < files.length; i++){
+    if(_tpFiles.length >= 4){ alert('You can attach up to 4 files.'); break; }
+    var f = files[i];
+    if(f.size > 12 * 1024 * 1024){ alert('"' + f.name + '" is larger than 12 MB and was skipped.'); continue; }
+    var isImg = /^image\//.test(f.type);
+    var data = isImg ? await tpCompressImage(f) : await tpReadFile(f);
+    if(!data) continue;
+    _tpFiles.push({ name: f.name, type: isImg ? 'image' : 'video', data: data });
+  }
+  tpRenderFiles();
+}
+
+function tpRenderFiles(){
+  var list = document.getElementById('tp-files-list');
+  if(!list) return;
+  list.innerHTML = _tpFiles.map(function(f, i){
+    return '<div style="position:relative;width:74px;height:74px;border-radius:9px;overflow:hidden;border:1px solid #D9E2EC;background:#F8FAFC">'
+      + (f.type === 'image'
+          ? '<img src="' + f.data + '" style="width:100%;height:100%;object-fit:cover">'
+          : '<div style="display:flex;align-items:center;justify-content:center;height:100%;color:#1D4E89"><i class="ti ti-video" style="font-size:26px"></i></div>')
+      + '<button type="button" onclick="tpRemoveFile(' + i + ')" style="position:absolute;top:2px;right:2px;width:20px;height:20px;border:none;border-radius:50%;background:rgba(192,57,43,.9);color:#fff;cursor:pointer;font-size:12px;line-height:1">×</button>'
+      + '</div>';
+  }).join('');
+}
+
+function tpRemoveFile(i){
+  _tpFiles.splice(i, 1);
+  tpRenderFiles();
+}
+
 
 // ══════════════════════════════════════
 // ACTIVITY LOG
@@ -6213,6 +6482,25 @@ function triggerMrTranslate(){
 // One request can cover several machines: each row is an item with its own
 // name, model and serial. When the chosen order has an uploaded item list,
 // the name field suggests from it.
+// Tickets can arrive with photos or a short video from the customer.
+function requestAttachments(r){
+  var v = r && r.attachments;
+  if(!v) return [];
+  if(Array.isArray(v)) return v;
+  try{ var a = JSON.parse(v); return Array.isArray(a) ? a : []; }catch(e){ return []; }
+}
+
+function openTicketImage(reqId, idx){
+  var r = maintRequests.find(function(x){ return String(x.id) === String(reqId); });
+  var f = requestAttachments(r)[idx];
+  if(!f) return;
+  var w = window.open('', '_blank');
+  if(!w) return;
+  w.document.write('<body style="margin:0;background:#111;display:flex;align-items:center;justify-content:center">'
+    + '<img src="' + f.data + '" style="max-width:100%;max-height:100vh"></body>');
+  w.document.close();
+}
+
 function requestItemsOf(r){
   var v = r && r.items;
   if(!v) return [];
@@ -6742,6 +7030,7 @@ function openMaintDetails(id){
         return _o ? _o.name : '';
       })())
     + row('Branch / الفرع', r.location)
+    + (r.contact_email ? row('Email / البريد', r.contact_email) : '')
     + (r.map_url
         ? '<div style="display:flex;gap:10px;padding:7px 0;border-bottom:1px solid #F0F4F8">'
           + '<div style="min-width:150px;font-size:11px;font-weight:700;color:#718096">Map / الموقع</div>'
@@ -6770,6 +7059,17 @@ function openMaintDetails(id){
     + row('Preferred Date / التاريخ المفضل', r.preferred_date)
     + row('Requested by / مقدّم الطلب', r.requested_by)
     + row('Submitted / تاريخ الطلب', r.date)
+    + (requestAttachments(r).length
+        ? '<div style="margin:12px 0"><div style="font-size:12px;font-weight:700;color:#4A5568;margin-bottom:7px">'
+          + (LNG==='ar' ? 'مرفقات العميل' : 'Customer attachments') + ' (' + requestAttachments(r).length + ')</div>'
+          + '<div style="display:flex;gap:8px;flex-wrap:wrap">'
+          + requestAttachments(r).map(function(f, i){
+              return f.type === 'video'
+                ? '<video src="' + f.data + '" controls style="width:180px;border-radius:8px;border:1px solid #D9E2EC"></video>'
+                : '<img src="' + f.data + '" onclick="openTicketImage(' + r.id + ',' + i + ')" style="width:92px;height:92px;object-fit:cover;border-radius:8px;border:1px solid #D9E2EC;cursor:zoom-in">';
+            }).join('')
+          + '</div></div>'
+        : '')
     + (r.is_exception ? row('Exception / استثناء',
         (r.exception_reason || '') + (r.exception_by ? '  —  ' + r.exception_by : '')
         + (r.exception_at ? '  ·  ' + r.exception_at : ''), {pre:true}) : '')
