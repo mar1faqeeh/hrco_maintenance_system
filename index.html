@@ -367,7 +367,7 @@ html,body{height:100%;overflow:auto;font-family:Tajawal,sans-serif;font-size:14p
       <div class="field">
         <label id="t-lbl-gps">GPS Location</label>
         <div style="display:flex;gap:6px;flex-wrap:wrap">
-          <button type="button" id="nv-map-btn" onclick="captureCurrentLocation('inp-map','nv-map-status','nv-map-btn')" class="btn btn-p" style="white-space:nowrap"><i class="ti ti-current-location"></i> <span id="t-mybtn">My location</span></button>
+          <button type="button" id="nv-map-btn" onclick="captureCurrentLocation('inp-map','nv-map-status','nv-map-btn')" class="btn btn-p" style="white-space:nowrap"><i class="ti ti-current-location"></i> <span id="t-mybtn">Client location</span></button>
           <input type="text" id="inp-map" dir="ltr" oninput="onMapLinkInput('inp-map','nv-map-status')" placeholder="or paste a map link" style="flex:1;min-width:200px;padding:9px 12px;border:1.5px solid #D9E2EC;border-radius:8px;font-size:13px;font-family:inherit;outline:none">
         </div>
         <div id="nv-map-status" style="font-size:11px;margin-top:5px;color:#718096"></div>
@@ -783,6 +783,7 @@ html,body{height:100%;overflow:auto;font-family:Tajawal,sans-serif;font-size:14p
             <option value="warranty">Under Warranty / تحت الضمان</option>
             <option value="contract">Maintenance Contract / عقد صيانة</option>
           </select>
+          <div id="mr-type-lock" style="display:none;font-size:11px;margin-top:5px;color:#1D4E89"></div>
         </div>
 
         <div class="field" style="margin:0">
@@ -798,6 +799,9 @@ html,body{height:100%;overflow:auto;font-family:Tajawal,sans-serif;font-size:14p
           <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:6px">
             <label style="margin:0" data-en="Items Needing Service" data-ar="البنود المطلوب صيانتها">Items Needing Service</label>
             <div style="flex:1"></div>
+            <button type="button" id="mr-pick-btn" onclick="openOrderItemsPicker()" style="display:none;align-items:center;gap:5px;padding:6px 13px;border-radius:8px;border:1px solid #D9E2EC;background:#F8FAFC;color:#1D4E89;cursor:pointer;font-size:11px;font-weight:700;font-family:inherit">
+              <i class="ti ti-list-check"></i> <span id="mr-pick-label" data-en="Pick from the order list" data-ar="اختر من قائمة الأوردر">Pick from the order list</span>
+            </button>
             <button type="button" onclick="addItemRow()" style="display:flex;align-items:center;gap:5px;padding:6px 13px;border-radius:8px;border:1px solid #1D4E89;background:#1D4E89;color:#fff;cursor:pointer;font-size:11px;font-weight:700;font-family:inherit">
               <i class="ti ti-plus"></i> <span data-en="Add item" data-ar="إضافة بند">Add item</span>
             </button>
@@ -845,10 +849,10 @@ html,body{height:100%;overflow:auto;font-family:Tajawal,sans-serif;font-size:14p
 
         <div class="field" style="margin:0;grid-column:1/-1">
           <label data-en="Location on Map" data-ar="الموقع على الخريطة">Location on Map</label>
-          <div style="font-size:11px;color:#718096;margin-bottom:6px" data-en="Paste the location link the customer sent on WhatsApp, or from Google Maps." data-ar="الصق رابط الموقع الذي أرسله العميل على واتساب أو من خرائط جوجل">Paste the location link the customer sent on WhatsApp, or from Google Maps.</div>
+          <div style="font-size:11px;color:#718096;margin-bottom:6px" data-en="Paste the link the customer sent, or press the button while you are at their site." data-ar="الصق الرابط الذي أرسله العميل، أو اضغط الزر وأنت عند موقعه.">Paste the link the customer sent, or press the button while you are at their site.</div>
           <div style="display:flex;gap:6px;flex-wrap:wrap">
             <input type="text" id="mr-map" dir="ltr" oninput="onMapLinkInput('mr-map','mr-map-status')" placeholder="https://maps.app.goo.gl/... or 24.7136, 46.6753" data-ph-en="https://maps.app.goo.gl/... or 24.7136, 46.6753" data-ph-ar="https://maps.app.goo.gl/... أو 24.7136, 46.6753" style="flex:1;min-width:220px;padding:9px 12px;border:1.5px solid #D9E2EC;border-radius:8px;font-size:13px;font-family:inherit;outline:none">
-            <button type="button" id="mr-map-btn" onclick="captureCurrentLocation('mr-map','mr-map-status','mr-map-btn')" class="btn btn-o" style="white-space:nowrap"><i class="ti ti-current-location"></i> موقعي الحالي</button>
+            <button type="button" id="mr-map-btn" onclick="captureCurrentLocation('mr-map','mr-map-status','mr-map-btn')" class="btn btn-o" style="white-space:nowrap" title="سجّل الموقع وأنت عند العميل / Capture it while you are at the client's site"><i class="ti ti-current-location"></i> <span data-en="Client location" data-ar="موقع العميل">Client location</span></button>
           </div>
           <div id="mr-map-status" style="font-size:11px;margin-top:5px;color:#718096"></div>
         </div>
@@ -1205,7 +1209,7 @@ function setLang(l){
   var _set = function(id, ar, en){ var e=document.getElementById(id); if(e) e.textContent = _ar ? ar : en; };
   _set('t-taskhint', 'اختر نوع المعدة لعرض مهامها', 'Pick the equipment type to load its checklist');
   _set('t-lbl-gps', 'الموقع الجغرافي', 'GPS Location');
-  _set('t-mybtn', 'موقعي الحالي', 'My location');
+  _set('t-mybtn', 'موقع العميل', 'Client location');
   var _mapInp = document.getElementById('inp-map');
   if(_mapInp) _mapInp.placeholder = _ar ? 'أو الصق رابط موقع' : 'or paste a map link';
   try{ if(typeof renderInvList === 'function' && document.getElementById('invList')){ renderPartCatFilter(); renderInvList(); renderHistList(); } }catch(e){}
@@ -4703,12 +4707,33 @@ function onRequestOrderChange(){
   var info = document.getElementById('mr-coverage');
   if(!sel || !info) return;
   var o = clientOrders.find(function(x){ return String(x.id) === String(sel.value); });
-  if(!o){ info.innerHTML = ''; return; }
+  if(!o){
+    info.innerHTML = '';
+    var t0 = document.getElementById('mr-type');
+    if(t0){ t0.disabled = false; t0.style.background = ''; t0.style.cursor = ''; }
+    var l0 = document.getElementById('mr-type-lock');
+    if(l0){ l0.style.display = 'none'; l0.innerHTML = ''; }
+    return;
+  }
 
-  // Coverage decides the visit type — the salesperson no longer guesses it.
+  // Coverage decides the visit type — and the field is LOCKED so it can't be
+  // overridden. Covering a chargeable job is the maintenance manager's call
+  // (the Exception button), never the salesperson's.
   var vtype = coverageVisitType(o);
   var tsel = document.getElementById('mr-type');
-  if(tsel) tsel.value = vtype;
+  if(tsel){
+    tsel.value = vtype;
+    tsel.disabled = true;
+    tsel.style.background = '#F8FAFC';
+    tsel.style.cursor = 'not-allowed';
+  }
+  var lock = document.getElementById('mr-type-lock');
+  if(lock){
+    lock.style.display = 'block';
+    lock.innerHTML = '<i class="ti ti-lock"></i> ' + ((LNG==='ar')
+      ? 'يُحدَّد تلقائياً من تغطية الأوردر — لتغطية زيارة مدفوعة استثناءً، يعتمدها مدير الصيانة.'
+      : 'Set automatically from the order\'s coverage — covering a chargeable visit is the maintenance manager\'s decision.');
+  }
 
   // The order already knows where it is, so take the city from it.
   if(o.city){
@@ -4868,6 +4893,123 @@ function requestOrderItems(){
   return o ? orderItems(o) : [];
 }
 
+
+// ── Picking items straight from the order's uploaded list ────────────────
+var _oipPicked = {};
+
+function oipKey(it, i){ return (it.code || '') + '|' + (it.name || '') + '|' + i; }
+
+function openOrderItemsPicker(){
+  var items = requestOrderItems();
+  if(!items.length){
+    alert((LNG==='ar') ? 'لا توجد قائمة أصناف مرفوعة لهذا الأوردر.'
+                       : 'This order has no uploaded item list.');
+    return;
+  }
+  _oipPicked = {};
+  var box = document.getElementById('oip-search'); if(box) box.value = '';
+  renderOrderItemsPicker();
+  openMod('orderItemsPickModal');
+}
+
+function renderOrderItemsPicker(){
+  var list = document.getElementById('oip-list');
+  if(!list) return;
+  var items = requestOrderItems();
+  var box = document.getElementById('oip-search');
+  var q = box ? box.value.trim().toLowerCase() : '';
+  var shown = !q ? items : items.filter(function(it){
+    return (String(it.code||'') + ' ' + String(it.name||'')).toLowerCase().indexOf(q) !== -1;
+  });
+
+  // Items already sitting in the form are marked so nothing gets added twice
+  var existing = {};
+  document.querySelectorAll('#mr-item-rows .mr-item-row').forEach(function(r){
+    var n = r.querySelector('.mr-item-name');
+    if(n && n.value.trim()) existing[n.value.trim().toLowerCase()] = true;
+  });
+
+  list.innerHTML = '';
+  if(!shown.length){
+    list.innerHTML = '<div style="padding:16px;text-align:center;color:#A0AEC0;font-size:12px">'
+      + ((LNG==='ar') ? 'لا توجد نتائج' : 'No matching items') + '</div>';
+  }
+
+  shown.forEach(function(it){
+    var idx = items.indexOf(it);
+    var key = oipKey(it, idx);
+    var already = !!existing[String(it.name||'').trim().toLowerCase()];
+    var on = !!_oipPicked[key];
+
+    var row = document.createElement('label');
+    row.style.cssText = 'display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:7px;width:100%;box-sizing:border-box;'
+      + 'cursor:' + (already ? 'default' : 'pointer') + ';opacity:' + (already ? '.55' : '1')
+      + ';border:1px solid ' + (on ? '#1D4E89' : '#F0F4F8') + ';background:' + (on ? '#E6F1FB' : '#fff');
+
+    var cb = document.createElement('input');
+    cb.type = 'checkbox'; cb.checked = on; cb.disabled = already;
+    cb.style.cssText = 'flex:0 0 auto;margin:0;width:16px;height:16px';
+    cb.onchange = function(){
+      if(cb.checked) _oipPicked[key] = { name: it.name, code: it.code };
+      else delete _oipPicked[key];
+      // restyle this row only — re-rendering here would swallow rapid ticks
+      row.style.borderColor = cb.checked ? '#1D4E89' : '#F0F4F8';
+      row.style.background  = cb.checked ? '#E6F1FB' : '#fff';
+      updateOipSummary();
+    };
+
+    var txt = document.createElement('div');
+    txt.style.cssText = 'flex:1;min-width:0';
+    txt.innerHTML = '<div style="font-size:13px;font-weight:600;color:#1a202c;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'
+        + String(it.name||'').replace(/</g,'&lt;')
+        + (already ? ' <span style="font-size:10px;color:#2D7D3A;font-weight:700">(' + ((LNG==='ar')?'مضاف':'added') + ')</span>' : '')
+      + '</div>'
+      + (it.code ? '<div style="font-size:11px;color:#1D4E89;font-weight:600" dir="ltr">' + String(it.code).replace(/</g,'&lt;') + '</div>' : '');
+
+    row.appendChild(cb); row.appendChild(txt);
+    list.appendChild(row);
+  });
+  updateOipSummary();
+}
+
+function updateOipSummary(){
+  var el = document.getElementById('oip-summary');
+  if(!el) return;
+  var n = Object.keys(_oipPicked).length;
+  var total = requestOrderItems().length;
+  el.textContent = n
+    ? ((LNG==='ar') ? (n + ' صنف محدد من ' + total) : (n + ' of ' + total + ' items selected'))
+    : ((LNG==='ar') ? ('الأوردر يحتوي ' + total + ' صنف') : (total + ' items in this order'));
+  el.style.color = n ? '#1D4E89' : '#718096';
+}
+
+// Each picked item becomes a row; the first blank row is reused so the form
+// doesn't end up with an empty line at the top.
+function addPickedOrderItems(){
+  var picked = Object.keys(_oipPicked).map(function(k){ return _oipPicked[k]; });
+  if(!picked.length){
+    alert((LNG==='ar') ? 'لم تحدد أي صنف.' : 'No items selected.');
+    return;
+  }
+  picked.forEach(function(it){
+    var rows = document.querySelectorAll('#mr-item-rows .mr-item-row');
+    var blank = null;
+    Array.prototype.forEach.call(rows, function(r){
+      if(blank) return;
+      var n = r.querySelector('.mr-item-name'), m = r.querySelector('.mr-item-model'), sn = r.querySelector('.mr-item-serial');
+      if(n && !n.value.trim() && (!m || !m.value.trim()) && (!sn || !sn.value.trim())) blank = r;
+    });
+    if(blank){
+      blank.querySelector('.mr-item-name').value = it.name || '';
+      blank.querySelector('.mr-item-model').value = it.code || '';
+    } else {
+      addItemRow(it.name || '', it.code || '', '');
+    }
+  });
+  renumberItemRows();
+  closeMod('orderItemsPickModal');
+}
+
 function addItemRow(name, model, serial){
   var wrap = document.getElementById('mr-item-rows');
   if(!wrap) return;
@@ -4938,6 +5080,13 @@ function refreshRequestItemsMode(){
   }).join('');
   var wrap = document.getElementById('mr-item-rows');
   if(wrap && !wrap.querySelectorAll('.mr-item-row').length) addItemRow();
+
+  var pick = document.getElementById('mr-pick-btn');
+  if(pick){
+    pick.style.display = items.length ? 'flex' : 'none';
+    var lbl = document.getElementById('mr-pick-label');
+    if(lbl) lbl.textContent = ((LNG==='ar') ? 'اختر من قائمة الأوردر' : 'Pick from the order list') + ' (' + items.length + ')';
+  }
   renumberItemRows();
 }
 
@@ -5009,8 +5158,12 @@ async function submitMaintRequest(){
     map_url: readMapField('mr-map'),
     contact_person: val('mr-contact'),
     contact_phone: val('mr-phone'),
-    visit_type: val('mr-type') || 'paid',
     priority: val('mr-priority') || 'normal',
+    // Never trust the field: if an order is linked, its coverage is the truth.
+    visit_type: (function(){
+      var _o = clientOrders.find(function(x){ return String(x.id) === String(val('mr-order')); });
+      return _o ? coverageVisitType(_o) : (val('mr-type') || 'paid');
+    })(),
     // The first row doubles as the request's main machine, so everything that
     // already reads equipment/model/serial (the visit, the print sheet) still works.
     equipment: (collectRequestItems()[0] || {}).name || '',
@@ -10307,6 +10460,30 @@ async function showPublicReport(token){
       <div id="ap-body" style="padding:24px 26px"></div>
     </div>
 
+  </div>
+</div>
+
+
+<!-- PICK ITEMS FROM THE ORDER'S UPLOADED LIST -->
+<div id="orderItemsPickModal" class="modal" style="display:none">
+  <div class="mbox" style="max-width:640px">
+    <div class="mh">
+      <div class="mhtitle"><i class="ti ti-list-check"></i> <span data-en="Choose from the order's items" data-ar="اختر من أصناف الأوردر">Choose from the order's items</span></div>
+      <button class="mclose" onclick="closeMod('orderItemsPickModal')"><i class="ti ti-x"></i></button>
+    </div>
+    <div class="mb">
+      <div style="position:relative;margin-bottom:10px">
+        <i class="ti ti-search" style="position:absolute;top:50%;transform:translateY(-50%);inset-inline-start:10px;color:#A0AEC0;font-size:14px;pointer-events:none"></i>
+        <input type="text" id="oip-search" oninput="renderOrderItemsPicker()" data-ph-en="Search by name or code…" data-ph-ar="ابحث بالاسم أو الكود…" placeholder="Search by name or code…"
+               style="width:100%;padding:9px 34px;border:1.5px solid #D9E2EC;border-radius:8px;font-size:13px;font-family:inherit;outline:none">
+      </div>
+      <div id="oip-list" style="display:flex;flex-direction:column;gap:5px;max-height:320px;overflow-y:auto;border:1.5px solid #D9E2EC;border-radius:8px;padding:7px"></div>
+      <div id="oip-summary" style="font-size:11px;color:#718096;margin-top:7px"></div>
+    </div>
+    <div class="mf">
+      <button onclick="closeMod('orderItemsPickModal')" class="btn btn-o" style="flex:1" data-en="Cancel" data-ar="إلغاء">Cancel</button>
+      <button onclick="addPickedOrderItems()" class="btn btn-p" style="flex:2"><i class="ti ti-plus"></i> <span id="oip-add-label" data-en="Add selected" data-ar="إضافة المحدد">Add selected</span></button>
+    </div>
   </div>
 </div>
 
