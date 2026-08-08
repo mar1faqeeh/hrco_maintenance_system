@@ -5125,6 +5125,8 @@ function apRenderGeneral(){
             : 'These details appear in the top bar and on every printed sheet and email the system sends.')
     + '</div>'
 
+    + group(ar?'بيانات الشركة':'Company details', ['name_en','name_ar','short','phone','email','website','address','cr'])
+
     // logo
     + '<div style="background:#0E2140;border:1px solid #1B3157;border-radius:12px;padding:18px;margin-bottom:14px">'
     +   '<div style="font-size:13px;font-weight:700;color:#fff;margin-bottom:12px">' + (ar?'الشعار':'Logo') + '</div>'
@@ -5166,7 +5168,6 @@ function apRenderGeneral(){
         }).join('')
     + '</div>'
 
-    + group(ar?'بيانات الشركة':'Company details', ['name_en','name_ar','short','phone','email','website','address','cr'])
     // per-document print style
     + '<div style="background:#0E2140;border:1px solid #1B3157;border-radius:12px;padding:18px;margin-bottom:14px">'
     +   '<div style="font-size:13px;font-weight:700;color:#fff;margin-bottom:4px">' + (ar?'شكل الطباعة لكل صفحة':'Print style per document') + '</div>'
