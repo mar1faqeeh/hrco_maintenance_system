@@ -658,7 +658,7 @@ html,body{height:100%;overflow:auto;font-family:Tajawal,sans-serif;font-size:14p
   <div class="ph"><div><div class="pt" id="t-reports-pg">Reports</div><div class="ps" id="t-reports-sub">Search all reports and visits</div></div>
     <div style="display:flex;gap:8px">
       <button class="btn btn-o" onclick="exportReportExcel()"><i class="ti ti-file-export"></i><span id="t-export">Export Excel</span></button>
-      <button class="btn btn-p" onclick="window.print()"><i class="ti ti-printer"></i><span id="t-print">Print</span></button>
+      <button class="btn btn-p" onclick="printReports()"><i class="ti ti-printer"></i><span id="t-print">Print</span></button>
     </div>
   </div>
   <div class="rsc">
@@ -687,10 +687,10 @@ html,body{height:100%;overflow:auto;font-family:Tajawal,sans-serif;font-size:14p
 <div id="pg-archive" style="display:none">
   <div class="ph">
     <div><div class="pt" id="t-archive-pg">Archive</div><div class="ps" id="t-archive-sub">All closed reports</div></div>
-    <button class="btn btn-o" onclick="window.print()"><i class="ti ti-printer"></i> Print</button>
+    <button class="btn btn-o" onclick="printArchive()"><i class="ti ti-printer"></i> Print</button>
   </div>
   <div class="vtbar">
-    <div class="sbox"><i class="ti ti-search"></i><input type="text" placeholder="Search archive..." oninput="filterArchive(this.value)"></div>
+    <div class="sbox"><i class="ti ti-search"></i><input type="text" id="archSearch" placeholder="Search archive..." data-ph-en="Search archive..." data-ph-ar="بحث في الأرشيف..." oninput="filterArchive(this.value)"></div>
   </div>
   <div class="tbl">
     <div class="thd" style="grid-template-columns:2fr 1.2fr 1fr 1fr 0.8fr 120px">
@@ -9573,6 +9573,141 @@ async function saveClient(){
 var rData=visData.map(function(v,i){return Object.assign({id:i+1,parts:v.status==='Pending'?['Danfoss T2']:[]},v);});
 // Shared by the on-screen table AND the Excel export, so what you download is
 // exactly what you're looking at.
+
+// Reports list print — a proper sheet with the company letterhead, matching
+// whatever filters are on screen (the same rows the Excel export uses).
+
+// Archive print — same letterhead, driven by the rows on screen.
+function printArchive(){
+  var ar = (LNG === 'ar');
+  var q = (document.getElementById('archSearch') || {}).value || '';
+  var src = (typeof archiveData !== 'undefined' && archiveData && archiveData.length)
+    ? archiveData
+    : (typeof visData !== 'undefined' ? visData.filter(function(r){
+        return String(r.status||'').toLowerCase() === 'completed';
+      }) : []);
+  var rows = src.filter(function(r){
+    if(!q) return true;
+    var s2 = q.toLowerCase();
+    return String(r.client||'').toLowerCase().indexOf(s2) !== -1
+        || String(r.tech||'').toLowerCase().indexOf(s2) !== -1;
+  });
+  if(!rows.length){
+    alert(ar ? 'لا توجد سجلات للطباعة.' : 'There are no records to print.');
+    return;
+  }
+  printListSheet(ar ? 'الأرشيف' : 'Archive', rows, q);
+}
+
+// Shared list-sheet printer used by the Archive (Reports builds its own with
+// its filter summary).
+function printListSheet(title, rows, note){
+  var ar = (LNG === 'ar');
+  var esc = function(v){
+    return String(v == null ? '' : v).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  };
+  var head = ar ? ['#','العميل','المعدة','الفني','النوع','الحالة','التاريخ']
+                : ['#','Client','Equipment','Technician','Type','Status','Date'];
+  var body = rows.map(function(r, i){
+    return '<tr><td>' + (i+1) + '</td><td>' + esc(r.client) + '</td>'
+      + '<td>' + esc(r.equipment || r.equip) + '</td><td>' + esc(r.tech) + '</td>'
+      + '<td>' + esc(r.visit_type || r.type) + '</td><td>' + esc(r.status) + '</td>'
+      + '<td>' + esc(r.date) + '</td></tr>';
+  }).join('');
+
+  var html = '<!DOCTYPE html><html dir="' + (ar?'rtl':'ltr') + '"><head><meta charset="UTF-8">'
+    + '<title>' + title + '</title><style>'
+    + 'body{font-family:Tajawal,Arial,sans-serif;padding:26px;color:#1a202c}'
+    + 'h1{font-size:18px;color:#0F2D52;margin:0 0 3px}'
+    + '.meta{font-size:11px;color:#718096;margin-bottom:14px}'
+    + 'table{width:100%;border-collapse:collapse}'
+    + 'th,td{border:1px solid #D9E2EC;padding:6px 9px;font-size:11px;text-align:start}'
+    + 'th{background:#F8FAFC;color:#4A5568;font-weight:700}'
+    + 'tr:nth-child(even) td{background:#FBFDFF}'
+    + printHeadStyle()
+    + '@media print{body{padding:0} thead{display:table-header-group}}'
+    + '</style></head><body>'
+    + printHeaderHtml()
+    + '<h1>' + title + '</h1>'
+    + '<div class="meta">' + rows.length + (ar ? ' سجل' : ' record(s)')
+    +   (note ? '  ·  ' + esc(note) : '') + '</div>'
+    + '<table><thead><tr>' + head.map(function(h){ return '<th>' + h + '</th>'; }).join('') + '</tr></thead>'
+    + '<tbody>' + body + '</tbody></table>'
+    + printFooterHtml()
+    + '</body></html>';
+
+  var w = window.open('', '_blank');
+  if(!w){ alert(ar ? 'المتصفح منع فتح نافذة الطباعة.' : 'The browser blocked the print window.'); return; }
+  w.document.open(); w.document.write(html); w.document.close();
+  setTimeout(function(){ try{ w.focus(); w.print(); }catch(e){} }, 400);
+}
+
+function printReports(){
+  var ar = (LNG === 'ar');
+  var rows = (typeof getReportRows === 'function') ? getReportRows() : [];
+  if(!rows.length){
+    alert(ar ? 'لا توجد نتائج للطباعة.' : 'There are no results to print.');
+    return;
+  }
+
+  var esc = function(v){
+    return String(v == null ? '' : v)
+      .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  };
+  var val = function(id){ var e = document.getElementById(id); return e ? e.value : ''; };
+
+  // Show which filters produced this list, so a printed copy is self-explanatory
+  var f = [];
+  if(val('rf-client')) f.push((ar?'العميل: ':'Client: ') + val('rf-client'));
+  if(val('rf-tech'))   f.push((ar?'الفني: ':'Technician: ') + val('rf-tech'));
+  if(val('rf-part'))   f.push((ar?'القطعة: ':'Part: ') + val('rf-part'));
+  if(val('rf-from') || val('rf-to')) f.push((ar?'الفترة: ':'Period: ') + (val('rf-from')||'…') + ' → ' + (val('rf-to')||'…'));
+  if(val('rf-status') && val('rf-status') !== 'all') f.push((ar?'الحالة: ':'Status: ') + val('rf-status'));
+  if(val('rf-type') && val('rf-type') !== 'all') f.push((ar?'النوع: ':'Type: ') + val('rf-type'));
+
+  var head = ar
+    ? ['#','العميل','المعدة','الفني','النوع','الحالة','التاريخ']
+    : ['#','Client','Equipment','Technician','Type','Status','Date'];
+
+  var body = rows.map(function(r, i){
+    return '<tr>'
+      + '<td>' + (i+1) + '</td>'
+      + '<td>' + esc(r.client) + '</td>'
+      + '<td>' + esc(r.equip || r.equipment) + '</td>'
+      + '<td>' + esc(r.tech) + '</td>'
+      + '<td>' + esc(r.type) + '</td>'
+      + '<td>' + esc(r.status) + '</td>'
+      + '<td>' + esc(r.date) + '</td>'
+      + '</tr>';
+  }).join('');
+
+  var html = '<!DOCTYPE html><html dir="' + (ar?'rtl':'ltr') + '"><head><meta charset="UTF-8">'
+    + '<title>' + (ar ? 'تقرير الزيارات' : 'Visits Report') + '</title><style>'
+    + 'body{font-family:Tajawal,Arial,sans-serif;padding:26px;color:#1a202c}'
+    + 'h1{font-size:18px;color:#0F2D52;margin:0 0 3px}'
+    + '.meta{font-size:11px;color:#718096;margin-bottom:14px}'
+    + 'table{width:100%;border-collapse:collapse}'
+    + 'th,td{border:1px solid #D9E2EC;padding:6px 9px;font-size:11px;text-align:start}'
+    + 'th{background:#F8FAFC;color:#4A5568;font-weight:700}'
+    + 'tr:nth-child(even) td{background:#FBFDFF}'
+    + printHeadStyle()
+    + '@media print{body{padding:0} thead{display:table-header-group}}'
+    + '</style></head><body>'
+    + printHeaderHtml()
+    + '<h1>' + (ar ? 'تقرير الزيارات' : 'Visits Report') + '</h1>'
+    + '<div class="meta">' + rows.length + (ar ? ' نتيجة' : ' result(s)')
+    +   (f.length ? '  ·  ' + esc(f.join('  ·  ')) : '') + '</div>'
+    + '<table><thead><tr>' + head.map(function(h){ return '<th>' + h + '</th>'; }).join('') + '</tr></thead>'
+    + '<tbody>' + body + '</tbody></table>'
+    + printFooterHtml()
+    + '</body></html>';
+
+  var w = window.open('', '_blank');
+  if(!w){ alert(ar ? 'المتصفح منع فتح نافذة الطباعة.' : 'The browser blocked the print window.'); return; }
+  w.document.open(); w.document.write(html); w.document.close();
+  setTimeout(function(){ try{ w.focus(); w.print(); }catch(e){} }, 400);
+}
+
 function getReportRows(){
   var val=function(id){ var e=document.getElementById(id); return e?e.value:''; };
   var qc=val('rf-client').trim().toLowerCase();
