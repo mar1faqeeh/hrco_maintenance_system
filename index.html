@@ -6532,15 +6532,77 @@ function requestAttachments(r){
   try{ var a = JSON.parse(v); return Array.isArray(a) ? a : []; }catch(e){ return []; }
 }
 
+// Attachments open in a lightbox over the page — a new tab loses the context
+// of the request you were reading, and gets blocked by popup settings.
+var _lbFiles = [], _lbIndex = 0;
+
 function openTicketImage(reqId, idx){
   var r = maintRequests.find(function(x){ return String(x.id) === String(reqId); });
-  var f = requestAttachments(r)[idx];
+  // Parse ONCE — calling requestAttachments twice returns two different object
+  // sets (JSON.parse each time), so indexOf would never match.
+  var all = requestAttachments(r);
+  _lbFiles = all.filter(function(f){ return f.type !== 'video'; });
+  if(!_lbFiles.length) return;
+  _lbIndex = Math.max(0, _lbFiles.indexOf(all[idx]));
+
+  var box = document.getElementById('lightbox');
+  if(!box){
+    box = document.createElement('div');
+    box.id = 'lightbox';
+    box.style.cssText = 'position:fixed;inset:0;z-index:10000;background:rgba(10,20,35,.94);'
+      + 'display:flex;align-items:center;justify-content:center;padding:24px';
+    box.onclick = function(ev){ if(ev.target === box) closeLightbox(); };
+    document.body.appendChild(box);
+    document.addEventListener('keydown', lightboxKeys);
+  }
+  box.style.display = 'flex';
+  drawLightbox();
+}
+
+function drawLightbox(){
+  var box = document.getElementById('lightbox');
+  if(!box) return;
+  var f = _lbFiles[_lbIndex];
   if(!f) return;
-  var w = window.open('', '_blank');
-  if(!w) return;
-  w.document.write('<body style="margin:0;background:#111;display:flex;align-items:center;justify-content:center">'
-    + '<img src="' + f.data + '" style="max-width:100%;max-height:100vh"></body>');
-  w.document.close();
+  var many = _lbFiles.length > 1;
+  var navBtn = function(dir, icon, side){
+    return '<button onclick="lightboxStep(' + dir + ')" style="position:absolute;' + side + ':18px;top:50%;'
+      + 'transform:translateY(-50%);width:44px;height:44px;border:none;border-radius:50%;'
+      + 'background:rgba(255,255,255,.15);color:#fff;font-size:20px;cursor:pointer;display:flex;'
+      + 'align-items:center;justify-content:center"><i class="ti ' + icon + '"></i></button>';
+  };
+  box.innerHTML =
+      '<button onclick="closeLightbox()" style="position:absolute;top:18px;inset-inline-end:18px;width:40px;height:40px;'
+    +   'border:none;border-radius:50%;background:rgba(255,255,255,.15);color:#fff;font-size:19px;cursor:pointer">✕</button>'
+    + (many ? navBtn(-1, 'ti-chevron-left', 'left') + navBtn(1, 'ti-chevron-right', 'right') : '')
+    + '<img src="' + f.data + '" style="max-width:92%;max-height:88vh;border-radius:10px;box-shadow:0 10px 40px rgba(0,0,0,.5)">'
+    + (many
+        ? '<div style="position:absolute;bottom:18px;left:0;right:0;text-align:center;color:#fff;font-size:12px;opacity:.85">'
+          + (_lbIndex + 1) + ' / ' + _lbFiles.length + '</div>'
+        : '')
+    + '<a href="' + f.data + '" download="' + (f.name || 'attachment.jpg') + '" '
+    +   'style="position:absolute;bottom:16px;inset-inline-start:18px;color:#fff;background:rgba(255,255,255,.15);'
+    +   'border-radius:8px;padding:8px 14px;font-size:12px;text-decoration:none;font-family:inherit">'
+    +   '<i class="ti ti-download"></i> ' + ((LNG==='ar') ? 'تنزيل' : 'Download') + '</a>';
+}
+
+function lightboxStep(dir){
+  if(!_lbFiles.length) return;
+  _lbIndex = (_lbIndex + dir + _lbFiles.length) % _lbFiles.length;
+  drawLightbox();
+}
+
+function closeLightbox(){
+  var box = document.getElementById('lightbox');
+  if(box) box.style.display = 'none';
+}
+
+function lightboxKeys(e){
+  var box = document.getElementById('lightbox');
+  if(!box || box.style.display === 'none') return;
+  if(e.key === 'Escape') closeLightbox();
+  else if(e.key === 'ArrowRight') lightboxStep(1);
+  else if(e.key === 'ArrowLeft') lightboxStep(-1);
 }
 
 function requestItemsOf(r){
