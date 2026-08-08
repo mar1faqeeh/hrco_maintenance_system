@@ -738,7 +738,11 @@ html,body{height:100%;overflow:auto;font-family:Tajawal,sans-serif;font-size:14p
 
         <div class="field" style="margin:0">
           <label data-en="City" data-ar="المدينة">City</label>
-          <input type="text" id="mr-city" list="mr-city-list" placeholder="e.g. Riyadh" data-ph-en="e.g. Riyadh" data-ph-ar="مثال: الرياض">
+          <div style="position:relative">
+            <input type="text" id="mr-city" autocomplete="off" placeholder="Type a city…" data-ph-en="Type a city…" data-ph-ar="اكتب اسم المدينة…">
+            <div id="mr-city-dd" style="display:none;position:absolute;inset-inline-start:0;inset-inline-end:0;top:100%;margin-top:2px;background:#fff;border:1.5px solid #D9E2EC;border-radius:8px;box-shadow:0 6px 20px rgba(0,0,0,.12);z-index:60;max-height:220px;overflow-y:auto"></div>
+          </div>
+          <div id="mr-city-zone" style="font-size:11px;margin-top:5px;color:#718096"></div>
           <datalist id="mr-city-list">
             <option value="Riyadh / الرياض"><option value="Jeddah / جدة"><option value="Makkah / مكة المكرمة">
             <option value="Madinah / المدينة المنورة"><option value="Dammam / الدمام"><option value="Khobar / الخبر">
@@ -1602,8 +1606,8 @@ function go(pg){
   if(pg==='visits') renderVisits('all','');
   if(pg==='archive') loadArchive();
   if(pg==='signature'){ try{ fillSummaryClient(); fillSummaryOrder(); }catch(e){} }
-  if(pg==='client-orders'){ renderClientOrders(); }
-  if(pg==='maint-requests'){ fillMaintClientList(); loadMaintRequests().then(renderMaintRequests); }
+  if(pg==='client-orders'){ renderClientOrders(); attachCityAutocomplete('co-city','co-city-dd','co-city-zone'); }
+  if(pg==='maint-requests'){ fillMaintClientList(); attachCityAutocomplete('mr-city','mr-city-dd','mr-city-zone'); loadMaintRequests().then(renderMaintRequests); }
   if(pg==='settings'){renderTaskEditor();renderUsersList();try{checkDBStatus();}catch(e){}}
 }
 function setBn(b){document.querySelectorAll('.bn').forEach(function(x){x.style.color='#A0AEC0';});b.style.color='#1D4E89';}
@@ -2768,10 +2772,11 @@ function openClientOrders(clientId){
 }
 
 function resetOrderForm(){
-  ['co-name','co-handover','co-contract-start','co-contract-end','co-notes','co-po'].forEach(function(id){
+  ['co-name','co-handover','co-contract-start','co-contract-end','co-notes','co-po','co-city'].forEach(function(id){
     var e = document.getElementById(id); if(e) e.value = '';
   });
   clearOrderItems();
+  var _cz = document.getElementById('co-city-zone'); if(_cz) _cz.innerHTML = '';
   var ct = document.getElementById('co-coverage'); if(ct) ct.value = 'warranty';
   var wm = document.getElementById('co-warranty-months'); if(wm) wm.value = '12';
   document.getElementById('co-edit-id').value = '';
@@ -2814,10 +2819,13 @@ function updateOrderPreview(){
 
 function readOrderForm(){
   var v = function(id){ var e=document.getElementById(id); return e ? e.value.trim() : ''; };
+  var _city = v('co-city');
   return {
     client_id: _ordersClientId,
     name: v('co-name'),
     po_number: v('co-po'),
+    city: _city,
+    zone: cityZone(_city),
     handover_date: v('co-handover') || null,
     coverage_type: v('co-coverage') || 'warranty',
     warranty_months: parseInt(v('co-warranty-months'),10) || 12,
@@ -2832,6 +2840,8 @@ async function saveClientOrder(){
   if(!canManageClientRecords()){ denyClientEdit(); return; }
   var o = readOrderForm();
   if(!o.name){ alert('الرجاء إدخال اسم الأوردر أو المشروع\nPlease enter the order / project name'); return; }
+  if(!o.city){ alert('الرجاء إدخال مدينة الأوردر — منها تُحدَّد المنطقة المسؤولة.\nPlease enter the order\'s city — it decides which zone owns it.'); return; }
+  if(!canEditZone(o.zone)){ denyZone(o.zone); return; }
   if(o.coverage_type === 'warranty' && !o.handover_date){
     alert('تاريخ تسليم المشروع مطلوب لحساب مدة الضمان\nThe handover date is required to calculate the warranty period');
     return;
@@ -2857,12 +2867,16 @@ async function saveClientOrder(){
 
 function editClientOrder(id){
   if(!canManageClientRecords()){ denyClientEdit(); return; }
+  var _o = clientOrders.find(function(x){ return String(x.id) === String(id); });
+  if(_o && !canEditZone(_o.zone)){ denyZone(_o.zone); return; }
   var o = clientOrders.find(function(x){ return String(x.id) === String(id); });
   if(!o) return;
   var set = function(elId, val){ var e=document.getElementById(elId); if(e) e.value = val || ''; };
   set('co-edit-id', o.id);
   set('co-name', o.name);
   set('co-po', o.po_number);
+  set('co-city', o.city);
+  showCityZone('co-city','co-city-zone');
   set('co-handover', o.handover_date);
   set('co-coverage', o.coverage_type || 'warranty');
   set('co-warranty-months', o.warranty_months || 12);
@@ -2892,6 +2906,8 @@ function editClientOrder(id){
 
 async function deleteClientOrder(id){
   if(!canManageClientRecords()){ denyClientEdit(); return; }
+  var _od = clientOrders.find(function(x){ return String(x.id) === String(id); });
+  if(_od && !canEditZone(_od.zone)){ denyZone(_od.zone); return; }
   var o = clientOrders.find(function(x){ return String(x.id) === String(id); });
   if(!o) return;
   if(!confirm('حذف الأوردر "'+(o.name||'')+'"؟\nDelete the order "'+(o.name||'')+'"?')) return;
@@ -3162,6 +3178,7 @@ function renderClientOrders(){
             : '')
       + '</div>'
       + '<div style="font-size:11px;color:#718096;margin-top:5px;display:flex;flex-wrap:wrap;gap:12px">'
+      +   (o.city ? '<span><i class="ti ti-map-pin"></i> '+o.city+' · <b style="color:#1D4E89">'+zoneLabel(o.zone||cityZone(o.city))+'</b></span>' : '')
       +   (o.handover_date ? '<span><i class="ti ti-truck-delivery"></i> '+(LNG==='ar'?'التسليم':'Handover')+': '+o.handover_date+'</span>' : '')
       +   (o.coverage_type==='warranty' ? '<span><i class="ti ti-shield"></i> '+(o.warranty_months||12)+' '+(LNG==='ar'?'شهر':'months')+'</span>' : '')
       +   (o.contract_start ? '<span><i class="ti ti-calendar"></i> '+o.contract_start+' → '+(o.contract_end||'')+'</span>' : '')
@@ -3195,6 +3212,7 @@ function clearMaintForm(){
   ['mr-client','mr-city','mr-location','mr-map','mr-contact','mr-phone','mr-equipment','mr-model','mr-serial','mr-date','mr-problem','mr-notes']
     .forEach(function(id){ var e=document.getElementById(id); if(e) e.value=''; });
   setMapStatus('mr-map-status','');
+  var _mz = document.getElementById('mr-city-zone'); if(_mz) _mz.innerHTML = '';
   var t=document.getElementById('mr-type'); if(t) t.value='paid';
   var pr=document.getElementById('mr-priority'); if(pr) pr.value='normal';
 }
@@ -3221,7 +3239,7 @@ function normAr(v){
     .replace(/[ىئ]/g, 'ي')
     .replace(/ؤ/g, 'و')
     .replace(/ة/g, 'ه')
-    .replace(/\bال/g, '')
+    .replace(/(^|\s)ال/g, '$1')   // \b doesn't work before Arabic letters
     .replace(/\s+/g, ' ')
     .trim()
     .toLowerCase();
@@ -3489,6 +3507,230 @@ function loadExtraEquipmentOptions(){
   }catch(e){}
 }
 
+
+
+// ══════════════════════════════════════
+// SAUDI CITIES → ZONES
+// The city written on an order (or a sales request) decides which
+// maintenance manager owns it. Names are bilingual and matched loosely,
+// so "الدمام" / "دمام" / "Dammam" all resolve to the same city.
+// ══════════════════════════════════════
+var SAUDI_CITIES = [
+  // ── Central: Riyadh + Qassim ───────────────────────────────
+  ['الرياض','Riyadh','central'], ['الخرج','Al Kharj','central'], ['الدرعية','Diriyah','central'],
+  ['الدوادمي','Dawadmi','central'], ['المجمعة','Majmaah','central'], ['الزلفي','Zulfi','central'],
+  ['وادي الدواسر','Wadi Al Dawasir','central'], ['الأفلاج','Aflaj','central'], ['شقراء','Shaqra','central'],
+  ['القويعية','Quwaiiyah','central'], ['عفيف','Afif','central'], ['حوطة بني تميم','Hotat Bani Tamim','central'],
+  ['السليل','Sulayyil','central'], ['الحريق','Hariq','central'], ['ضرما','Dhurma','central'],
+  ['حريملاء','Huraymila','central'], ['ثادق','Thadiq','central'], ['الغاط','Ghat','central'],
+  ['مرات','Marat','central'], ['رماح','Rumah','central'],
+  ['بريدة','Buraydah','central'], ['عنيزة','Unaizah','central'], ['الرس','Ar Rass','central'],
+  ['المذنب','Al Mithnab','central'], ['البكيرية','Al Bukayriyah','central'], ['البدائع','Al Badayea','central'],
+  ['رياض الخبراء','Riyadh Al Khabra','central'], ['عيون الجواء','Uyun Al Jiwa','central'],
+  ['الأسياح','Al Asyah','central'], ['النبهانية','An Nabhaniyah','central'],
+  ['الشماسية','Ash Shimasiyah','central'], ['ضرية','Dhurayyah','central'],
+
+  // ── Eastern ────────────────────────────────────────────────
+  ['الدمام','Dammam','eastern'], ['الخبر','Khobar','eastern'], ['الظهران','Dhahran','eastern'],
+  ['الجبيل','Jubail','eastern'], ['الأحساء','Al Ahsa','eastern'], ['الهفوف','Hofuf','eastern'],
+  ['المبرز','Mubarraz','eastern'], ['القطيف','Qatif','eastern'], ['حفر الباطن','Hafar Al Batin','eastern'],
+  ['رأس تنورة','Ras Tanura','eastern'], ['الخفجي','Khafji','eastern'], ['بقيق','Buqayq','eastern'],
+  ['النعيرية','Nairyah','eastern'], ['قرية العليا','Qaryat Al Ulya','eastern'], ['سيهات','Saihat','eastern'],
+  ['صفوى','Safwa','eastern'], ['تاروت','Tarout','eastern'], ['العيون','Al Uyun','eastern'],
+  ['العمران','Al Omran','eastern'],
+
+  // ── Western: Makkah + Madinah ──────────────────────────────
+  ['مكة المكرمة','Makkah','western'], ['جدة','Jeddah','western'], ['الطائف','Taif','western'],
+  ['رابغ','Rabigh','western'], ['الليث','Al Lith','western'], ['القنفذة','Qunfudhah','western'],
+  ['الجموم','Al Jumum','western'], ['خليص','Khulais','western'], ['الكامل','Al Kamil','western'],
+  ['تربة','Turbah','western'], ['رنية','Ranyah','western'], ['الخرمة','Khurmah','western'],
+  ['أضم','Adham','western'], ['بحرة','Bahrah','western'],
+  ['المدينة المنورة','Madinah','western'], ['ينبع','Yanbu','western'], ['العلا','AlUla','western'],
+  ['بدر','Badr','western'], ['خيبر','Khaybar','western'], ['الحناكية','Al Hanakiyah','western'],
+  ['المهد','Mahd Adh Dhahab','western'], ['وادي الفرع','Wadi Al Fara','western'],
+
+  // ── Northern: Tabuk + Hail + Northern Borders + Jouf ───────
+  ['تبوك','Tabuk','northern'], ['ضباء','Duba','northern'], ['الوجه','Al Wajh','northern'],
+  ['أملج','Umluj','northern'], ['حقل','Haql','northern'], ['تيماء','Tayma','northern'],
+  ['البدع','Al Bad','northern'], ['نيوم','NEOM','northern'],
+  ['حائل','Hail','northern'], ['بقعاء','Baqaa','northern'], ['الشنان','Ash Shinan','northern'],
+  ['الغزالة','Al Ghazalah','northern'], ['الشملي','Ash Shamli','northern'], ['موقق','Mawqaq','northern'],
+  ['السليمي','As Sulaymi','northern'],
+  ['عرعر','Arar','northern'], ['رفحاء','Rafha','northern'], ['طريف','Turaif','northern'],
+  ['العويقيلة','Al Uwayqilah','northern'],
+  ['سكاكا','Sakaka','northern'], ['دومة الجندل','Dumat Al Jandal','northern'],
+  ['القريات','Qurayyat','northern'], ['طبرجل','Tabarjal','northern'],
+
+  // ── Southern: Asir + Jazan + Najran + Baha ─────────────────
+  ['أبها','Abha','southern'], ['خميس مشيط','Khamis Mushait','southern'], ['بيشة','Bisha','southern'],
+  ['النماص','An Namas','southern'], ['محايل عسير','Muhayil Asir','southern'],
+  ['ظهران الجنوب','Dhahran Al Janub','southern'], ['سراة عبيدة','Sarat Abidah','southern'],
+  ['رجال ألمع','Rijal Almaa','southern'], ['تثليث','Tathlith','southern'], ['أحد رفيدة','Ahad Rufaydah','southern'],
+  ['بلقرن','Balqarn','southern'], ['المجاردة','Al Majaridah','southern'], ['تنومة','Tanumah','southern'],
+  ['البرك','Al Birk','southern'],
+  ['جازان','Jazan','southern'], ['صبيا','Sabya','southern'], ['أبو عريش','Abu Arish','southern'],
+  ['صامطة','Samtah','southern'], ['بيش','Baish','southern'], ['فرسان','Farasan','southern'],
+  ['الدرب','Ad Darb','southern'], ['أحد المسارحة','Ahad Al Masarihah','southern'],
+  ['العارضة','Al Aridhah','southern'], ['الحرث','Al Harth','southern'], ['ضمد','Damad','southern'],
+  ['العيدابي','Al Aydabi','southern'], ['فيفاء','Fifa','southern'],
+  ['نجران','Najran','southern'], ['شرورة','Sharurah','southern'], ['حبونا','Habuna','southern'],
+  ['بدر الجنوب','Badr Al Janub','southern'], ['يدمة','Yadamah','southern'], ['ثار','Thar','southern'],
+  ['الباحة','Al Baha','southern'], ['بلجرشي','Baljurashi','southern'], ['المندق','Al Mandaq','southern'],
+  ['المخواة','Al Makhwah','southern'], ['قلوة','Qilwah','southern'], ['العقيق','Al Aqiq','southern']
+];
+
+function cityLabel(c){ return (LNG === 'ar') ? c[0] : c[1]; }
+
+// Find the city record behind whatever was typed, in either language.
+function findCity(text){
+  var q = String(text||'').trim();
+  if(!q) return null;
+  var qAr = normAr(q), qLat = latinKey(q), qSk = skeleton(q), qTrSk = skeleton(translit(q));
+
+  var exact = SAUDI_CITIES.find(function(c){
+    return normAr(c[0]) === qAr || latinKey(c[1]) === qLat;
+  });
+  if(exact) return exact;
+
+  // Then score the candidates rather than taking the first partial hit —
+  // otherwise "دمام" matches "الدوادمي" (which normalises to "دوادمي")
+  // before it ever reaches "الدمام".
+  var best = null, bestScore = 0;
+  SAUDI_CITIES.forEach(function(c){
+    var ar = normAr(c[0]), en = latinKey(c[1]), enSk = skeleton(c[1]);
+    var sc = 0;
+    if(qAr && ar){
+      if(ar === qAr) sc = Math.max(sc, 100);
+      else if(ar.indexOf(qAr) === 0) sc = Math.max(sc, 80 - Math.min(20, ar.length - qAr.length));
+      else if(qAr.indexOf(ar) === 0) sc = Math.max(sc, 70);
+      else if(ar.indexOf(qAr) !== -1) sc = Math.max(sc, 50);
+    }
+    if(qLat && en){
+      if(en === qLat) sc = Math.max(sc, 100);
+      else if(en.indexOf(qLat) === 0) sc = Math.max(sc, 80 - Math.min(20, en.length - qLat.length));
+      else if(qLat.indexOf(en) === 0) sc = Math.max(sc, 70);
+      else if(en.indexOf(qLat) !== -1) sc = Math.max(sc, 45);
+    }
+    if(qTrSk && enSk){
+      if(enSk === qTrSk) sc = Math.max(sc, 90);
+      else if(enSk.indexOf(qTrSk) === 0) sc = Math.max(sc, 60);
+    }
+    if(sc > bestScore){ bestScore = sc; best = c; }
+  });
+  return bestScore >= 45 ? best : null;
+}
+
+// The zone a city belongs to — 'other' when we don't recognise it, so the
+// record still has an owner rather than falling through the cracks.
+function cityZone(text){
+  var c = findCity(text);
+  return c ? c[2] : 'other';
+}
+
+function citySuggestions(text, limit){
+  var q = String(text||'').trim();
+  var qAr = normAr(q), qLat = latinKey(q), qTrSk = skeleton(translit(q));
+  if(!q) return SAUDI_CITIES.slice(0, limit || 8);
+  var scored = [];
+  SAUDI_CITIES.forEach(function(c){
+    var ar = normAr(c[0]), en = latinKey(c[1]), enSk = skeleton(c[1]);
+    var sc = 0;
+    if(qAr && ar){
+      if(ar === qAr) sc = 100;
+      else if(ar.indexOf(qAr) === 0) sc = 80;
+      else if(ar.indexOf(qAr) !== -1) sc = 50;
+    }
+    if(qLat && en){
+      if(en === qLat) sc = Math.max(sc, 100);
+      else if(en.indexOf(qLat) === 0) sc = Math.max(sc, 80);
+      else if(en.indexOf(qLat) !== -1) sc = Math.max(sc, 45);
+    }
+    if(qTrSk && enSk && enSk.indexOf(qTrSk) === 0) sc = Math.max(sc, 60);
+    if(sc) scored.push({ c:c, sc:sc });
+  });
+  scored.sort(function(a,b){ return b.sc - a.sc; });
+  return scored.slice(0, limit || 8).map(function(x){ return x.c; });
+}
+
+// ── Reusable bilingual city autocomplete ─────────────────────────────────
+// Attaches to any text input; shows both spellings and reports the zone.
+function attachCityAutocomplete(inputId, ddId, statusId){
+  var inp = document.getElementById(inputId);
+  var dd  = document.getElementById(ddId);
+  if(!inp || !dd) return;
+
+  var draw = function(){
+    var hits = citySuggestions(inp.value, 8);
+    if(!hits.length){ dd.style.display = 'none'; }
+    else {
+      dd.style.display = 'block';
+      dd.innerHTML = hits.map(function(c, i){
+        return '<div class="city-opt" data-i="' + i + '" style="padding:8px 12px;cursor:pointer;border-bottom:1px solid #F0F4F8">'
+          + '<div style="font-size:13px;font-weight:600;color:#1a202c">' + cityLabel(c) + '</div>'
+          + '<div style="font-size:11px;color:#718096">' + ((LNG==='ar') ? c[1] : c[0])
+          + ' · ' + zoneLabel(c[2]) + '</div></div>';
+      }).join('');
+      Array.prototype.forEach.call(dd.querySelectorAll('.city-opt'), function(el){
+        el.onmouseover = function(){ this.style.background = '#F8FAFC'; };
+        el.onmouseout  = function(){ this.style.background = '#fff'; };
+        el.onmousedown = function(ev){
+          ev.preventDefault();
+          var c = hits[parseInt(el.getAttribute('data-i'), 10)];
+          inp.value = cityLabel(c);
+          dd.style.display = 'none';
+          showCityZone(inputId, statusId);
+        };
+      });
+    }
+    showCityZone(inputId, statusId);
+  };
+
+  inp.addEventListener('input', draw);
+  inp.addEventListener('focus', draw);
+  inp.addEventListener('blur', function(){
+    setTimeout(function(){ dd.style.display = 'none'; }, 180);
+  });
+}
+
+function showCityZone(inputId, statusId){
+  if(!statusId) return;
+  var el = document.getElementById(statusId);
+  var inp = document.getElementById(inputId);
+  if(!el || !inp) return;
+  var q = inp.value.trim();
+  if(!q){ el.innerHTML = ''; return; }
+  var c = findCity(q);
+  if(c){
+    el.innerHTML = '<i class="ti ti-map-pin-check"></i> ' + zoneLabel(c[2])
+      + ' <span style="color:#A0AEC0">· ' + ((LNG==='ar') ? c[1] : c[0]) + '</span>';
+    el.style.color = '#2D7D3A';
+  } else {
+    el.innerHTML = '<i class="ti ti-alert-triangle"></i> ' + ((LNG==='ar')
+      ? 'مدينة غير معروفة — ستُسند إلى "أخرى"'
+      : 'City not recognised — it will fall to "Other"');
+    el.style.color = '#C4680A';
+  }
+}
+
+// ── Zone-based write permission ──────────────────────────────────────────
+// A maintenance manager edits only inside the zones he covers; he can still
+// SEE everything. The system administrator is not restricted.
+function myZones(){
+  var u = USERS[curUserLogin];
+  return u ? userZones(u) : [];
+}
+function canEditZone(zone){
+  if(isSysAdmin()) return true;
+  if(curUserRole !== 'manager') return false;
+  var z = myZones();
+  if(!z.length) return false;
+  return z.indexOf(zone || 'other') !== -1;
+}
+function denyZone(zone){
+  alert((LNG==='ar')
+    ? ('هذا السجل يتبع منطقة "' + zoneLabel(zone) + '" وهي خارج نطاقك. يمكنك الاطلاع دون التعديل.')
+    : ('This record belongs to the "' + zoneLabel(zone) + '" zone, outside your coverage. You can view it but not edit it.'));
+}
 
 // ══════════════════════════════════════
 // CONTROL PANEL (system administrator)
@@ -4376,6 +4618,7 @@ async function submitMaintRequest(){
   var req = {
     client: client,
     city: val('mr-city'),
+    zone: cityZone(val('mr-city')),
     location: val('mr-location'),
     map_url: readMapField('mr-map'),
     contact_person: val('mr-contact'),
@@ -4494,8 +4737,9 @@ function renderMaintRequests(){
     card.onclick = function(ev){ if(ev.target.closest('button')) return; openMaintDetails(r.id); };
 
     var meta = [];
-    var place = [r.city, r.location].filter(Boolean).join(' — ');
-  if(place) meta.push('<i class="ti ti-map-pin"></i> ' + place);
+      var place = [r.city, r.location].filter(Boolean).join(' — ');
+    if(place) meta.push('<i class="ti ti-map-pin"></i> ' + place
+      + (r.city ? ' <b style="color:#1D4E89">· ' + zoneLabel(r.zone || cityZone(r.city)) + '</b>' : ''));
     if(r.equipment) meta.push('<i class="ti ti-tool"></i> ' + r.equipment + (r.model ? ' — ' + r.model : ''));
     if(r.serial_no) meta.push('<i class="ti ti-hash"></i> ' + r.serial_no);
     if(r.contact_person) meta.push('<i class="ti ti-user"></i> ' + r.contact_person + (r.contact_phone ? ' · ' + r.contact_phone : ''));
@@ -4583,7 +4827,7 @@ function openMaintDetails(id){
 
     + '<div style="font-size:11px;font-weight:700;color:#0F2D52;margin:4px 0 2px">Customer / العميل</div>'
     + row('Client / العميل', r.client)
-    + row('City / المدينة', r.city)
+    + row('City / المدينة', r.city ? (r.city + '  —  ' + zoneLabel(r.zone || cityZone(r.city))) : '')
     + row('Branch / الفرع', r.location)
     + (r.map_url
         ? '<div style="display:flex;gap:10px;padding:7px 0;border-bottom:1px solid #F0F4F8">'
@@ -9375,6 +9619,15 @@ async function showPublicReport(token){
         <div class="field" style="margin:0">
           <label data-en="PO / Reference" data-ar="رقم الأمر">PO / Reference</label>
           <input type="text" id="co-po" placeholder="PO-2026-114" dir="ltr">
+        </div>
+
+        <div class="field" style="margin:0">
+          <label data-en="City *" data-ar="المدينة *">City *</label>
+          <div style="position:relative">
+            <input type="text" id="co-city" autocomplete="off" data-ph-en="Type a city…" data-ph-ar="اكتب اسم المدينة…" placeholder="Type a city…">
+            <div id="co-city-dd" style="display:none;position:absolute;inset-inline-start:0;inset-inline-end:0;top:100%;margin-top:2px;background:#fff;border:1.5px solid #D9E2EC;border-radius:8px;box-shadow:0 6px 20px rgba(0,0,0,.12);z-index:60;max-height:220px;overflow-y:auto"></div>
+          </div>
+          <div id="co-city-zone" style="font-size:11px;margin-top:5px;color:#718096"></div>
         </div>
 
         <div class="field" style="margin:0">
