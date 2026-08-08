@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>HRCO Maintenance System</title>
+<title>Maintenance System</title>
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@2.44.0/tabler-icons.min.css">
 <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700&display=swap" rel="stylesheet">
 <style>
@@ -1628,7 +1628,8 @@ function go(pg){
   }
   }catch(e){console.log('go() error:',e);}
   if(pg==='dashboard'){updateDashStats();renderDashTechs();renderDashRecent();renderDashPending();renderPending();
-    try{ applyDashboardLayout(); }catch(e){}}
+    try{ applyDashboardLayout(); }catch(e){}
+    try{ applyCompany(); }catch(e){}}
   if(pg==='signature') setTimeout(function(){initSig('tech');initSig('client');},80);
   if(pg==='newvisit'){ loadExtraEquipmentOptions(); fillVisitClientSelect(); if(!document.querySelector('#taskcats button')) { renderTaskCats(); renderTaskList(); }
     window._visitStartTime = Date.now();
@@ -3853,6 +3854,7 @@ function applyFeatureFlags(){
 // ── Panel shell ──────────────────────────────────────────────────────────
 var AP_SECTIONS = [
   { key:'overview', icon:'ti-layout-dashboard', en:'Overview',        ar:'نظرة عامة' },
+  { key:'general',  icon:'ti-building',         en:'General',         ar:'عام' },
   { key:'features', icon:'ti-toggle-right',     en:'System Features', ar:'مميزات النظام' },
   { key:'dash',     icon:'ti-layout-dashboard', en:'Dashboard',       ar:'لوحة المعلومات' },
   { key:'users',    icon:'ti-users',            en:'Users & Roles',   ar:'المستخدمون والصلاحيات' },
@@ -3909,6 +3911,7 @@ function apGo(key){
 
   var subs = {
     overview: { en:'A snapshot of the whole system', ar:'لمحة عامة عن النظام بالكامل' },
+    general:  { en:'Company name, logo, print template and emails', ar:'اسم الشركة والشعار وقالب الطباعة والإيميلات' },
     features: { en:'Turn parts of the system on or off for everyone', ar:'تشغيل وإيقاف أجزاء النظام لجميع المستخدمين' },
     users:    { en:'Accounts, roles, emails and zone coverage', ar:'الحسابات والرتب والإيميلات ومناطق التغطية' },
     log:      { en:'Every action, with before and after values', ar:'كل العمليات مع القيم قبل وبعد' },
@@ -3925,6 +3928,7 @@ function apGo(key){
   else if(key === 'log') apRenderLog();
   else if(key === 'lists') apRenderLists();
   else if(key === 'dash'){ _apDash = null; apRenderDashboard(); }
+  else if(key === 'general'){ _cmpLogoPending = null; apRenderGeneral(); }
   else apRenderPlanned(sec);
 }
 
@@ -4674,6 +4678,96 @@ async function apResetList(){
 }
 
 
+
+// ══════════════════════════════════════
+// COMPANY PROFILE (control panel → General)
+// The system was built for one company; these settings make it work for any
+// company without touching the code. Every value falls back to a default, so
+// nothing breaks before the panel is ever opened.
+// ══════════════════════════════════════
+var COMPANY_FIELDS = [
+  { key:'name_en',    en:'Company name (English)', ar:'اسم الشركة (إنجليزي)', def:'HRCO Refrigeration Co. Ltd.' },
+  { key:'name_ar',    en:'Company name (Arabic)',  ar:'اسم الشركة (عربي)',    def:'شركة هركو للتبريد المحدودة' },
+  { key:'short',      en:'Short name / brand',     ar:'الاسم المختصر',         def:'HRCO',
+    enHint:'Shown beside the logo in the top bar and used in file names.',
+    arHint:'يظهر بجانب الشعار في الشريط العلوي ويُستخدم في أسماء الملفات.' },
+  { key:'phone',      en:'Phone',                  ar:'الهاتف',               def:'' },
+  { key:'email',      en:'Company email',          ar:'البريد الإلكتروني',     def:'' },
+  { key:'website',    en:'Website',                ar:'الموقع الإلكتروني',     def:'' },
+  { key:'address',    en:'Address',                ar:'العنوان',              def:'' },
+  { key:'cr',         en:'CR / VAT number',        ar:'السجل التجاري / الرقم الضريبي', def:'' },
+  { key:'print_header', en:'Print header line',    ar:'سطر ترويسة الطباعة',    def:'',
+    enHint:'Appears under the company name on every printed sheet. Leave blank to use the address and phone.',
+    arHint:'يظهر تحت اسم الشركة في كل ورقة مطبوعة. اتركه فارغاً لاستخدام العنوان والهاتف.' },
+  { key:'print_footer', en:'Print footer line',    ar:'سطر تذييل الطباعة',     def:'',
+    enHint:'The line printed at the bottom of reports.',
+    arHint:'السطر الذي يُطبع أسفل التقارير.' },
+  { key:'email_warehouse', en:'Warehouse email',   ar:'إيميل المستودع',        def:'',
+    enHint:'Where approved parts orders are sent.',
+    arHint:'الجهة التي تُرسل إليها طلبات القطع المعتمدة.' },
+  { key:'email_reports',   en:'Reports sender / CC', ar:'إيميل إرسال التقارير', def:'',
+    enHint:'Used as the sender or copy address for visit reports.',
+    arHint:'يُستخدم كمرسل أو نسخة عند إرسال كشوف الزيارات.' },
+  { key:'email_manager',   en:'Maintenance manager email', ar:'إيميل مدير الصيانة', def:'' },
+  { key:'email_admin',     en:'System administrator email', ar:'إيميل مدير النظام', def:'' }
+];
+
+function company(key){
+  var f = COMPANY_FIELDS.find(function(x){ return x.key === key; });
+  var v = appSettings['company_' + key];
+  if(v === undefined || v === null || v === '') return f ? f.def : '';
+  return v;
+}
+function companyLogo(){ return appSettings['company_logo'] || ''; }
+
+// The name to print, following the interface language.
+function companyName(){
+  return (LNG === 'ar') ? (company('name_ar') || company('name_en'))
+                        : (company('name_en') || company('name_ar'));
+}
+
+// Header/footer used by every printed sheet and email.
+function companyPrintHeader(){
+  var h = company('print_header');
+  if(h) return h;
+  return [company('address'), company('phone'), company('website')].filter(Boolean).join('  ·  ');
+}
+function companyPrintFooter(){
+  var f = company('print_footer');
+  if(f) return f;
+  return [company('name_ar'), company('name_en')].filter(Boolean).join(' — ');
+}
+
+// Put the company into the live interface.
+function applyCompany(){
+  var short = company('short');
+
+  var sub = document.querySelector('.tsub');
+  if(sub) sub.textContent = short;
+
+  try{ document.title = short + ' — ' + ((LNG==='ar') ? 'نظام إدارة الصيانة' : 'Maintenance System'); }catch(e){}
+
+  // Logo, if one was uploaded — replaces the snowflake mark
+  var logo = companyLogo();
+  var mark = document.querySelector('.tlogo');
+  if(mark){
+    if(logo){
+      mark.innerHTML = '<img src="' + logo + '" alt="" style="width:100%;height:100%;object-fit:contain;border-radius:8px">';
+      mark.style.background = '#fff';
+    } else if(!mark.querySelector('i')){
+      mark.innerHTML = '<i class="ti ti-snowflake"></i>';
+      mark.style.background = '';
+    }
+  }
+
+  var lgc = document.getElementById('lg-company');
+  if(lgc) lgc.textContent = companyName();
+
+  // Warehouse email default on the send form
+  var wh = document.getElementById('wh-to');
+  if(wh && !wh.value) wh.value = company('email_warehouse');
+}
+
 // ══════════════════════════════════════
 // CONFIGURABLE DASHBOARD
 // The order and visibility of every dashboard block live in app_settings,
@@ -4978,6 +5072,252 @@ async function apDashSave(){
     st.textContent = ar ? ('تم الحفظ · ' + _apDash.length + ' بطاقة ظاهرة') : ('Saved · ' + _apDash.length + ' card(s) visible');
     st.style.color = '#34D399';
   }
+}
+
+
+// ── General / company profile section ────────────────────────────────────
+function apRenderGeneral(){
+  var body = document.getElementById('ap-body');
+  if(!body) return;
+  var ar = (LNG === 'ar');
+
+  if(!_initSb()){
+    body.innerHTML = apCard('<div style="color:#F87171;font-size:13px"><i class="ti ti-alert-triangle"></i> '
+      + (ar ? 'لا يوجد اتصال بقاعدة البيانات — لا يمكن حفظ بيانات الشركة.'
+            : 'No database connection — the company profile cannot be saved.') + '</div>');
+    return;
+  }
+
+  var inputStyle = 'width:100%;padding:9px 12px;border-radius:8px;border:1px solid #24406e;background:#0B1B33;color:#E6EDF7;font-size:13px;font-family:inherit;outline:none';
+  var esc = function(v){ return String(v||'').replace(/"/g,'&quot;'); };
+
+  var field = function(f){
+    var hint = ar ? (f.arHint || '') : (f.enHint || '');
+    return '<div style="margin-bottom:13px">'
+      + '<label style="display:block;font-size:11px;font-weight:700;color:#9FB4D4;margin-bottom:5px">' + (ar ? f.ar : f.en) + '</label>'
+      + '<input type="text" id="cmp-' + f.key + '" value="' + esc(company(f.key)) + '" style="' + inputStyle + '">'
+      + (hint ? '<div style="font-size:10px;color:#64748B;margin-top:4px">' + hint + '</div>' : '')
+      + '</div>';
+  };
+
+  var group = function(title, keys){
+    return '<div style="background:#0E2140;border:1px solid #1B3157;border-radius:12px;padding:18px;margin-bottom:14px">'
+      + '<div style="font-size:13px;font-weight:700;color:#fff;margin-bottom:14px">' + title + '</div>'
+      + '<div style="display:grid;grid-template-columns:1fr 1fr;gap:0 14px">'
+      + keys.map(function(k){
+          var f = COMPANY_FIELDS.find(function(x){ return x.key === k; });
+          return f ? field(f) : '';
+        }).join('')
+      + '</div></div>';
+  };
+
+  var logo = companyLogo();
+
+  body.innerHTML =
+      '<div style="font-size:12px;color:#7E93B5;margin-bottom:14px">'
+    +   (ar ? 'هذه البيانات تظهر في الشريط العلوي وفي كل ورقة مطبوعة وكل إيميل يرسله النظام.'
+            : 'These details appear in the top bar and on every printed sheet and email the system sends.')
+    + '</div>'
+
+    // logo
+    + '<div style="background:#0E2140;border:1px solid #1B3157;border-radius:12px;padding:18px;margin-bottom:14px">'
+    +   '<div style="font-size:13px;font-weight:700;color:#fff;margin-bottom:12px">' + (ar?'الشعار':'Logo') + '</div>'
+    +   '<div style="display:flex;align-items:center;gap:16px;flex-wrap:wrap">'
+    +     '<div id="cmp-logo-box" style="width:78px;height:78px;border-radius:12px;background:' + (logo ? '#fff' : '#0B1B33') + ';border:1px solid #24406e;display:flex;align-items:center;justify-content:center;overflow:hidden;flex-shrink:0">'
+    +       (logo ? '<img src="' + logo + '" style="width:100%;height:100%;object-fit:contain">'
+                  : '<i class="ti ti-photo" style="color:#334C73;font-size:26px"></i>')
+    +     '</div>'
+    +     '<div style="flex:1;min-width:220px">'
+    +       '<input type="file" id="cmp-logo-file" accept="image/*" onchange="apLogoChosen(this)" style="width:100%;padding:8px;border:1px solid #24406e;border-radius:8px;background:#0B1B33;color:#9FB4D4;font-size:12px;font-family:inherit">'
+    +       '<div style="font-size:10px;color:#64748B;margin-top:6px">'
+    +         (ar ? 'PNG أو JPG · يُفضّل مربعاً · الحد الأقصى 300 كيلوبايت'
+                  : 'PNG or JPG · square works best · 300 KB maximum') + '</div>'
+    +     '</div>'
+    +     (logo ? '<button onclick="apRemoveLogo()" style="padding:8px 14px;border-radius:8px;border:1px solid #5B2E2E;background:transparent;color:#FCA5A5;cursor:pointer;font-size:11px;font-weight:700;font-family:inherit"><i class="ti ti-trash"></i> ' + (ar?'إزالة':'Remove') + '</button>' : '')
+    +   '</div>'
+    + '</div>'
+
+    // print letterhead images
+    + '<div style="background:#0E2140;border:1px solid #1B3157;border-radius:12px;padding:18px;margin-bottom:14px">'
+    +   '<div style="font-size:13px;font-weight:700;color:#fff;margin-bottom:4px">' + (ar?'ترويسة وتذييل الطباعة':'Print letterhead') + '</div>'
+    +   '<div style="font-size:11px;color:#7E93B5;margin-bottom:14px">'
+    +     (ar ? 'صور تظهر أعلى وأسفل كشف الزيارة المطبوع. اتركها فارغة لاستخدام الترويسة المدمجة.'
+                : 'Images printed at the top and bottom of a visit report. Leave empty to keep the built-in letterhead.') + '</div>'
+    +   ['header','footer'].map(function(kind){
+          var cur = appSettings['company_' + kind + '_img'] || '';
+          return '<div style="margin-bottom:14px">'
+            + '<label style="display:block;font-size:11px;font-weight:700;color:#9FB4D4;margin-bottom:6px">'
+            +   (kind === 'header' ? (ar?'الترويسة (أعلى الصفحة)':'Header (top of the page)')
+                                   : (ar?'التذييل (أسفل الصفحة)':'Footer (bottom of the page)')) + '</label>'
+            + '<div style="background:#fff;border:1px solid #24406e;border-radius:8px;padding:6px;margin-bottom:7px;min-height:44px;display:flex;align-items:center;justify-content:center">'
+            +   (cur ? '<img src="' + cur + '" style="max-width:100%;max-height:90px;object-fit:contain">'
+                     : '<span style="color:#94A3B8;font-size:11px">' + (ar?'الترويسة المدمجة مستخدمة':'using the built-in letterhead') + '</span>')
+            + '</div>'
+            + '<div style="display:flex;gap:8px;flex-wrap:wrap">'
+            +   '<input type="file" accept="image/*" onchange="apLetterheadChosen(this,\'' + kind + '\')" style="flex:1;min-width:180px;padding:7px;border:1px solid #24406e;border-radius:8px;background:#0B1B33;color:#9FB4D4;font-size:11px;font-family:inherit">'
+            +   (cur ? '<button onclick="apRemoveLetterhead(\'' + kind + '\')" style="padding:7px 13px;border-radius:8px;border:1px solid #5B2E2E;background:transparent;color:#FCA5A5;cursor:pointer;font-size:11px;font-weight:700;font-family:inherit"><i class="ti ti-trash"></i> ' + (ar?'إزالة':'Remove') + '</button>' : '')
+            + '</div></div>';
+        }).join('')
+    + '</div>'
+
+    + group(ar?'بيانات الشركة':'Company details', ['name_en','name_ar','short','phone','email','website','address','cr'])
+    + group(ar?'الطباعة':'Printing', ['print_header','print_footer'])
+    + group(ar?'الإيميلات':'Emails', ['email_warehouse','email_reports','email_manager','email_admin'])
+
+    + '<div style="display:flex;gap:8px;flex-wrap:wrap">'
+    +   '<button onclick="apPreviewPrint()" style="padding:9px 16px;border-radius:9px;border:1px solid #24406e;background:transparent;color:#9FB4D4;cursor:pointer;font-size:12px;font-weight:700;font-family:inherit"><i class="ti ti-eye"></i> ' + (ar?'معاينة الترويسة':'Preview header') + '</button>'
+    +   '<div style="flex:1"></div>'
+    +   '<button onclick="apSaveCompany()" style="padding:9px 24px;border-radius:9px;border:none;background:#7C3AED;color:#fff;cursor:pointer;font-size:12px;font-weight:700;font-family:inherit"><i class="ti ti-device-floppy"></i> ' + (ar?'حفظ':'Save') + '</button>'
+    + '</div>'
+    + '<div id="cmp-status" style="font-size:11px;color:#7E93B5;margin-top:10px"></div>';
+}
+
+
+// Letterhead images are embedded in every printed report, so they're saved
+// straight away (not held with the text fields) and size-capped.
+function apLetterheadChosen(input, kind){
+  var ar = (LNG === 'ar');
+  var f = input && input.files && input.files[0];
+  if(!f) return;
+  if(!/^image\//.test(f.type)){
+    alert(ar ? 'الرجاء اختيار صورة.' : 'Please choose an image file.');
+    input.value = ''; return;
+  }
+  if(f.size > 500 * 1024){
+    alert(ar ? 'حجم الصورة كبير (الحد 500 كيلوبايت).' : 'That image is too large (500 KB maximum).');
+    input.value = ''; return;
+  }
+  var rd = new FileReader();
+  rd.onload = async function(){
+    var ok = await saveAppSetting('company_' + kind + '_img', rd.result);
+    if(!ok){
+      alert(ar ? 'تعذّر الحفظ — تحقّق من جدول app_settings.' : 'Could not save — check the app_settings table.');
+      return;
+    }
+    appSettings['company_' + kind + '_img'] = rd.result;
+    logActivity('setting', 'company', (kind === 'header' ? (ar?'ترويسة الطباعة':'Print header') : (ar?'تذييل الطباعة':'Print footer')),
+                null, { image: 'updated' });
+    apRenderGeneral();
+  };
+  rd.readAsDataURL(f);
+}
+
+async function apRemoveLetterhead(kind){
+  var ar = (LNG === 'ar');
+  if(!confirm(ar ? 'إزالة الصورة والعودة للترويسة المدمجة؟'
+                 : 'Remove this image and go back to the built-in letterhead?')) return;
+  await saveAppSetting('company_' + kind + '_img', '');
+  appSettings['company_' + kind + '_img'] = '';
+  apRenderGeneral();
+}
+
+var _cmpLogoPending = null;
+
+function apLogoChosen(input){
+  var ar = (LNG === 'ar');
+  var f = input && input.files && input.files[0];
+  if(!f) return;
+  if(!/^image\//.test(f.type)){
+    alert(ar ? 'الرجاء اختيار صورة.' : 'Please choose an image file.');
+    input.value = ''; return;
+  }
+  // A logo is embedded in every print and email, so keep it small.
+  if(f.size > 300 * 1024){
+    alert(ar ? 'حجم الشعار كبير (الحد 300 كيلوبايت). استخدم صورة أصغر.'
+             : 'That logo is too large (300 KB maximum). Please use a smaller image.');
+    input.value = ''; return;
+  }
+  var rd = new FileReader();
+  rd.onload = function(){
+    _cmpLogoPending = rd.result;
+    var box = document.getElementById('cmp-logo-box');
+    if(box){
+      box.style.background = '#fff';
+      box.innerHTML = '<img src="' + _cmpLogoPending + '" style="width:100%;height:100%;object-fit:contain">';
+    }
+    var st = document.getElementById('cmp-status');
+    if(st){ st.textContent = ar ? 'اضغط "حفظ" لاعتماد الشعار.' : 'Press Save to apply the logo.'; st.style.color = '#FBBF24'; }
+  };
+  rd.readAsDataURL(f);
+}
+
+async function apRemoveLogo(){
+  var ar = (LNG === 'ar');
+  if(!confirm(ar ? 'إزالة الشعار؟' : 'Remove the logo?')) return;
+  _cmpLogoPending = null;
+  await saveAppSetting('company_logo', '');
+  appSettings['company_logo'] = '';
+  applyCompany();
+  apRenderGeneral();
+}
+
+async function apSaveCompany(){
+  var ar = (LNG === 'ar');
+  var st = document.getElementById('cmp-status');
+  var changed = [], failed = 0;
+
+  for(var i = 0; i < COMPANY_FIELDS.length; i++){
+    var f = COMPANY_FIELDS[i];
+    var el = document.getElementById('cmp-' + f.key);
+    if(!el) continue;
+    var v = el.value.trim();
+    if(v === company(f.key)) continue;
+
+    if(f.key.indexOf('email') === 0 && v && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(v)){
+      alert((ar ? 'بريد غير صحيح: ' : 'Invalid email: ') + (ar ? f.ar : f.en));
+      return;
+    }
+    var before = company(f.key);
+    var ok = await saveAppSetting('company_' + f.key, v);
+    if(ok){ changed.push((ar ? f.ar : f.en)); logActivity('setting', 'company', (ar ? f.ar : f.en), { value: before }, { value: v }); }
+    else failed++;
+  }
+
+  if(_cmpLogoPending){
+    var okL = await saveAppSetting('company_logo', _cmpLogoPending);
+    if(okL){ appSettings['company_logo'] = _cmpLogoPending; _cmpLogoPending = null; changed.push(ar?'الشعار':'Logo');
+             logActivity('setting', 'company', ar?'الشعار':'Logo', null, { logo: 'updated' }); }
+    else failed++;
+  }
+
+  applyCompany();
+  if(st){
+    if(failed){ st.textContent = ar ? 'تعذّر حفظ بعض الحقول — تحقّق من جدول app_settings.' : 'Some fields could not be saved — check the app_settings table.'; st.style.color = '#F87171'; }
+    else if(!changed.length){ st.textContent = ar ? 'لا توجد تغييرات.' : 'Nothing changed.'; st.style.color = '#7E93B5'; }
+    else { st.textContent = (ar ? 'تم الحفظ · ' : 'Saved · ') + changed.length + (ar ? ' حقل' : ' field(s)'); st.style.color = '#34D399'; }
+  }
+}
+
+// Show exactly what a printed sheet will look like at the top.
+function apPreviewPrint(){
+  var ar = (LNG === 'ar');
+  var logo = _cmpLogoPending || companyLogo();
+  var name = ar ? (document.getElementById('cmp-name_ar').value || document.getElementById('cmp-name_en').value)
+                : (document.getElementById('cmp-name_en').value || document.getElementById('cmp-name_ar').value);
+  var head = document.getElementById('cmp-print_header').value
+             || [document.getElementById('cmp-address').value, document.getElementById('cmp-phone').value,
+                 document.getElementById('cmp-website').value].filter(Boolean).join('  ·  ');
+  var foot = document.getElementById('cmp-print_footer').value
+             || [document.getElementById('cmp-name_ar').value, document.getElementById('cmp-name_en').value].filter(Boolean).join(' — ');
+
+  var w = window.open('', '_blank');
+  if(!w){ alert(ar ? 'المتصفح منع فتح النافذة.' : 'The browser blocked the preview window.'); return; }
+  w.document.write(
+      '<!DOCTYPE html><html dir="' + (ar?'rtl':'ltr') + '"><head><meta charset="utf-8">'
+    + '<title>' + (ar?'معاينة الترويسة':'Header preview') + '</title>'
+    + '<style>body{font-family:Tajawal,Arial,sans-serif;padding:30px;background:#F1F5F9}'
+    + '.sheet{background:#fff;max-width:760px;margin:0 auto;padding:26px 30px;border-radius:10px;box-shadow:0 2px 12px rgba(0,0,0,.08)}'
+    + '.hd{display:flex;align-items:center;gap:14px;border-bottom:2px solid #1D4E89;padding-bottom:14px}'
+    + '.nm{font-size:19px;font-weight:800;color:#0F2D52}.sb{font-size:11px;color:#64748B;margin-top:3px}'
+    + '.bd{padding:40px 0;color:#94A3B8;text-align:center;font-size:13px}'
+    + '.ft{border-top:1px solid #E2E8F0;padding-top:12px;font-size:11px;color:#64748B;text-align:center}</style></head><body>'
+    + '<div class="sheet"><div class="hd">'
+    + (logo ? '<img src="' + logo + '" style="width:60px;height:60px;object-fit:contain">' : '')
+    + '<div><div class="nm">' + name + '</div><div class="sb">' + head + '</div></div></div>'
+    + '<div class="bd">' + (ar ? '— محتوى التقرير —' : '— report content —') + '</div>'
+    + '<div class="ft">' + foot + '</div></div></body></html>'
+  );
+  w.document.close();
 }
 
 function apRenderPlanned(sec){
@@ -6129,7 +6469,7 @@ function printMaintRequest(id){
     + '@media print{body{padding:0}}'
     + '</style></head><body>'
     + '<h1>طلب صيانة / Maintenance Request</h1>'
-    + '<div class="sub">HRCO — Maintenance Management System &nbsp;|&nbsp; #' + esc(r.id) + '</div>'
+    + '<div class="sub">' + esc(companyName()) + ' &nbsp;|&nbsp; #' + esc(r.id) + '</div>'
     + '<div class="badges">'
     +   '<span class="badge">' + esc((MR_STATUS[r.status||'new']||{}).label || r.status || '') + '</span>'
     +   '<span class="badge">' + esc(prioLbl[r.priority] || r.priority || '') + '</span>'
@@ -6735,7 +7075,7 @@ function exportPartsExcel(){
     var url = URL.createObjectURL(blob);
     var a = document.createElement('a');
     a.href = url;
-    a.download = 'HRCO-Spare-Parts-' + new Date().toISOString().split('T')[0] + '.xls';
+    a.download = (company('short') || 'Company').replace(/[^\w-]/g,'') + '-Spare-Parts-' + new Date().toISOString().split('T')[0] + '.xls';
     document.body.appendChild(a); a.click(); document.body.removeChild(a);
     setTimeout(function(){ URL.revokeObjectURL(url); }, 1000);
   }catch(e){
@@ -7692,7 +8032,7 @@ function buildWarehouseHtml(req, eq, extraMsg){
   + '<div style="font-family:Tahoma,Arial,sans-serif;max-width:700px;margin:0 auto;color:#1a202c">'
   + '<div style="background:#0F2D52;color:#fff;padding:16px 20px;border-radius:10px 10px 0 0">'
   +   '<div style="font-size:18px;font-weight:700">طلب قطع غيار / Spare Parts Request</div>'
-  +   '<div style="font-size:12px;opacity:.85;margin-top:2px">HRCO Refrigeration — Request #'+req.id+'</div>'
+  +   '<div style="font-size:12px;opacity:.85;margin-top:2px">'+companyName()+' — Request #'+req.id+'</div>'
   + '</div>'
   + '<div style="border:1px solid #D9E2EC;border-top:none;border-radius:0 0 10px 10px;padding:20px">'
   +   (extraMsg ? '<div style="background:#FDF0E0;border:1px solid #F5D5A8;border-radius:8px;padding:10px 12px;margin-bottom:16px;font-size:13px">'+extraMsg+'</div>' : '')
@@ -7715,7 +8055,7 @@ function buildWarehouseHtml(req, eq, extraMsg){
   +   (req.notes ? '<div style="margin-top:14px;font-size:13px"><b>ملاحظات / Notes:</b> '+req.notes+'</div>' : '')
   +   images
   +   '<div style="margin-top:20px;padding-top:12px;border-top:1px solid #D9E2EC;font-size:11px;color:#A0AEC0;text-align:center">'
-  +     'HRCO Maintenance Management System'
+  +     companyPrintFooter()
   +   '</div>'
   + '</div></div>';
 }
@@ -8719,7 +9059,7 @@ async function sendByEmail(id){
 
   // Pre-fill modal
   var subj = document.getElementById('email-subject');
-  if(subj) subj.value = 'كشف زيارة صيانة HRCO #' + id + ' - ' + (v.client||'');
+  if(subj) subj.value = 'كشف زيارة صيانة ' + (company('short')||'') + ' #' + id + ' - ' + (v.client||'');
   var nameEl = document.getElementById('email-name');
   if(nameEl) nameEl.value = v.client || '';
   var toEl = document.getElementById('email-to');
@@ -8741,7 +9081,7 @@ async function sendByEmail(id){
     var parts = Array.isArray(v.parts)&&v.parts.length ? v.parts.join(', ') : '—';
 
     var subject = encodeURIComponent(
-      'كشف زيارة صيانة HRCO #' + id + ' | Maintenance Visit Report - ' + (v.client||'')
+      'كشف زيارة صيانة ' + (company('short')||'') + ' #' + id + ' | Maintenance Visit Report - ' + (v.client||'')
     );
 
     var bodyText = [
@@ -8770,7 +9110,7 @@ async function sendByEmail(id){
       '',
       'قسم الصيانة | Maintenance Department',
       'شركة هركو للتبريد المحدودة',
-      'HRCO Refrigeration Co. Ltd.',
+      company('name_en'),
       '',
       'جدة / Jeddah: +966 12 636 4884',
       'جدة: المدينة الصناعية الاولى، المرحلة 5، طريق 47',
@@ -8821,7 +9161,7 @@ async function doSendEmail(){
     // Header
     '<div style="background:#0F2D52;padding:24px 28px;color:#fff">',
     '<div style="font-size:22px;font-weight:700">🔧 كشف زيارة صيانة</div>',
-    '<div style="font-size:13px;color:#7EC8E3;margin-top:4px">Maintenance Visit Report — HRCO</div>',
+    '<div style="font-size:13px;color:#7EC8E3;margin-top:4px">Maintenance Visit Report — ' + (company('short')||'') + '</div>',
     '</div>',
     // Greeting
     extraMsg ? '<div style="padding:16px 28px;background:#FDF0E0;border-right:4px solid #C4680A;font-size:14px;color:#4A5568">'+extraMsg+'</div>' : '',
@@ -8844,7 +9184,7 @@ async function doSendEmail(){
     // Footer
     '<div style="background:#F8FAFC;padding:16px 28px;border-top:1px solid #D9E2EC;font-size:11px;color:#718096">',
     '<strong style="color:#0F2D52">قسم الصيانة | Maintenance Dept.</strong><br>',
-    'شركة هركو للتبريد المحدودة — HRCO Refrigeration Co. Ltd.<br>',
+    companyPrintFooter() + '<br>',
     '📞 +966 12 636 4884 &nbsp;|&nbsp; 🌐 www.hrcoksa.com<br>',
     '📍 جدة: المدينة الصناعية الأولى، المرحلة 5، طريق 47<br>',
     '📍 الرياض: مركز الفالح، الطابق الرابع، شارع العليا',
@@ -8862,7 +9202,7 @@ async function doSendEmail(){
       },
       body: JSON.stringify({
         to: to,
-        subject: subject || ('كشف زيارة صيانة HRCO #'+id),
+        subject: subject || ('كشف زيارة صيانة ' + (company('short')||'') + ' #'+id),
         html: htmlBody
       })
     });
@@ -9253,7 +9593,7 @@ function exportReportExcel(){
     xml += '<Column ss:AutoFitWidth="0" ss:Width="'+w+'"/>';
   });
 
-  xml += '<Row><Cell ss:StyleID="ttl"><Data ss:Type="String">HRCO — Maintenance Visits Report</Data></Cell></Row>'
+  xml += '<Row><Cell ss:StyleID="ttl"><Data ss:Type="String">' + companyName() + ' — Maintenance Visits Report</Data></Cell></Row>'
       +  '<Row><Cell><Data ss:Type="String">Generated: '+esc(new Date().toLocaleString())+'  |  '+rows.length+' record(s)</Data></Cell></Row>'
       +  '<Row></Row>';
 
@@ -9284,7 +9624,7 @@ function exportReportExcel(){
     var url = URL.createObjectURL(blob);
     var a = document.createElement('a');
     a.href = url;
-    a.download = 'HRCO-Report-' + new Date().toISOString().split('T')[0] + '.xls';
+    a.download = (company('short')||'Company').replace(/[^\w-]/g,'') + '-Report-' + new Date().toISOString().split('T')[0] + '.xls';
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
@@ -9932,7 +10272,7 @@ function _doPrintVisit(id, v, techSigImg, clientSigImg, visitDateTime, vtype, pa
   var typeEn = {'ضمان':'Warranty','مدفوعة':'Paid','عقد':'Contract','warranty':'Warranty','paid':'Paid','contract':'Contract'};
 
   var html = '<!DOCTYPE html><html dir="rtl"><head><meta charset="UTF-8">'
-    + '<title>كشف زيارة صيانة HRCO #' + id + '</title>'
+    + '<title>كشف زيارة صيانة ' + (company('short')||'') + ' #' + id + '</title>'
     + '<style>'
     + '* { margin:0; padding:0; box-sizing:border-box; }'
     + 'body { font-family: "Tajawal", "Arial", sans-serif; color:#1a202c; background:#fff; direction:rtl; font-size:13px; }'
@@ -9967,7 +10307,7 @@ function _doPrintVisit(id, v, techSigImg, clientSigImg, visitDateTime, vtype, pa
     + '@media print { .no-print{display:none!important} body{-webkit-print-color-adjust:exact;print-color-adjust:exact} .page{width:100%;min-height:auto} }'
     + '</style></head><body>'
     + '<div class="page">'
-    + '<img src="data:image/jpeg;base64,' + HEADER + '" class="header-img" alt="HRCO Header">'
+    + '<img src="' + HEADER + '" class="header-img" alt="">'
     + '<div class="content">'
     + '<div class="report-title">'
     + '<div><div class="title-ar">كشف زيارة صيانة</div><div class="title-en">Maintenance Visit Report</div></div>'
@@ -10031,7 +10371,7 @@ function _doPrintVisit(id, v, techSigImg, clientSigImg, visitDateTime, vtype, pa
     + '</div>'
     + '</div>'
     + '</div>'
-    + '<img src="data:image/jpeg;base64,' + FOOTER + '" class="footer-img" alt="HRCO Footer">'
+    + '<img src="' + FOOTER + '" class="footer-img" alt="">'
     + '</div>'
     + '<div class="no-print" style="text-align:center;padding:16px;background:#F0F4F8">'
     + '<button onclick="window.print()" style="padding:10px 32px;background:#0F2D52;color:#fff;border:none;border-radius:8px;cursor:pointer;font-size:15px;font-family:Tajawal,Arial,sans-serif;font-weight:700;margin-left:10px">🖨️ طباعة / Print</button>'
@@ -10352,8 +10692,10 @@ async function showPublicReport(token){
   var clientSig = sigRow ? sigRow.sig_client||'' : '';
 
   // Load header/footer images (embedded in this file)
-  var HEADER = HEADER_IMG;
-  var FOOTER = FOOTER_IMG;
+  // A company can upload its own letterhead from the control panel; the
+  // built-in images are only the fallback.
+  var HEADER = appSettings['company_header_img'] || ('data:image/jpeg;base64,' + HEADER_IMG);
+  var FOOTER = appSettings['company_footer_img'] || ('data:image/jpeg;base64,' + FOOTER_IMG);
 
   var typeAr = {'ضمان':'ضمان','مدفوعة':'مدفوعة','عقد':'عقد صيانة','warranty':'ضمان','paid':'مدفوعة','contract':'عقد صيانة'};
   var typeEn = {'ضمان':'Warranty','مدفوعة':'Paid','عقد':'Contract','warranty':'Warranty','paid':'Paid','contract':'Contract'};
@@ -11017,7 +11359,7 @@ async function showPublicReport(token){
     <div style="background:#0F2D52;padding:24px 20px;text-align:center">
       <div style="width:52px;height:52px;background:rgba(255,255,255,.12);border-radius:12px;display:flex;align-items:center;justify-content:center;margin:0 auto 12px"><i class="ti ti-snowflake" style="color:#7EC8E3;font-size:28px"></i></div>
       <div style="color:#fff;font-size:16px;font-weight:700" id="lg-appname">Maintenance Management System</div>
-      <div style="color:#7EC8E3;font-size:12px;margin-top:4px">HRCO — Central Kitchens & Cold Rooms</div>
+      <div style="color:#7EC8E3;font-size:12px;margin-top:4px" id="lg-company">HRCO</div>
       <div style="display:flex;justify-content:center;gap:6px;margin-top:14px">
         <button id="lg-en" onclick="lgLang('en')" style="padding:4px 12px;border-radius:99px;font-size:11px;font-weight:700;cursor:pointer;border:1px solid rgba(255,255,255,.3);background:#fff;color:#0F2D52;font-family:Tajawal,sans-serif">EN</button>
         <button id="lg-ar" onclick="lgLang('ar')" style="padding:4px 12px;border-radius:99px;font-size:11px;font-weight:700;cursor:pointer;border:1px solid rgba(255,255,255,.3);background:transparent;color:#fff;font-family:Tajawal,sans-serif">ع</button>
