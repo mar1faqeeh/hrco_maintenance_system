@@ -256,28 +256,28 @@ html,body{height:100%;overflow:auto;font-family:Tajawal,sans-serif;font-size:14p
     <div><div class="pt" id="t-pg-dashboard">Dashboard</div><div class="ps" id="t-pg-dashboard-sub">Today's operations overview</div></div>
     <button class="btn btn-p" onclick="go('newvisit')"><i class="ti ti-plus"></i><span id="t-new-visit-btn">New Visit</span></button>
   </div>
-  <div class="sg sg-4">
+  <div class="sg sg-4" id="dw-stats">
     <div class="sc" onclick="go('visits')" style="cursor:pointer"><div class="si" style="background:#E6F1FB"><i class="ti ti-calendar-check" style="color:#1D4E89"></i></div><div class="sv" id="dash-total-visits">0</div><div class="sl" id="t-stat-today">Today's Visits</div><div class="sch cup"><i class="ti ti-trending-up"></i><span id="t-from-yest">+3 from yesterday</span></div></div>
     <div class="sc" onclick="go('visits')" style="cursor:pointer"><div class="si" style="background:#EAF3DE"><i class="ti ti-circle-check" style="color:#2D7D3A"></i></div><div class="sv" id="dash-completed">0</div><div class="sl" id="t-stat-done">Completed</div><div class="sch cup"><i class="ti ti-trending-up"></i> <span id="dash-comp-pct">72%</span></div></div>
     <div class="sc" onclick="go('pending')" style="cursor:pointer"><div class="si" style="background:#FDF0E0"><i class="ti ti-clock-pause" style="color:#C4680A"></i></div><div class="sv" id="dash-pending">0</div><div class="sl" id="t-stat-pend">Pending</div><div class="sch cwn"><i class="ti ti-alert-triangle"></i><span id="t-needs-fu">Needs follow-up</span></div></div>
     <div class="sc" onclick="go('parts')" style="cursor:pointer"><div class="si" style="background:#FCEBEB"><i class="ti ti-tool" style="color:#C0392B"></i></div><div class="sv" id="dash-missing-parts">0</div><div class="sl" id="t-stat-parts">Missing Parts</div><div class="sch cdn"><i class="ti ti-trending-down"></i> 3</div></div>
   </div>
-  <div class="g2">
-    <div class="card">
+  <div class="g2" id="dw-row1">
+    <div class="card" id="dw-techs">
       <div class="ch"><div class="ct"><i class="ti ti-users"></i><span id="t-tech-status">Technician Status</span></div><button class="ca" onclick="go('technicians')" id="t-view-all">View All</button></div>
       <div id="dash-tech-body"><div style="padding:20px;text-align:center;color:#A0AEC0;font-size:13px">Loading...</div></div>
     </div>
-    <div class="card">
+    <div class="card" id="dw-pending">
       <div class="ch"><div class="ct"><i class="ti ti-clock-pause" style="color:#C4680A"></i><span id="t-pend-reports">Pending Reports</span></div><button class="ca" onclick="go('pending')" id="t-view-all2">View All</button></div>
       <div id="dash-pending-body"><div style="padding:20px;text-align:center;color:#A0AEC0;font-size:13px">Loading...</div></div>
     </div>
   </div>
-  <div class="g2">
-    <div class="card">
+  <div class="g2" id="dw-row2">
+    <div class="card" id="dw-recent">
       <div class="ch"><div class="ct"><i class="ti ti-history"></i><span id="t-recent">Recent Visits</span></div><button class="ca" onclick="go('visits')" id="t-archive-btn">Full Archive</button></div>
       <div id="dash-recent-body"><div style="padding:20px;text-align:center;color:#A0AEC0;font-size:13px">Loading...</div></div>
     </div>
-    <div class="card">
+    <div class="card" id="dw-weekly">
       <div class="ch"><div class="ct"><i class="ti ti-chart-bar"></i><span id="t-weekly">Weekly Progress</span></div><span style="font-size:11px;color:#A0AEC0">Sun—Sat</span></div>
       <div style="padding:14px 16px"><div id="dashChart" style="display:flex;align-items:flex-end;gap:4px;height:72px;margin-bottom:8px"></div><div style="display:flex;gap:12px"><div style="display:flex;align-items:center;gap:4px;font-size:11px;color:#718096"><div style="width:10px;height:10px;border-radius:3px;background:#1D4E89"></div><span id="t-done2">Completed</span></div><div style="display:flex;align-items:center;gap:4px;font-size:11px;color:#718096"><div style="width:10px;height:10px;border-radius:3px;background:#FAC775"></div><span id="t-pend2">Pending</span></div></div></div>
       <div style="display:grid;grid-template-columns:1fr 1fr 1fr;border-top:1px solid #D9E2EC">
@@ -287,6 +287,8 @@ html,body{height:100%;overflow:auto;font-family:Tajawal,sans-serif;font-size:14p
       </div>
     </div>
   </div>
+
+  <div id="dw-extra" style="display:flex;flex-direction:column;gap:14px;margin-top:14px"></div>
 </div>
 
 <!-- ═══ VISITS ═══ -->
@@ -1625,7 +1627,8 @@ function go(pg){
     if(_ovlEl){ _ovlEl.style.display='none'; _ovlEl.style.pointerEvents='none'; }
   }
   }catch(e){console.log('go() error:',e);}
-  if(pg==='dashboard'){updateDashStats();renderDashTechs();renderDashRecent();renderDashPending();renderPending();}
+  if(pg==='dashboard'){updateDashStats();renderDashTechs();renderDashRecent();renderDashPending();renderPending();
+    try{ applyDashboardLayout(); }catch(e){}}
   if(pg==='signature') setTimeout(function(){initSig('tech');initSig('client');},80);
   if(pg==='newvisit'){ loadExtraEquipmentOptions(); fillVisitClientSelect(); if(!document.querySelector('#taskcats button')) { renderTaskCats(); renderTaskList(); }
     window._visitStartTime = Date.now();
@@ -3820,6 +3823,8 @@ async function loadAppSettings(){
     appSettings = {};
     (r.data||[]).forEach(function(row){ appSettings[row.key] = row.value; });
     applyFeatureFlags();
+    try{ applyLists(); }catch(e){}
+    try{ applyDashboardLayout(); }catch(e){}
   }catch(e){ console.log('loadAppSettings error:', e); }
 }
 
@@ -3849,9 +3854,10 @@ function applyFeatureFlags(){
 var AP_SECTIONS = [
   { key:'overview', icon:'ti-layout-dashboard', en:'Overview',        ar:'نظرة عامة' },
   { key:'features', icon:'ti-toggle-right',     en:'System Features', ar:'مميزات النظام' },
+  { key:'dash',     icon:'ti-layout-dashboard', en:'Dashboard',       ar:'لوحة المعلومات' },
   { key:'users',    icon:'ti-users',            en:'Users & Roles',   ar:'المستخدمون والصلاحيات' },
   { key:'log',      icon:'ti-history',          en:'Activity Log',    ar:'سجل الحركات' },
-  { key:'lists',    icon:'ti-list-details',     en:'Lists & Settings',ar:'القوائم والإعدادات',    planned:true },
+  { key:'lists',    icon:'ti-list-details',     en:'Lists & Settings',ar:'القوائم والإعدادات' },
   { key:'tickets',  icon:'ti-ticket',           en:'Ticket Portal',   ar:'بوابة التذاكر',         planned:true }
 ];
 var apSection = 'overview';
@@ -3907,6 +3913,7 @@ function apGo(key){
     users:    { en:'Accounts, roles, emails and zone coverage', ar:'الحسابات والرتب والإيميلات ومناطق التغطية' },
     log:      { en:'Every action, with before and after values', ar:'كل العمليات مع القيم قبل وبعد' },
     lists:    { en:'Checklists, categories, units, cities and zones', ar:'قوائم المهام والفئات والوحدات والمدن والمناطق' },
+    dash:     { en:'Choose which cards appear and in what order', ar:'اختر البطاقات الظاهرة وترتيبها' },
     tickets:  { en:'Customer links, form fields and notifications', ar:'روابط العملاء وحقول النموذج والتنبيهات' }
   };
   var sub = subs[key] || {};
@@ -3916,6 +3923,8 @@ function apGo(key){
   else if(key === 'features') apRenderFeatures();
   else if(key === 'users') apRenderUsers();
   else if(key === 'log') apRenderLog();
+  else if(key === 'lists') apRenderLists();
+  else if(key === 'dash'){ _apDash = null; apRenderDashboard(); }
   else apRenderPlanned(sec);
 }
 
@@ -4453,6 +4462,522 @@ async function apPurgeLog(){
   var n = await purgeOldLog();
   alert(ar ? ('تم حذف ' + n + ' حركة.') : (n + ' entries deleted.'));
   apRenderLog();
+}
+
+
+// ══════════════════════════════════════
+// EDITABLE LISTS (control panel → Lists & Settings)
+// Values that used to be hardcoded now live in app_settings, so Marwan can
+// change them himself. Every list falls back to its built-in default, so the
+// app still works before anything is saved.
+// ══════════════════════════════════════
+var LIST_DEFS = {
+  equipment: {
+    key: 'list_equipment',
+    en: 'Equipment types', ar: 'أنواع المعدات',
+    enDesc: 'The choices in the New Visit "Equipment / Device" list.',
+    arDesc: 'الخيارات في قائمة "المعدة / الجهاز" بصفحة الزيارة الجديدة.',
+    icon: 'ti-tool',
+    def: ['Cold Room','Custom-fab','Dishwasher Machine','Exhaust Hood','Ice Maker',
+          'Kitchen Equipment','Under Counter Refrigerator','Upright Refrigerator']
+  },
+  warranty: {
+    key: 'list_warranty_months',
+    en: 'Warranty periods (months)', ar: 'مدد الضمان (بالأشهر)',
+    enDesc: 'The options offered when an order is covered by a warranty.',
+    arDesc: 'الخيارات المتاحة عند اختيار ضمان للأوردر.',
+    icon: 'ti-shield-check', numeric: true,
+    def: [6, 12, 24, 36]
+  },
+  priority: {
+    key: 'list_priority',
+    en: 'Request priorities', ar: 'أولويات الطلبات',
+    enDesc: 'Written as "value | English | Arabic".',
+    arDesc: 'تُكتب بالصيغة: "القيمة | الإنجليزي | العربي".',
+    icon: 'ti-flag',
+    def: ['normal | Normal | عادية', 'urgent | Urgent | عاجلة', 'breakdown | Breakdown | توقف تام']
+  }
+};
+
+function listValues(name){
+  var d = LIST_DEFS[name];
+  if(!d) return [];
+  var raw = appSettings[d.key];
+  if(raw === undefined || raw === null || raw === '') return d.def.slice();
+  try{
+    var a = JSON.parse(raw);
+    return Array.isArray(a) && a.length ? a : d.def.slice();
+  }catch(e){ return d.def.slice(); }
+}
+
+async function saveList(name, values){
+  var d = LIST_DEFS[name];
+  if(!d) return false;
+  return await saveAppSetting(d.key, JSON.stringify(values));
+}
+
+// Push the saved lists into the live UI.
+function applyLists(){
+  // Equipment select — keep whatever is chosen, and keep "Other" last
+  var eq = document.getElementById('inp-equipment');
+  if(eq){
+    var chosen = eq.value;
+    var first = eq.querySelector('option[value=""]');
+    eq.innerHTML = '';
+    if(first) eq.appendChild(first);
+    else {
+      var o0 = document.createElement('option');
+      o0.value = ''; o0.textContent = (LNG==='ar') ? '-- اختر المعدة --' : '-- Select Equipment --';
+      eq.appendChild(o0);
+    }
+    listValues('equipment').forEach(function(v){
+      var o = document.createElement('option'); o.value = v; o.textContent = v; eq.appendChild(o);
+    });
+    var oth = document.createElement('option');
+    oth.value = '__other__';
+    oth.setAttribute('data-en', '+ Other — type a new one');
+    oth.setAttribute('data-ar', '+ أخرى — اكتب معدة جديدة');
+    oth.textContent = (LNG==='ar') ? '+ أخرى — اكتب معدة جديدة' : '+ Other — type a new one';
+    eq.appendChild(oth);
+    if(typeof loadExtraEquipmentOptions === 'function') loadExtraEquipmentOptions();
+    if(chosen) eq.value = chosen;
+  }
+
+  // Warranty months
+  var wm = document.getElementById('co-warranty-months');
+  if(wm){
+    var keep = wm.value;
+    wm.innerHTML = listValues('warranty').map(function(m){
+      var n = parseInt(m, 10) || 0;
+      var enL = n + ' months', arL = n + ' شهراً';
+      return '<option value="' + n + '" data-en="' + enL + '" data-ar="' + arL + '">'
+           + ((LNG==='ar') ? arL : enL) + '</option>';
+    }).join('');
+    if(keep) wm.value = keep;
+  }
+
+  // Request priorities — "value | English | Arabic"
+  var pr = document.getElementById('mr-priority');
+  if(pr){
+    var keepP = pr.value;
+    pr.innerHTML = listValues('priority').map(function(row){
+      var parts = String(row).split('|').map(function(x){ return x.trim(); });
+      var val = parts[0] || 'normal', enL = parts[1] || val, arL = parts[2] || enL;
+      return '<option value="' + val + '" data-en="' + enL + '" data-ar="' + arL + '">'
+           + enL + ' / ' + arL + '</option>';
+    }).join('');
+    if(keepP) pr.value = keepP;
+  }
+}
+
+// ── Panel section ────────────────────────────────────────────────────────
+var apListKey = 'equipment';
+
+function apRenderLists(){
+  var body = document.getElementById('ap-body');
+  if(!body) return;
+  var ar = (LNG === 'ar');
+
+  if(!_initSb()){
+    body.innerHTML = apCard('<div style="color:#F87171;font-size:13px"><i class="ti ti-alert-triangle"></i> '
+      + (ar ? 'لا يوجد اتصال بقاعدة البيانات — لا يمكن حفظ القوائم.'
+            : 'No database connection — lists cannot be saved.') + '</div>');
+    return;
+  }
+
+  var tabs = Object.keys(LIST_DEFS).map(function(k){
+    var d = LIST_DEFS[k], on = (k === apListKey);
+    return '<button onclick="apSetList(\'' + k + '\')" style="padding:8px 15px;border-radius:9px;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;'
+      + 'border:1px solid ' + (on ? '#7C3AED' : '#24406e') + ';background:' + (on ? '#7C3AED' : 'transparent') + ';color:' + (on ? '#fff' : '#9FB4D4') + '">'
+      + '<i class="ti ' + d.icon + '"></i> ' + (ar ? d.ar : d.en) + '</button>';
+  }).join('');
+
+  var d = LIST_DEFS[apListKey];
+  var vals = listValues(apListKey);
+
+  body.innerHTML =
+      '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:16px">' + tabs + '</div>'
+    + '<div style="background:#0E2140;border:1px solid #1B3157;border-radius:12px;padding:18px">'
+    +   '<div style="font-size:14px;font-weight:700;color:#fff">' + (ar ? d.ar : d.en) + '</div>'
+    +   '<div style="font-size:11px;color:#7E93B5;margin-top:4px;margin-bottom:14px">' + (ar ? d.arDesc : d.enDesc) + '</div>'
+    +   '<div id="ap-list-rows" style="display:flex;flex-direction:column;gap:7px"></div>'
+    +   '<div style="display:flex;gap:8px;margin-top:14px;flex-wrap:wrap">'
+    +     '<button onclick="apAddListRow()" style="padding:9px 16px;border-radius:9px;border:1px solid #24406e;background:transparent;color:#9FB4D4;cursor:pointer;font-size:12px;font-weight:700;font-family:inherit"><i class="ti ti-plus"></i> ' + (ar?'إضافة':'Add') + '</button>'
+    +     '<button onclick="apResetList()" style="padding:9px 16px;border-radius:9px;border:1px solid #5B2E2E;background:transparent;color:#FCA5A5;cursor:pointer;font-size:12px;font-weight:700;font-family:inherit"><i class="ti ti-rotate"></i> ' + (ar?'استعادة الافتراضي':'Restore defaults') + '</button>'
+    +     '<div style="flex:1"></div>'
+    +     '<button onclick="apSaveList()" style="padding:9px 22px;border-radius:9px;border:none;background:#7C3AED;color:#fff;cursor:pointer;font-size:12px;font-weight:700;font-family:inherit"><i class="ti ti-device-floppy"></i> ' + (ar?'حفظ':'Save') + '</button>'
+    +   '</div>'
+    +   '<div id="ap-list-status" style="font-size:11px;color:#7E93B5;margin-top:10px"></div>'
+    + '</div>';
+
+  vals.forEach(function(v){ apAddListRow(v); });
+}
+
+function apSetList(k){ apListKey = k; apRenderLists(); }
+
+function apAddListRow(value){
+  var wrap = document.getElementById('ap-list-rows');
+  if(!wrap) return;
+  var ar = (LNG === 'ar');
+  var row = document.createElement('div');
+  row.className = 'ap-list-row';
+  row.style.cssText = 'display:flex;gap:8px;align-items:center';
+  row.innerHTML =
+      '<i class="ti ti-grip-vertical" style="color:#334C73;font-size:15px"></i>'
+    + '<input type="text" class="ap-list-val" value="' + String(value == null ? '' : value).replace(/"/g,'&quot;') + '" '
+    +   'style="flex:1;padding:9px 12px;border-radius:8px;border:1px solid #24406e;background:#0B1B33;color:#E6EDF7;font-size:13px;font-family:inherit;outline:none">'
+    + '<button onclick="this.parentElement.remove()" title="' + (ar?'حذف':'Remove') + '" style="border:1px solid #5B2E2E;background:transparent;color:#FCA5A5;border-radius:8px;padding:9px 12px;cursor:pointer;font-family:inherit"><i class="ti ti-trash"></i></button>';
+  wrap.appendChild(row);
+  if(value == null){ var i = row.querySelector('input'); if(i) i.focus(); }
+}
+
+async function apSaveList(){
+  var ar = (LNG === 'ar');
+  var d = LIST_DEFS[apListKey];
+  var vals = [];
+  document.querySelectorAll('#ap-list-rows .ap-list-val').forEach(function(i){
+    var v = i.value.trim();
+    if(!v) return;
+    vals.push(d.numeric ? (parseInt(v, 10) || 0) : v);
+  });
+  if(d.numeric) vals = vals.filter(function(n){ return n > 0; });
+
+  if(!vals.length){
+    alert(ar ? 'لا يمكن حفظ قائمة فارغة.' : 'An empty list cannot be saved.');
+    return;
+  }
+
+  var before = listValues(apListKey);
+  var ok = await saveList(apListKey, vals);
+  var st = document.getElementById('ap-list-status');
+  if(!ok){
+    if(st){ st.textContent = ar ? 'تعذّر الحفظ — تحقّق من جدول app_settings.' : 'Could not save — check the app_settings table.'; st.style.color = '#F87171'; }
+    return;
+  }
+  logActivity('setting', 'list', (ar ? d.ar : d.en),
+              { items: before.join(', ') }, { items: vals.join(', ') });
+  applyLists();
+  if(st){
+    st.textContent = ar ? ('تم الحفظ · ' + vals.length + ' عنصر') : ('Saved · ' + vals.length + ' item(s)');
+    st.style.color = '#34D399';
+  }
+}
+
+async function apResetList(){
+  var ar = (LNG === 'ar');
+  var d = LIST_DEFS[apListKey];
+  if(!confirm(ar ? 'استعادة القائمة الافتراضية؟ سيُفقد التخصيص.'
+                 : 'Restore the built-in list? Your customisation will be lost.')) return;
+  await saveList(apListKey, d.def.slice());
+  applyLists();
+  apRenderLists();
+}
+
+
+// ══════════════════════════════════════
+// CONFIGURABLE DASHBOARD
+// The order and visibility of every dashboard block live in app_settings,
+// so the system admin arranges the dashboard from the control panel.
+// ══════════════════════════════════════
+var DASH_WIDGETS = [
+  { key:'stats',    el:'dw-stats',   en:'Summary cards',        ar:'بطاقات الملخص',        icon:'ti-layout-grid',      built:true },
+  { key:'techs',    el:'dw-techs',   en:'Technician status',    ar:'حالة الفنيين',          icon:'ti-users',            built:true },
+  { key:'pending',  el:'dw-pending', en:'Pending reports',      ar:'الكشوف المعلقة',        icon:'ti-clock-pause',      built:true },
+  { key:'recent',   el:'dw-recent',  en:'Recent visits',        ar:'آخر الزيارات',          icon:'ti-history',          built:true },
+  { key:'weekly',   el:'dw-weekly',  en:'Weekly progress',      ar:'الإنجاز الأسبوعي',      icon:'ti-chart-bar',        built:true },
+  // extras, rendered into #dw-extra in the saved order
+  { key:'requests', en:'Maintenance requests',   ar:'طلبات الصيانة',            icon:'ti-headset' },
+  { key:'expiring', en:'Warranties expiring',    ar:'ضمانات على وشك الانتهاء',  icon:'ti-shield-half' },
+  { key:'lowstock', en:'Low stock parts',        ar:'قطع تحت الحد الأدنى',      icon:'ti-package' },
+  { key:'zones',    en:'Visits by zone',         ar:'الزيارات حسب المنطقة',     icon:'ti-map-pin' },
+  { key:'types',    en:'Visit types breakdown',  ar:'توزيع أنواع الزيارات',     icon:'ti-chart-pie' },
+  { key:'topclients', en:'Top clients',          ar:'أكثر العملاء زيارات',      icon:'ti-building' }
+];
+
+var DASH_DEFAULT = ['stats','techs','pending','recent','weekly'];
+
+function dashLayout(){
+  var raw = appSettings['dashboard_layout'];
+  if(!raw) return DASH_DEFAULT.slice();
+  try{
+    var a = JSON.parse(raw);
+    return Array.isArray(a) ? a : DASH_DEFAULT.slice();
+  }catch(e){ return DASH_DEFAULT.slice(); }
+}
+
+// Reorder and show/hide the dashboard to match the saved layout.
+function applyDashboardLayout(){
+  var page = document.getElementById('pg-dashboard');
+  var extra = document.getElementById('dw-extra');
+  if(!page || !extra) return;
+  var on = dashLayout();
+
+  // built-in blocks: visibility
+  DASH_WIDGETS.filter(function(w){ return w.built; }).forEach(function(w){
+    var el = document.getElementById(w.el);
+    if(el) el.style.display = (on.indexOf(w.key) === -1) ? 'none' : '';
+  });
+  // the two side-by-side rows collapse when both their cards are hidden
+  [['dw-row1','techs','pending'], ['dw-row2','recent','weekly']].forEach(function(r){
+    var row = document.getElementById(r[0]);
+    if(row) row.style.display = (on.indexOf(r[1]) === -1 && on.indexOf(r[2]) === -1) ? 'none' : '';
+  });
+
+  // built-in blocks: order, by moving them to match the saved sequence
+  var anchor = null;
+  on.forEach(function(key){
+    var w = DASH_WIDGETS.find(function(x){ return x.key === key; });
+    if(!w || !w.built) return;
+    var el = document.getElementById(w.el);
+    if(!el) return;
+    var node = (w.key === 'techs' || w.key === 'pending') ? document.getElementById('dw-row1')
+             : (w.key === 'recent' || w.key === 'weekly') ? document.getElementById('dw-row2')
+             : el;
+    if(!node || node.parentElement !== page) return;
+    if(anchor) page.insertBefore(node, anchor.nextSibling);
+    else page.insertBefore(node, page.querySelector('.ph') ? page.querySelector('.ph').nextSibling : page.firstChild);
+    anchor = node;
+  });
+  page.appendChild(extra);
+
+  // extras
+  extra.innerHTML = '';
+  on.forEach(function(key){
+    var w = DASH_WIDGETS.find(function(x){ return x.key === key; });
+    if(!w || w.built) return;
+    var html = dashWidgetHtml(key);
+    if(html) extra.insertAdjacentHTML('beforeend', html);
+  });
+}
+
+// ── The extra widgets ────────────────────────────────────────────────────
+function dashCard(icon, title, inner, action){
+  return '<div class="card">'
+    + '<div class="ch"><div class="ct"><i class="ti ' + icon + '"></i>' + title + '</div>'
+    + (action || '') + '</div>'
+    + inner + '</div>';
+}
+function dashEmpty(msg){
+  return '<div style="padding:22px;text-align:center;color:#A0AEC0;font-size:12px">' + msg + '</div>';
+}
+
+function dashWidgetHtml(key){
+  var ar = (LNG === 'ar');
+  var w = DASH_WIDGETS.find(function(x){ return x.key === key; });
+  var title = w ? (ar ? w.ar : w.en) : key;
+
+  if(key === 'requests'){
+    var list = (typeof maintRequests !== 'undefined' ? maintRequests : []);
+    var open = list.filter(function(r){ return (r.status||'new') === 'new'; });
+    var rows = open.slice(0,5).map(function(r){
+      return '<div style="display:flex;align-items:center;gap:9px;padding:9px 16px;border-bottom:1px solid #F0F4F8">'
+        + '<span style="background:#FCEBEB;color:#C0392B;font-size:10px;font-weight:700;padding:2px 8px;border-radius:99px">' + (ar?'جديد':'new') + '</span>'
+        + '<div style="flex:1;min-width:0"><div style="font-size:12px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + (r.client||'') + '</div>'
+        + '<div style="font-size:11px;color:#718096;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + (r.problem||'') + '</div></div>'
+        + '<span style="font-size:10px;color:#A0AEC0">' + (r.date||'') + '</span></div>';
+    }).join('');
+    return dashCard('ti-headset', title + ' <span style="color:#C0392B">(' + open.length + ')</span>',
+      rows || dashEmpty(ar ? 'لا توجد طلبات جديدة' : 'No new requests'),
+      '<button class="ca" onclick="go(\'maint-requests\')">' + (ar?'عرض الكل':'View All') + '</button>');
+  }
+
+  if(key === 'expiring'){
+    var soon = [];
+    (typeof clientOrders !== 'undefined' ? clientOrders : []).forEach(function(o){
+      var c = orderCoverage(o);
+      if(c.active && c.daysLeft != null && c.daysLeft <= 60) soon.push({ o:o, d:c.daysLeft, end:c.endDate });
+    });
+    soon.sort(function(a,b){ return a.d - b.d; });
+    var rowsE = soon.slice(0,6).map(function(x){
+      var cl = (typeof clientsData !== 'undefined' ? clientsData : []).find(function(c){ return String(c.id) === String(x.o.client_id); });
+      var col = x.d <= 14 ? '#C0392B' : (x.d <= 30 ? '#C4680A' : '#2D7D3A');
+      return '<div style="display:flex;align-items:center;gap:9px;padding:9px 16px;border-bottom:1px solid #F0F4F8">'
+        + '<div style="flex:1;min-width:0"><div style="font-size:12px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + (x.o.name||'') + '</div>'
+        + '<div style="font-size:11px;color:#718096">' + (cl ? (cl.nickname || cl.name) : '') + '</div></div>'
+        + '<span style="font-size:11px;font-weight:700;color:' + col + '">' + x.d + ' ' + (ar?'يوم':'days') + '</span></div>';
+    }).join('');
+    return dashCard('ti-shield-half', title + ' <span style="color:#C4680A">(' + soon.length + ')</span>',
+      rowsE || dashEmpty(ar ? 'لا توجد ضمانات تنتهي خلال 60 يوماً' : 'Nothing expiring in the next 60 days'));
+  }
+
+  if(key === 'lowstock'){
+    var low = (typeof partsData !== 'undefined' ? partsData : []).filter(function(p){
+      return (parseInt(p.qty,10)||0) <= (parseInt(p.min,10)||0);
+    });
+    var rowsL = low.slice(0,6).map(function(p){
+      var out = (parseInt(p.qty,10)||0) === 0;
+      return '<div style="display:flex;align-items:center;gap:9px;padding:9px 16px;border-bottom:1px solid #F0F4F8">'
+        + '<div style="flex:1;min-width:0"><div style="font-size:12px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'
+        + (typeof partName === 'function' ? partName(p) : p.name) + '</div>'
+        + '<div style="font-size:10px;color:#1D4E89;font-weight:600" dir="ltr">' + (p.code||'') + '</div></div>'
+        + '<span style="font-size:11px;font-weight:700;color:' + (out ? '#C0392B' : '#C4680A') + '">'
+        + (parseInt(p.qty,10)||0) + ' / ' + (parseInt(p.min,10)||0) + '</span></div>';
+    }).join('');
+    return dashCard('ti-package', title + ' <span style="color:#C0392B">(' + low.length + ')</span>',
+      rowsL || dashEmpty(ar ? 'المخزون ضمن الحدود' : 'Stock is within limits'),
+      '<button class="ca" onclick="go(\'parts\')">' + (ar?'المخزون':'Inventory') + '</button>');
+  }
+
+  if(key === 'zones'){
+    var counts = {};
+    (typeof visData !== 'undefined' ? visData : []).forEach(function(v){
+      var o = (typeof clientOrders !== 'undefined' ? clientOrders : []).find(function(x){ return String(x.id) === String(v.order_id); });
+      var z = (o && o.zone) ? o.zone : 'other';
+      counts[z] = (counts[z]||0) + 1;
+    });
+    var totalZ = Object.keys(counts).reduce(function(a,k){ return a + counts[k]; }, 0);
+    var rowsZ = ZONES.map(function(z){
+      var n = counts[z.key] || 0;
+      var pct = totalZ ? Math.round(n * 100 / totalZ) : 0;
+      return '<div style="padding:7px 16px"><div style="display:flex;justify-content:space-between;font-size:11px;margin-bottom:3px">'
+        + '<span style="color:#4A5568;font-weight:600">' + zoneLabel(z.key) + '</span>'
+        + '<span style="color:#718096">' + n + '</span></div>'
+        + '<div style="height:6px;background:#F0F4F8;border-radius:99px;overflow:hidden">'
+        + '<div style="height:100%;width:' + pct + '%;background:#1D4E89"></div></div></div>';
+    }).join('');
+    return dashCard('ti-map-pin', title, '<div style="padding:8px 0">' + rowsZ + '</div>');
+  }
+
+  if(key === 'types'){
+    var t = { warranty:0, contract:0, paid:0 };
+    (typeof visData !== 'undefined' ? visData : []).forEach(function(v){
+      var k = (v.type || v.visit_type || '').toLowerCase();
+      if(t[k] !== undefined) t[k]++;
+    });
+    var tot = t.warranty + t.contract + t.paid;
+    var cols = { warranty:'#1D4E89', contract:'#2D7D3A', paid:'#C4680A' };
+    var labs = { warranty: ar?'ضمان':'Warranty', contract: ar?'عقد':'Contract', paid: ar?'مدفوعة':'Paid' };
+    var rowsT = Object.keys(t).map(function(k){
+      var pct = tot ? Math.round(t[k] * 100 / tot) : 0;
+      return '<div style="padding:7px 16px"><div style="display:flex;justify-content:space-between;font-size:11px;margin-bottom:3px">'
+        + '<span style="color:#4A5568;font-weight:600">' + labs[k] + '</span>'
+        + '<span style="color:#718096">' + t[k] + ' · ' + pct + '%</span></div>'
+        + '<div style="height:6px;background:#F0F4F8;border-radius:99px;overflow:hidden">'
+        + '<div style="height:100%;width:' + pct + '%;background:' + cols[k] + '"></div></div></div>';
+    }).join('');
+    return dashCard('ti-chart-pie', title, '<div style="padding:8px 0">' + rowsT + '</div>');
+  }
+
+  if(key === 'topclients'){
+    var tally = {};
+    (typeof visData !== 'undefined' ? visData : []).forEach(function(v){
+      if(!v.client) return;
+      tally[v.client] = (tally[v.client]||0) + 1;
+    });
+    var top = Object.keys(tally).map(function(k){ return { name:k, n:tally[k] }; })
+      .sort(function(a,b){ return b.n - a.n; }).slice(0,5);
+    var max = top.length ? top[0].n : 1;
+    var rowsC = top.map(function(x, i){
+      return '<div style="display:flex;align-items:center;gap:10px;padding:9px 16px;border-bottom:1px solid #F0F4F8">'
+        + '<span style="width:20px;height:20px;border-radius:50%;background:#E6F1FB;color:#1D4E89;font-size:10px;font-weight:700;display:flex;align-items:center;justify-content:center">' + (i+1) + '</span>'
+        + '<div style="flex:1;min-width:0"><div style="font-size:12px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + x.name + '</div>'
+        + '<div style="height:5px;background:#F0F4F8;border-radius:99px;margin-top:4px;overflow:hidden"><div style="height:100%;width:' + Math.round(x.n*100/max) + '%;background:#1D4E89"></div></div></div>'
+        + '<span style="font-size:12px;font-weight:700;color:#1D4E89">' + x.n + '</span></div>';
+    }).join('');
+    return dashCard('ti-building', title, rowsC || dashEmpty(ar ? 'لا توجد زيارات بعد' : 'No visits yet'),
+      '<button class="ca" onclick="go(\'clients\')">' + (ar?'العملاء':'Clients') + '</button>');
+  }
+
+  return '';
+}
+
+// ── Panel section ────────────────────────────────────────────────────────
+var _apDash = null;
+
+function apRenderDashboard(){
+  var body = document.getElementById('ap-body');
+  if(!body) return;
+  var ar = (LNG === 'ar');
+
+  if(!_initSb()){
+    body.innerHTML = apCard('<div style="color:#F87171;font-size:13px"><i class="ti ti-alert-triangle"></i> '
+      + (ar ? 'لا يوجد اتصال بقاعدة البيانات — لا يمكن حفظ الترتيب.'
+            : 'No database connection — the layout cannot be saved.') + '</div>');
+    return;
+  }
+
+  if(!_apDash) _apDash = dashLayout();
+
+  var shownRows = _apDash.map(function(key, i){
+    var w = DASH_WIDGETS.find(function(x){ return x.key === key; });
+    if(!w) return '';
+    return '<div style="background:#0E2140;border:1px solid #2E5A8F;border-radius:10px;padding:11px 14px;display:flex;align-items:center;gap:11px">'
+      + '<div style="display:flex;flex-direction:column;gap:2px">'
+      +   '<button onclick="apDashMove(' + i + ',-1)" ' + (i === 0 ? 'disabled' : '') + ' style="border:none;background:transparent;color:' + (i===0?'#334C73':'#9FB4D4') + ';cursor:pointer;font-size:12px;line-height:1"><i class="ti ti-chevron-up"></i></button>'
+      +   '<button onclick="apDashMove(' + i + ',1)" ' + (i === _apDash.length-1 ? 'disabled' : '') + ' style="border:none;background:transparent;color:' + (i===_apDash.length-1?'#334C73':'#9FB4D4') + ';cursor:pointer;font-size:12px;line-height:1"><i class="ti ti-chevron-down"></i></button>'
+      + '</div>'
+      + '<i class="ti ' + w.icon + '" style="color:#7C3AED;font-size:17px"></i>'
+      + '<div style="flex:1;font-size:13px;font-weight:600;color:#fff">' + (ar ? w.ar : w.en) + '</div>'
+      + '<span style="font-size:10px;color:#7E93B5">' + (i+1) + '</span>'
+      + '<button onclick="apDashToggle(\'' + w.key + '\')" style="padding:6px 12px;border-radius:8px;border:1px solid #24406e;background:transparent;color:#FCA5A5;cursor:pointer;font-size:11px;font-weight:700;font-family:inherit">'
+      +   '<i class="ti ti-eye-off"></i> ' + (ar?'إخفاء':'Hide') + '</button>'
+      + '</div>';
+  }).join('');
+
+  var hidden = DASH_WIDGETS.filter(function(w){ return _apDash.indexOf(w.key) === -1; });
+  var hiddenRows = hidden.map(function(w){
+    return '<div style="background:#0B1B33;border:1px dashed #24406e;border-radius:10px;padding:11px 14px;display:flex;align-items:center;gap:11px;opacity:.75">'
+      + '<i class="ti ' + w.icon + '" style="color:#4A6285;font-size:17px"></i>'
+      + '<div style="flex:1;font-size:13px;color:#9FB4D4">' + (ar ? w.ar : w.en) + '</div>'
+      + '<button onclick="apDashToggle(\'' + w.key + '\')" style="padding:6px 12px;border-radius:8px;border:1px solid #2E5A8F;background:transparent;color:#34D399;cursor:pointer;font-size:11px;font-weight:700;font-family:inherit">'
+      +   '<i class="ti ti-eye"></i> ' + (ar?'إظهار':'Show') + '</button>'
+      + '</div>';
+  }).join('');
+
+  body.innerHTML =
+      '<div style="font-size:12px;color:#7E93B5;margin-bottom:12px">'
+    +   (ar ? 'رتّب البطاقات بالأسهم، وأظهر أو أخفِ ما تشاء. الترتيب يسري على جميع المستخدمين.'
+            : 'Order the cards with the arrows and show or hide any of them. The layout applies to every user.')
+    + '</div>'
+    + '<div style="font-size:11px;font-weight:700;color:#9FB4D4;margin-bottom:8px">'
+    +   (ar ? 'الظاهرة' : 'Visible') + ' (' + _apDash.length + ')</div>'
+    + '<div style="display:flex;flex-direction:column;gap:7px">' + (shownRows || '<div style="color:#7E93B5;font-size:12px">' + (ar?'كل البطاقات مخفية':'Everything is hidden') + '</div>') + '</div>'
+    + (hidden.length
+        ? '<div style="font-size:11px;font-weight:700;color:#9FB4D4;margin:18px 0 8px">' + (ar ? 'المخفية' : 'Hidden') + ' (' + hidden.length + ')</div>'
+          + '<div style="display:flex;flex-direction:column;gap:7px">' + hiddenRows + '</div>'
+        : '')
+    + '<div style="display:flex;gap:8px;margin-top:18px;flex-wrap:wrap">'
+    +   '<button onclick="apDashReset()" style="padding:9px 16px;border-radius:9px;border:1px solid #5B2E2E;background:transparent;color:#FCA5A5;cursor:pointer;font-size:12px;font-weight:700;font-family:inherit"><i class="ti ti-rotate"></i> ' + (ar?'الافتراضي':'Defaults') + '</button>'
+    +   '<div style="flex:1"></div>'
+    +   '<button onclick="apDashSave()" style="padding:9px 22px;border-radius:9px;border:none;background:#7C3AED;color:#fff;cursor:pointer;font-size:12px;font-weight:700;font-family:inherit"><i class="ti ti-device-floppy"></i> ' + (ar?'حفظ':'Save') + '</button>'
+    + '</div>'
+    + '<div id="ap-dash-status" style="font-size:11px;color:#7E93B5;margin-top:10px"></div>';
+}
+
+function apDashMove(i, dir){
+  var j = i + dir;
+  if(j < 0 || j >= _apDash.length) return;
+  var t = _apDash[i]; _apDash[i] = _apDash[j]; _apDash[j] = t;
+  apRenderDashboard();
+}
+
+function apDashToggle(key){
+  var i = _apDash.indexOf(key);
+  if(i === -1) _apDash.push(key); else _apDash.splice(i, 1);
+  apRenderDashboard();
+}
+
+function apDashReset(){
+  _apDash = DASH_DEFAULT.slice();
+  apRenderDashboard();
+}
+
+async function apDashSave(){
+  var ar = (LNG === 'ar');
+  var before = dashLayout();
+  var ok = await saveAppSetting('dashboard_layout', JSON.stringify(_apDash));
+  var st = document.getElementById('ap-dash-status');
+  if(!ok){
+    if(st){ st.textContent = ar ? 'تعذّر الحفظ — تحقّق من جدول app_settings.' : 'Could not save — check the app_settings table.'; st.style.color = '#F87171'; }
+    return;
+  }
+  logActivity('setting', 'dashboard', ar ? 'ترتيب لوحة التحكم' : 'Dashboard layout',
+              { widgets: before.join(', ') }, { widgets: _apDash.join(', ') });
+  applyDashboardLayout();
+  if(st){
+    st.textContent = ar ? ('تم الحفظ · ' + _apDash.length + ' بطاقة ظاهرة') : ('Saved · ' + _apDash.length + ' card(s) visible');
+    st.style.color = '#34D399';
+  }
 }
 
 function apRenderPlanned(sec){
