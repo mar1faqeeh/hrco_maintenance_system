@@ -210,6 +210,7 @@ html,body{height:100%;overflow:auto;font-family:Tajawal,sans-serif;font-size:14p
         <button class="lbtn" id="lb-ar" onclick="setLang('ar')">ع</button>
         <button class="lbtn" id="lb-ur" onclick="setLang('ur')">اردو</button>
       </div>
+      <button id="adminPanelBtn" onclick="openAdminPanel()" title="لوحة التحكم / Control Panel" style="display:none;align-items:center;gap:6px;background:#7C3AED;color:#fff;border:none;border-radius:8px;padding:7px 12px;cursor:pointer;font-size:12px;font-weight:700;font-family:inherit"><i class="ti ti-shield-lock"></i><span class="grf-label">Control Panel</span></button>
       <button id="globalRefreshBtn" onclick="refreshAll()" title="تحديث البيانات / Refresh data" style="display:flex;align-items:center;gap:6px;background:rgba(255,255,255,.12);color:#fff;border:none;border-radius:8px;padding:7px 12px;cursor:pointer;font-size:12px;font-weight:700;font-family:inherit"><i class="ti ti-refresh" id="globalRefreshIcon"></i><span class="grf-label">Refresh</span></button>
       <button class="notif"><div class="ndot"></div><i class="ti ti-bell"></i> 3</button>
       <div class="uav" id="uAv" onclick="logout()">M</div>
@@ -1216,7 +1217,10 @@ async function loadSystemUsers(){
           pass: u.password,
           role: u.role,
           name: u.full_name || u.username,
-          init: (u.full_name||u.username)[0].toUpperCase()
+          init: (u.full_name||u.username)[0].toUpperCase(),
+          email: u.email || '',
+          zones: u.zones || [],
+          active: (u.active === false) ? false : true
         };
       });
       console.log('Loaded', r.data.length, 'users from DB:', Object.keys(USERS));
@@ -1240,7 +1244,10 @@ async function saveUserToDB(username, userData){
       username: username,
       password: userData.pass,
       role: userData.role,
-      full_name: userData.name
+      full_name: userData.name,
+      email: userData.email || '',
+      zones: JSON.stringify(userData.zones || []),
+      active: (userData.active === false) ? false : true
     },{onConflict:'username'});
     if(r.error) console.error('saveUser error:',r.error.message);
     else console.log('✅ Saved user to DB:', username);
@@ -1267,15 +1274,17 @@ function lgRole(r){
   else{tb.style.background='#1D4E89';tb.style.color='#fff';tb.style.border='none';mb.style.background='#fff';mb.style.color='#4A5568';mb.style.border='1px solid #D9E2EC';document.getElementById('lg-email').value='ahmed';document.getElementById('lg-pass').value='tech1234';}
 }
 function populateLoginDropdown(){
+  // Disabled accounts are hidden from the picker as well as blocked at login.
   var sel = document.getElementById('lg-email');
   if(!sel) return;
   var current = sel.value;
   sel.innerHTML = '';
   Object.keys(USERS).forEach(function(ukey){
     var u = USERS[ukey];
+    if(u && (u.active === false || u.active === 'false')) return;
     var opt = document.createElement('option');
     opt.value = ukey;
-    opt.textContent = ukey + ' — ' + (u.name||ukey) + (u.role==='manager'?' (Manager)':' (Tech)');
+    opt.textContent = ukey + ' — ' + (u.name||ukey) + ' (' + (typeof roleLabel==='function' ? roleLabel(u.role) : u.role) + ')';
     sel.appendChild(opt);
   });
   // Restore selection
@@ -1302,7 +1311,15 @@ async function lgLogin(){
   
   // Then check credentials
   var u=USERS[email];
-  if(u && u.pass===pass){ lgSuccess(u); return; }
+  if(u && (u.active === false || u.active === 'false')){
+    alert('هذا الحساب معطّل. راجع مدير النظام.\nThis account is disabled. Please contact the system administrator.');
+    return;
+  }
+  if(u && u.pass===pass){
+    lgSuccess(u);
+    try{ logActivity('login', 'session', (u.name||email)); }catch(e){}
+    return;
+  }
   
   err.textContent=t('err'); err.style.display='block';
 }
@@ -1376,6 +1393,7 @@ function lgSuccess(u, restoring){
     try{ loadMaintRequests().then(function(){ updateMaintBadge(); }); }catch(e){}
     try{ loadTaskTemplates(); }catch(e){}
     try{ loadClientOrders().then(function(){ if(typeof renderClientGrid==='function') renderClientGrid(); }); }catch(e){}
+    try{ loadAppSettings(); }catch(e){}
     go(curUserRole === 'salesman'   ? 'maint-requests'
      : curUserRole === 'data_entry' ? 'clients'
      : 'dashboard');
@@ -1505,6 +1523,7 @@ async function refreshAll(){
     try{ await loadMaintRequests(); }catch(e){}
     try{ await loadTaskTemplates(); }catch(e){}
     try{ await loadClientOrders(); }catch(e){}
+    try{ await loadAppSettings(); }catch(e){}
     updatePendingBadge();
     // repaint the page currently on screen
     var current = 'dashboard';
@@ -1524,6 +1543,7 @@ async function refreshAll(){
 
 function logout(){
   if(!confirm('Sign out?')) return;
+  try{ logActivity('logout', 'session', (curUser||curUserLogin||'')); }catch(e){}
   try{ window.localStorage.removeItem('hrco_session'); }catch(e){}
   var ls = document.getElementById('loginScreen');
   if(ls){
@@ -2883,6 +2903,8 @@ async function deleteClientOrder(id){
       return;
     }
   }
+  logActivity('delete', 'order', o.name,
+              logSnapshot(o, ['name','po_number','handover_date','coverage_type','warranty_months']), null);
   clientOrders = clientOrders.filter(function(x){ return String(x.id) !== String(id); });
   renderClientOrders();
 }
@@ -3465,6 +3487,720 @@ function loadExtraEquipmentOptions(){
     var saved = JSON.parse(localStorage_get('hrco_equipment_extra') || '[]');
     saved.forEach(function(n){ rememberEquipmentOption(n); });
   }catch(e){}
+}
+
+
+// ══════════════════════════════════════
+// CONTROL PANEL (system administrator)
+// ══════════════════════════════════════
+
+// Marwan's own account is the system administrator. Recognised either by the
+// explicit 'sysadmin' role or by the original owner login, so upgrading the
+// file can never lock him out of his own panel.
+function isSysAdmin(){
+  return curUserRole === 'sysadmin'
+      || String(curUserLogin||'').toLowerCase() === 'manager';
+}
+
+// ── Shared settings (feature flags live here, NOT in localStorage, so
+//    switching a feature off applies to everyone immediately) ──────────────
+var appSettings = {};
+
+var FEATURE_FLAGS = [
+  { key:'customer_tickets',  def:false, built:false,
+    en:'Customer Ticket Portal', ar:'بوابة تذاكر العملاء',
+    enDesc:'A public link customers use to raise a maintenance ticket.',
+    arDesc:'رابط عام يفتح منه العميل تذكرة صيانة تصل لمدير الصيانة.' },
+  { key:'ai_diagram_search', def:false, built:true,
+    en:'AI Diagram Search', ar:'البحث عن الرسومات بالذكاء الاصطناعي',
+    enDesc:'Search the web for exploded-view drawings. Needs the search keys configured.',
+    arDesc:'البحث عن رسومات القطع على الإنترنت. يحتاج ضبط مفاتيح البحث.' },
+  { key:'warehouse_email',   def:true,  built:true,
+    en:'Send Parts Orders to the Warehouse by Email', ar:'إرسال طلبات القطع للمستودع بالإيميل',
+    enDesc:'Shows the "Send to Warehouse" button on approved parts requests.',
+    arDesc:'يُظهر زر "إرسال للمستودع" على طلبات القطع المعتمدة.' }
+];
+
+function featureOn(key){
+  var f = FEATURE_FLAGS.find(function(x){ return x.key === key; });
+  var def = f ? f.def : false;
+  var v = appSettings['feature_' + key];
+  if(v === undefined || v === null) return def;
+  return (v === true || v === 'true' || v === 1 || v === '1');
+}
+
+async function loadAppSettings(){
+  if(!_initSb()) return;
+  try{
+    var r = await _sb.from('app_settings').select('*');
+    if(r.error){ console.log('loadAppSettings:', r.error.message); return; }
+    appSettings = {};
+    (r.data||[]).forEach(function(row){ appSettings[row.key] = row.value; });
+    applyFeatureFlags();
+  }catch(e){ console.log('loadAppSettings error:', e); }
+}
+
+async function saveAppSetting(key, value){
+  if(!_initSb()) return false;
+  try{
+    var r = await _sb.from('app_settings')
+      .upsert({ key: key, value: String(value), updated_at: new Date().toISOString() }, { onConflict: 'key' })
+      .select();
+    if(r.error){ console.error('saveAppSetting:', r.error); return false; }
+    appSettings[key] = String(value);
+    return true;
+  }catch(e){ console.error('saveAppSetting:', e); return false; }
+}
+
+// Reflect the flags in the main app.
+function applyFeatureFlags(){
+  var aiCard = document.getElementById('ai-search-card');
+  if(aiCard) aiCard.style.display = featureOn('ai_diagram_search') ? '' : 'none';
+  // the warehouse button is drawn per request, so just repaint that list
+  if(typeof renderPartsRequests === 'function' && document.getElementById('po-list')){
+    try{ renderPartsRequests(); }catch(e){}
+  }
+}
+
+// ── Panel shell ──────────────────────────────────────────────────────────
+var AP_SECTIONS = [
+  { key:'overview', icon:'ti-layout-dashboard', en:'Overview',        ar:'نظرة عامة' },
+  { key:'features', icon:'ti-toggle-right',     en:'System Features', ar:'مميزات النظام' },
+  { key:'users',    icon:'ti-users',            en:'Users & Roles',   ar:'المستخدمون والصلاحيات' },
+  { key:'log',      icon:'ti-history',          en:'Activity Log',    ar:'سجل الحركات' },
+  { key:'lists',    icon:'ti-list-details',     en:'Lists & Settings',ar:'القوائم والإعدادات',    planned:true },
+  { key:'tickets',  icon:'ti-ticket',           en:'Ticket Portal',   ar:'بوابة التذاكر',         planned:true }
+];
+var apSection = 'overview';
+
+function openAdminPanel(){
+  if(!isSysAdmin()){
+    alert('لوحة التحكم متاحة لمدير النظام فقط.\nThe control panel is for the system administrator only.');
+    return;
+  }
+  document.getElementById('adminPanel').style.display = 'block';
+  document.body.style.overflow = 'hidden';
+  var u = document.getElementById('ap-user');
+  if(u) u.innerHTML = '<i class="ti ti-user-shield"></i> ' + (curUser || '');
+  loadAppSettings().then(function(){ apGo(apSection); });
+  apRenderNav();
+  apGo(apSection);
+}
+
+function closeAdminPanel(){
+  document.getElementById('adminPanel').style.display = 'none';
+  document.body.style.overflow = '';
+}
+
+function apRenderNav(){
+  var el = document.getElementById('ap-nav');
+  if(!el) return;
+  el.innerHTML = '';
+  AP_SECTIONS.forEach(function(sec){
+    var on = (sec.key === apSection);
+    var b = document.createElement('button');
+    b.type = 'button';
+    b.style.cssText = 'width:100%;display:flex;align-items:center;gap:10px;padding:10px 12px;margin-bottom:3px;border-radius:9px;'
+      + 'border:none;cursor:pointer;font-family:inherit;font-size:13px;font-weight:600;text-align:start;'
+      + (on ? 'background:#1D3A6B;color:#fff' : 'background:transparent;color:#9FB4D4');
+    b.innerHTML = '<i class="ti ' + sec.icon + '" style="font-size:16px"></i>'
+      + '<span style="flex:1">' + ((LNG==='ar') ? sec.ar : sec.en) + '</span>'
+      + (sec.planned ? '<span style="font-size:9px;background:#24406e;color:#9FB4D4;padding:2px 6px;border-radius:99px">'
+          + ((LNG==='ar') ? 'قريباً' : 'soon') + '</span>' : '');
+    b.onclick = function(){ apGo(sec.key); };
+    el.appendChild(b);
+  });
+}
+
+function apGo(key){
+  apSection = key;
+  apRenderNav();
+  var sec = AP_SECTIONS.find(function(x){ return x.key === key; }) || AP_SECTIONS[0];
+  document.getElementById('ap-title').textContent = (LNG==='ar') ? sec.ar : sec.en;
+
+  var subs = {
+    overview: { en:'A snapshot of the whole system', ar:'لمحة عامة عن النظام بالكامل' },
+    features: { en:'Turn parts of the system on or off for everyone', ar:'تشغيل وإيقاف أجزاء النظام لجميع المستخدمين' },
+    users:    { en:'Accounts, roles, emails and zone coverage', ar:'الحسابات والرتب والإيميلات ومناطق التغطية' },
+    log:      { en:'Every action, with before and after values', ar:'كل العمليات مع القيم قبل وبعد' },
+    lists:    { en:'Checklists, categories, units, cities and zones', ar:'قوائم المهام والفئات والوحدات والمدن والمناطق' },
+    tickets:  { en:'Customer links, form fields and notifications', ar:'روابط العملاء وحقول النموذج والتنبيهات' }
+  };
+  var sub = subs[key] || {};
+  document.getElementById('ap-sub').textContent = (LNG==='ar') ? (sub.ar||'') : (sub.en||'');
+
+  if(key === 'overview') apRenderOverview();
+  else if(key === 'features') apRenderFeatures();
+  else if(key === 'users') apRenderUsers();
+  else if(key === 'log') apRenderLog();
+  else apRenderPlanned(sec);
+}
+
+function apCard(inner, pad){
+  return '<div style="background:#0E2140;border:1px solid #1B3157;border-radius:12px;padding:' + (pad||'18px') + '">' + inner + '</div>';
+}
+
+function apRenderOverview(){
+  var body = document.getElementById('ap-body');
+  if(!body) return;
+  var ar = (LNG === 'ar');
+  var stat = function(label, value, icon, colour){
+    return '<div style="background:#0E2140;border:1px solid #1B3157;border-radius:12px;padding:16px">'
+      + '<div style="display:flex;align-items:center;gap:8px;color:' + colour + ';font-size:12px;font-weight:700">'
+      +   '<i class="ti ' + icon + '"></i> ' + label + '</div>'
+      + '<div style="font-size:26px;font-weight:700;color:#fff;margin-top:6px">' + value + '</div>'
+      + '</div>';
+  };
+  var count = function(v){ return (typeof v !== 'undefined' && v) ? v.length : 0; };
+
+  var onCount = FEATURE_FLAGS.filter(function(f){ return featureOn(f.key); }).length;
+
+  body.innerHTML =
+      '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:12px;margin-bottom:20px">'
+    +   stat(ar?'المستخدمون':'Users',      Object.keys(typeof USERS!=='undefined'?USERS:{}).length, 'ti-users',    '#60A5FA')
+    +   stat(ar?'الفنيون':'Technicians',   count(typeof techsData!=='undefined'?techsData:[]),      'ti-tool',     '#34D399')
+    +   stat(ar?'العملاء':'Clients',       count(typeof clientsData!=='undefined'?clientsData:[]),  'ti-building', '#FBBF24')
+    +   stat(ar?'الأوردرات':'Orders',      count(typeof clientOrders!=='undefined'?clientOrders:[]),'ti-package',  '#A78BFA')
+    +   stat(ar?'الزيارات':'Visits',       count(typeof visData!=='undefined'?visData:[]),          'ti-calendar', '#F472B6')
+    +   stat(ar?'قطع الغيار':'Spare Parts',count(typeof partsData!=='undefined'?partsData:[]),      'ti-box',      '#22D3EE')
+    + '</div>'
+
+    + apCard(
+        '<div style="font-size:13px;font-weight:700;color:#fff;margin-bottom:10px">'
+      +   '<i class="ti ti-toggle-right"></i> ' + (ar?'حالة المميزات':'Feature status') + '</div>'
+      + '<div style="font-size:12px;color:#9FB4D4;line-height:1.9">'
+      +   FEATURE_FLAGS.map(function(f){
+            var on = featureOn(f.key);
+            return '<div style="display:flex;align-items:center;gap:8px">'
+              + '<span style="width:8px;height:8px;border-radius:50%;background:' + (on ? '#34D399' : '#475569') + ';display:inline-block"></span>'
+              + (ar ? f.ar : f.en)
+              + '<span style="color:' + (on ? '#34D399' : '#64748B') + ';font-weight:700">'
+              + (on ? (ar?'مفعّلة':'on') : (ar?'متوقفة':'off')) + '</span></div>';
+          }).join('')
+      + '</div>')
+
+    + '<div style="height:12px"></div>'
+    + apCard(
+        '<div style="font-size:12px;color:#9FB4D4;line-height:1.9">'
+      + (ar
+          ? ('مفعّل حالياً <b style="color:#fff">' + onCount + '</b> من <b style="color:#fff">' + FEATURE_FLAGS.length + '</b> مميزات. '
+             + 'الأقسام المعلّمة بـ"قريباً" مخططة ولم تُبنَ بعد.')
+          : ('<b style="color:#fff">' + onCount + '</b> of <b style="color:#fff">' + FEATURE_FLAGS.length + '</b> features are on. '
+             + 'Sections marked "soon" are planned but not built yet.'))
+      + '</div>');
+}
+
+function apRenderFeatures(){
+  var body = document.getElementById('ap-body');
+  if(!body) return;
+  var ar = (LNG === 'ar');
+
+  if(!_initSb()){
+    body.innerHTML = apCard('<div style="color:#F87171;font-size:13px"><i class="ti ti-alert-triangle"></i> '
+      + (ar ? 'لا يوجد اتصال بقاعدة البيانات — لا يمكن حفظ المفاتيح.'
+            : 'No database connection — switches cannot be saved.') + '</div>');
+    return;
+  }
+
+  body.innerHTML = '<div style="display:flex;flex-direction:column;gap:12px">'
+    + FEATURE_FLAGS.map(function(f){
+        var on = featureOn(f.key);
+        return '<div style="background:#0E2140;border:1px solid ' + (on ? '#2E5A8F' : '#1B3157') + ';border-radius:12px;padding:16px;display:flex;align-items:center;gap:14px;flex-wrap:wrap">'
+          + '<div style="flex:1;min-width:220px">'
+          +   '<div style="font-size:14px;font-weight:700;color:#fff;display:flex;align-items:center;gap:8px;flex-wrap:wrap">'
+          +     (ar ? f.ar : f.en)
+          +     (f.built ? '' : '<span style="font-size:9px;background:#3B2E5A;color:#C4B5FD;padding:2px 8px;border-radius:99px">'
+                              + (ar ? 'قيد التطوير' : 'not built yet') + '</span>')
+          +   '</div>'
+          +   '<div style="font-size:11px;color:#7E93B5;margin-top:4px">' + (ar ? f.arDesc : f.enDesc) + '</div>'
+          + '</div>'
+          + '<button onclick="apToggleFeature(\'' + f.key + '\')" title="' + (on ? 'ON' : 'OFF') + '" '
+          +   'style="width:56px;height:30px;border-radius:99px;border:none;cursor:pointer;position:relative;flex-shrink:0;'
+          +   'background:' + (on ? '#22C55E' : '#334155') + ';transition:background .2s">'
+          +   '<span style="position:absolute;top:3px;' + (on ? 'inset-inline-end:3px' : 'inset-inline-start:3px')
+          +     ';width:24px;height:24px;border-radius:50%;background:#fff;display:block"></span>'
+          + '</button>'
+          + '<div style="font-size:11px;font-weight:700;color:' + (on ? '#34D399' : '#64748B') + ';min-width:56px;text-align:center">'
+          +   (on ? (ar?'مفعّلة':'ON') : (ar?'متوقفة':'OFF')) + '</div>'
+          + '</div>';
+      }).join('')
+    + '</div>'
+    + '<div style="margin-top:14px;font-size:11px;color:#64748B">'
+    + (ar ? 'التغيير يُحفظ فوراً ويسري على جميع المستخدمين.'
+          : 'Changes are saved immediately and apply to every user.')
+    + '</div>';
+}
+
+async function apToggleFeature(key){
+  var next = !featureOn(key);
+  var ok = await saveAppSetting('feature_' + key, next ? 'true' : 'false');
+  if(!ok){
+    alert('تعذّر حفظ الإعداد — تحقّق من جدول app_settings وصلاحياته.\nCould not save the setting — check the app_settings table and its policies.');
+    return;
+  }
+  var _f = FEATURE_FLAGS.find(function(x){ return x.key === key; });
+  logActivity('setting', 'feature', (_f ? _f.en : key), { value: String(!next) }, { value: String(next) });
+  applyFeatureFlags();
+  apRenderFeatures();
+}
+
+
+// ── Zones ────────────────────────────────────────────────────────────────
+// Coverage areas a maintenance manager can be responsible for.
+var ZONES = [
+  { key:'central',  en:'Central',  ar:'الوسطى' },
+  { key:'eastern',  en:'Eastern',  ar:'الشرقية' },
+  { key:'western',  en:'Western',  ar:'الغربية' },
+  { key:'northern', en:'Northern', ar:'الشمالية' },
+  { key:'southern', en:'Southern', ar:'الجنوبية' },
+  { key:'other',    en:'Other',    ar:'أخرى' }
+];
+function zoneLabel(k){
+  var z = ZONES.find(function(x){ return x.key === k; });
+  return z ? ((LNG==='ar') ? z.ar : z.en) : k;
+}
+function userZones(u){
+  var v = u && u.zones;
+  if(!v) return [];
+  if(Array.isArray(v)) return v;
+  try{ var a = JSON.parse(v); return Array.isArray(a) ? a : []; }catch(e){
+    return String(v).split(',').map(function(x){ return x.trim(); }).filter(Boolean);
+  }
+}
+
+// ── Users & Roles section of the control panel ───────────────────────────
+var apEditingUser = null;
+
+var AP_ROLES = [
+  { key:'sysadmin',   en:'System Administrator', ar:'مدير النظام',   colour:'#7C3AED' },
+  { key:'manager',    en:'Maintenance Manager',  ar:'مدير صيانة',    colour:'#2563EB' },
+  { key:'technician', en:'Technician',           ar:'فني',           colour:'#059669' },
+  { key:'salesman',   en:'Sales',                ar:'مبيعات',        colour:'#D97706' },
+  { key:'data_entry', en:'Data Entry',           ar:'مدخل بيانات',   colour:'#0891B2' }
+];
+function apRoleInfo(r){
+  return AP_ROLES.find(function(x){ return x.key === r; })
+      || { key:r, en:r, ar:r, colour:'#64748B' };
+}
+
+function apRenderUsers(){
+  var body = document.getElementById('ap-body');
+  if(!body) return;
+  var ar = (LNG === 'ar');
+
+  var rows = Object.keys(USERS).map(function(login){
+    var u = USERS[login] || {};
+    var info = apRoleInfo(u.role);
+    var zones = userZones(u);
+    var isSelf = (login === curUserLogin);
+    var disabled = (u.active === false || u.active === 'false');
+
+    return '<div style="background:#0E2140;border:1px solid #1B3157;border-radius:12px;padding:14px 16px;display:flex;align-items:center;gap:14px;flex-wrap:wrap'
+      + (disabled ? ';opacity:.55' : '') + '">'
+      + '<div style="width:38px;height:38px;border-radius:9px;background:' + info.colour + '22;color:' + info.colour
+      +   ';display:flex;align-items:center;justify-content:center;font-weight:700;flex-shrink:0">'
+      +   String(u.name || login).charAt(0).toUpperCase() + '</div>'
+      + '<div style="flex:1;min-width:180px">'
+      +   '<div style="font-size:13px;font-weight:700;color:#fff">' + (u.name || login)
+      +     (isSelf ? ' <span style="font-size:10px;color:#7E93B5;font-weight:400">' + (ar?'(أنت)':'(you)') + '</span>' : '')
+      +     (disabled ? ' <span style="font-size:9px;background:#3F1D1D;color:#FCA5A5;padding:2px 7px;border-radius:99px">' + (ar?'معطّل':'disabled') + '</span>' : '')
+      +   '</div>'
+      +   '<div style="font-size:11px;color:#7E93B5" dir="ltr">@' + login + (u.email ? ' · ' + u.email : '') + '</div>'
+      +   (u.role === 'manager'
+          ? '<div style="font-size:10px;color:#9FB4D4;margin-top:4px">'
+            + (zones.length
+                ? zones.map(function(z){ return '<span style="background:#1D3A6B;padding:2px 8px;border-radius:99px;margin-inline-end:4px;display:inline-block">' + zoneLabel(z) + '</span>'; }).join('')
+                : '<span style="color:#F59E0B">' + (ar ? 'لم تُسنَد مناطق' : 'no zones assigned') + '</span>')
+            + '</div>'
+          : '')
+      + '</div>'
+      + '<span style="font-size:10px;font-weight:700;padding:4px 11px;border-radius:99px;background:' + info.colour + '22;color:' + info.colour + '">'
+      +   (ar ? info.ar : info.en) + '</span>'
+      + '<div style="display:flex;gap:6px">'
+      +   '<button onclick="apEditUser(\'' + login + '\')" style="padding:7px 12px;border-radius:8px;border:1px solid #24406e;background:transparent;color:#9FB4D4;cursor:pointer;font-size:11px;font-weight:700;font-family:inherit"><i class="ti ti-pencil"></i> ' + (ar?'تعديل':'Edit') + '</button>'
+      +   (isSelf ? '' : '<button onclick="apToggleUserActive(\'' + login + '\')" style="padding:7px 12px;border-radius:8px;border:1px solid ' + (disabled ? '#1E5B36' : '#5B2E2E') + ';background:transparent;color:' + (disabled ? '#34D399' : '#FCA5A5') + ';cursor:pointer;font-size:11px;font-weight:700;font-family:inherit">' + (disabled ? (ar?'تفعيل':'Enable') : (ar?'تعطيل':'Disable')) + '</button>')
+      + '</div>'
+      + '</div>';
+  }).join('');
+
+  body.innerHTML =
+      '<div style="display:flex;align-items:center;gap:10px;margin-bottom:14px;flex-wrap:wrap">'
+    +   '<div style="flex:1;font-size:12px;color:#7E93B5">'
+    +     (ar ? ('عدد الحسابات: ' + Object.keys(USERS).length) : (Object.keys(USERS).length + ' account(s)'))
+    +   '</div>'
+    +   '<button onclick="apEditUser(null)" style="padding:9px 16px;border-radius:9px;border:none;background:#7C3AED;color:#fff;cursor:pointer;font-size:12px;font-weight:700;font-family:inherit"><i class="ti ti-user-plus"></i> ' + (ar?'مستخدم جديد':'New User') + '</button>'
+    + '</div>'
+    + '<div id="ap-user-form"></div>'
+    + '<div style="display:flex;flex-direction:column;gap:10px">' + rows + '</div>';
+}
+
+function apEditUser(login){
+  apEditingUser = login;
+  var ar = (LNG === 'ar');
+  var u = login ? (USERS[login] || {}) : {};
+  var zones = userZones(u);
+  var box = document.getElementById('ap-user-form');
+  if(!box) return;
+
+  var fld = function(label, inner){
+    return '<div style="margin-bottom:12px"><label style="display:block;font-size:11px;font-weight:700;color:#9FB4D4;margin-bottom:5px">'
+      + label + '</label>' + inner + '</div>';
+  };
+  var inputStyle = 'width:100%;padding:9px 12px;border-radius:8px;border:1px solid #24406e;background:#0B1B33;color:#E6EDF7;font-size:13px;font-family:inherit;outline:none';
+
+  box.innerHTML =
+      '<div style="background:#0E2140;border:1px solid #2E5A8F;border-radius:12px;padding:18px;margin-bottom:16px">'
+    + '<div style="font-size:14px;font-weight:700;color:#fff;margin-bottom:14px">'
+    +   '<i class="ti ti-' + (login ? 'pencil' : 'user-plus') + '"></i> '
+    +   (login ? ((ar?'تعديل: ':'Editing: ') + (u.name || login)) : (ar?'مستخدم جديد':'New user'))
+    + '</div>'
+    + '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">'
+    +   fld(ar?'الاسم':'Full name',  '<input id="apu-name" style="' + inputStyle + '" value="' + String(u.name||'').replace(/"/g,'&quot;') + '">')
+    +   fld(ar?'اسم المستخدم':'Username', '<input id="apu-login" dir="ltr" ' + (login ? 'disabled' : '') + ' style="' + inputStyle + (login ? ';opacity:.6' : '') + '" value="' + (login||'') + '">')
+    +   fld(ar?'البريد الإلكتروني':'Email', '<input id="apu-email" type="email" dir="ltr" style="' + inputStyle + '" value="' + String(u.email||'').replace(/"/g,'&quot;') + '">')
+    +   fld(ar?'الرتبة':'Role',
+          '<select id="apu-role" onchange="apOnRoleChange()" style="' + inputStyle + '">'
+          + AP_ROLES.map(function(r){
+              return '<option value="' + r.key + '"' + ((u.role||'technician')===r.key ? ' selected' : '') + '>' + (ar?r.ar:r.en) + '</option>';
+            }).join('')
+          + '</select>')
+    +   '<div style="grid-column:1/-1">'
+    +     fld(login ? (ar?'كلمة مرور جديدة (اتركها فارغة لعدم التغيير)':'New password (leave blank to keep)') : (ar?'كلمة المرور':'Password'),
+             '<input id="apu-pass" type="text" dir="ltr" style="' + inputStyle + '" value="">')
+    +   '</div>'
+    + '</div>'
+    + '<div id="apu-zones-box" style="margin-top:6px">'
+    +   '<label style="display:block;font-size:11px;font-weight:700;color:#9FB4D4;margin-bottom:7px">'
+    +     (ar?'مناطق التغطية':'Zone coverage') + '</label>'
+    +   '<div style="display:flex;gap:8px;flex-wrap:wrap">'
+    +     ZONES.map(function(z){
+            var on = zones.indexOf(z.key) !== -1;
+            return '<label style="display:flex;align-items:center;gap:7px;padding:8px 13px;border-radius:9px;cursor:pointer;'
+              + 'border:1px solid ' + (on ? '#7C3AED' : '#24406e') + ';background:' + (on ? '#2A1D4A' : 'transparent') + ';font-size:12px;color:#E6EDF7">'
+              + '<input type="checkbox" class="apu-zone" value="' + z.key + '"' + (on ? ' checked' : '') + '> ' + (ar?z.ar:z.en) + '</label>';
+          }).join('')
+    +   '</div>'
+    +   '<div style="font-size:10px;color:#64748B;margin-top:7px">'
+    +     (ar ? 'مدير الصيانة يعدّل فقط داخل مناطقه، ويطّلع على الباقي دون تعديل.'
+          : 'A maintenance manager edits only inside his zones, and views the rest read-only.')
+    +   '</div>'
+    + '</div>'
+    + '<div style="display:flex;gap:8px;justify-content:flex-end;margin-top:16px">'
+    +   '<button onclick="apCancelUser()" style="padding:9px 16px;border-radius:9px;border:1px solid #24406e;background:transparent;color:#9FB4D4;cursor:pointer;font-size:12px;font-weight:700;font-family:inherit">' + (ar?'إلغاء':'Cancel') + '</button>'
+    +   '<button onclick="apSaveUser()" style="padding:9px 20px;border-radius:9px;border:none;background:#7C3AED;color:#fff;cursor:pointer;font-size:12px;font-weight:700;font-family:inherit"><i class="ti ti-device-floppy"></i> ' + (ar?'حفظ':'Save') + '</button>'
+    + '</div>'
+    + '</div>';
+
+  apOnRoleChange();
+  box.scrollIntoView({ block:'nearest' });
+}
+
+// Zones only make sense for a maintenance manager.
+function apOnRoleChange(){
+  var sel = document.getElementById('apu-role');
+  var box = document.getElementById('apu-zones-box');
+  if(!sel || !box) return;
+  box.style.display = (sel.value === 'manager') ? 'block' : 'none';
+}
+
+function apCancelUser(){
+  apEditingUser = null;
+  var box = document.getElementById('ap-user-form');
+  if(box) box.innerHTML = '';
+}
+
+async function apSaveUser(){
+  var ar = (LNG === 'ar');
+  var val = function(id){ var e = document.getElementById(id); return e ? e.value.trim() : ''; };
+  var login = apEditingUser || val('apu-login').toLowerCase().replace(/\s+/g,'');
+  var name  = val('apu-name');
+  var email = val('apu-email');
+  var role  = val('apu-role');
+  var pass  = val('apu-pass');
+
+  if(!login){ alert(ar?'الرجاء إدخال اسم المستخدم':'Please enter a username'); return; }
+  if(!apEditingUser && USERS[login]){ alert(ar?'اسم المستخدم موجود مسبقاً':'That username already exists'); return; }
+  if(!apEditingUser && (!pass || pass.length < 6)){
+    alert(ar?'كلمة المرور 6 أحرف على الأقل':'The password must be at least 6 characters'); return;
+  }
+  if(email && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)){
+    alert(ar?'صيغة البريد الإلكتروني غير صحيحة':'That email address is not valid'); return;
+  }
+
+  var zones = Array.prototype.slice.call(document.querySelectorAll('.apu-zone:checked')).map(function(c){ return c.value; });
+  if(role === 'manager' && !zones.length){
+    if(!confirm(ar ? 'لم تُسنَد أي منطقة لهذا المدير — لن يتمكن من التعديل على أي شيء. المتابعة؟'
+                   : 'No zone assigned — this manager will not be able to edit anything. Continue?')) return;
+  }
+
+  var existing = USERS[login] || {};
+  var data = {
+    pass: pass || existing.pass,
+    role: role,
+    name: name || login,
+    init: String(name || login).charAt(0).toUpperCase(),
+    email: email,
+    zones: (role === 'manager') ? zones : [],
+    active: (existing.active === false || existing.active === 'false') ? false : true
+  };
+
+  try{
+    await saveUserToDB(login, data);
+  }catch(e){
+    alert((ar?'تعذّر الحفظ: ':'Could not save: ') + e.message); return;
+  }
+
+  var _fields = ['name','role','email','active'];
+  logActivity(apEditingUser ? 'update' : 'create', 'user', '@' + login,
+              apEditingUser ? logSnapshot(existing, _fields) : null,
+              logSnapshot(Object.assign({}, data, { zones: (data.zones||[]).join(', ') }), _fields.concat('zones')));
+  USERS[login] = data;
+  if(typeof systemUsers !== 'undefined') systemUsers[login] = data;
+  if(typeof populateLoginDropdown === 'function') populateLoginDropdown();
+
+  apCancelUser();
+  apRenderUsers();
+}
+
+async function apToggleUserActive(login){
+  var ar = (LNG === 'ar');
+  var u = USERS[login];
+  if(!u) return;
+  if(login === curUserLogin){ alert(ar?'لا يمكنك تعطيل حسابك.':'You cannot disable your own account.'); return; }
+  var disabled = (u.active === false || u.active === 'false');
+  var next = disabled ? true : false;
+  if(!confirm(next ? (ar?('تفعيل حساب @'+login+'؟'):('Enable @'+login+'?'))
+                   : (ar?('تعطيل حساب @'+login+'؟ لن يتمكن من الدخول.'):('Disable @'+login+'? They will not be able to log in.')))) return;
+
+  u.active = next;
+  logActivity('status', 'user', '@' + login, { active: String(!next) }, { active: String(next) });
+  try{ await saveUserToDB(login, u); }catch(e){
+    alert((ar?'تعذّر الحفظ: ':'Could not save: ') + e.message);
+    u.active = !next; return;
+  }
+  apRenderUsers();
+}
+
+
+// ══════════════════════════════════════
+// ACTIVITY LOG
+// Every meaningful action is recorded with the values BEFORE and AFTER, so the
+// log can actually be investigated rather than just skimmed. Kept one month.
+// ══════════════════════════════════════
+var activityLog = [];
+var LOG_RETENTION_DAYS = 30;
+
+var LOG_ACTIONS = {
+  login:   { en:'Signed in',   ar:'تسجيل دخول',  colour:'#22C55E', icon:'ti-login' },
+  logout:  { en:'Signed out',  ar:'تسجيل خروج',  colour:'#64748B', icon:'ti-logout' },
+  create:  { en:'Created',     ar:'إضافة',        colour:'#3B82F6', icon:'ti-plus' },
+  update:  { en:'Updated',     ar:'تعديل',        colour:'#F59E0B', icon:'ti-pencil' },
+  delete:  { en:'Deleted',     ar:'حذف',          colour:'#EF4444', icon:'ti-trash' },
+  status:  { en:'Status change', ar:'تغيير حالة', colour:'#8B5CF6', icon:'ti-refresh' },
+  setting: { en:'Setting',     ar:'إعداد',        colour:'#06B6D4', icon:'ti-settings' }
+};
+function logActionInfo(a){ return LOG_ACTIONS[a] || { en:a, ar:a, colour:'#64748B', icon:'ti-point' }; }
+
+// Reduce a record to the handful of fields worth showing in a diff.
+function logSnapshot(obj, fields){
+  if(!obj) return null;
+  var out = {};
+  (fields || Object.keys(obj)).forEach(function(f){
+    var v = obj[f];
+    if(v === undefined || v === null) return;
+    if(typeof v === 'object') return;                 // skip blobs and arrays
+    var str = String(v);
+    if(str.length > 120) str = str.slice(0,120) + '…'; // never log a base64 image
+    out[f] = str;
+  });
+  return out;
+}
+
+// Fire-and-forget: logging must never block or break the action it records.
+function logActivity(action, entity, label, before, after){
+  try{
+    var entry = {
+      user_login: curUserLogin || '',
+      user_name:  curUser || '',
+      user_role:  curUserRole || '',
+      action:     action,
+      entity:     entity || '',
+      label:      String(label || '').slice(0, 160),
+      before_val: before ? JSON.stringify(before) : null,
+      after_val:  after  ? JSON.stringify(after)  : null,
+      at:         new Date().toISOString()
+    };
+    activityLog.unshift(entry);
+    if(_initSb()){
+      _sb.from('activity_log').insert(entry).then(function(r){
+        if(r && r.error) console.log('logActivity:', r.error.message);
+      });
+    }
+  }catch(e){ console.log('logActivity failed:', e); }
+}
+
+async function loadActivityLog(limit){
+  if(!_initSb()) return;
+  try{
+    var r = await _sb.from('activity_log').select('*').order('at', { ascending:false }).limit(limit || 300);
+    if(r.error){ console.log('loadActivityLog:', r.error.message); return; }
+    activityLog = r.data || [];
+  }catch(e){ console.log('loadActivityLog error:', e); }
+}
+
+// One-month retention, enforced from the app so it needs no scheduled job.
+async function purgeOldLog(){
+  if(!_initSb()) return 0;
+  try{
+    var cutoff = new Date(Date.now() - LOG_RETENTION_DAYS*86400000).toISOString();
+    var r = await _sb.from('activity_log').delete().lt('at', cutoff).select();
+    return (r && r.data) ? r.data.length : 0;
+  }catch(e){ return 0; }
+}
+
+// ── Log viewer (system administrator only) ───────────────────────────────
+var logFilterAction = 'all';
+var logFilterUser = 'all';
+
+async function apRenderLog(){
+  var body = document.getElementById('ap-body');
+  if(!body) return;
+  var ar = (LNG === 'ar');
+  body.innerHTML = '<div style="color:#7E93B5;font-size:13px"><i class="ti ti-loader"></i> ' + (ar?'جاري التحميل…':'Loading…') + '</div>';
+
+  await loadActivityLog(400);
+  apDrawLog();
+}
+
+function apDrawLog(){
+  var body = document.getElementById('ap-body');
+  if(!body) return;
+  var ar = (LNG === 'ar');
+
+  var users = [];
+  activityLog.forEach(function(e){ if(e.user_login && users.indexOf(e.user_login) === -1) users.push(e.user_login); });
+
+  var list = activityLog.filter(function(e){
+    if(logFilterAction !== 'all' && e.action !== logFilterAction) return false;
+    if(logFilterUser !== 'all' && e.user_login !== logFilterUser) return false;
+    return true;
+  });
+
+  var chip = function(label, val, current, fn){
+    var on = (val === current);
+    return '<button onclick="' + fn + '(\'' + val + '\')" style="padding:6px 13px;border-radius:99px;font-size:11px;font-weight:700;cursor:pointer;font-family:inherit;'
+      + 'border:1px solid ' + (on ? '#7C3AED' : '#24406e') + ';background:' + (on ? '#7C3AED' : 'transparent') + ';color:' + (on ? '#fff' : '#9FB4D4') + '">'
+      + label + '</button>';
+  };
+
+  var diffHtml = function(e){
+    var b = null, a = null;
+    try{ b = e.before_val ? JSON.parse(e.before_val) : null; }catch(x){}
+    try{ a = e.after_val  ? JSON.parse(e.after_val)  : null; }catch(x){}
+    if(!b && !a) return '';
+    var keys = [];
+    [b, a].forEach(function(o){ if(o) Object.keys(o).forEach(function(k){ if(keys.indexOf(k) === -1) keys.push(k); }); });
+    var rows = keys.map(function(k){
+      var ov = b ? (b[k] === undefined ? '—' : b[k]) : '—';
+      var nv = a ? (a[k] === undefined ? '—' : a[k]) : '—';
+      if(String(ov) === String(nv)) return '';        // only show what actually changed
+      return '<div style="display:flex;gap:8px;align-items:center;font-size:11px;padding:2px 0">'
+        + '<span style="color:#7E93B5;min-width:110px">' + k + '</span>'
+        + '<span style="color:#F87171;text-decoration:line-through" dir="auto">' + ov + '</span>'
+        + '<span style="color:#64748B">←</span>'
+        + '<span style="color:#34D399" dir="auto">' + nv + '</span>'
+        + '</div>';
+    }).filter(Boolean).join('');
+    return rows ? '<div style="margin-top:8px;padding:8px 10px;background:#0B1B33;border-radius:8px">' + rows + '</div>' : '';
+  };
+
+  body.innerHTML =
+      '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px;align-items:center">'
+    +   '<span style="font-size:11px;color:#7E93B5;min-width:60px">' + (ar?'الإجراء':'Action') + '</span>'
+    +   chip(ar?'الكل':'All', 'all', logFilterAction, 'apSetLogAction')
+    +   Object.keys(LOG_ACTIONS).map(function(k){
+          return chip(ar ? LOG_ACTIONS[k].ar : LOG_ACTIONS[k].en, k, logFilterAction, 'apSetLogAction');
+        }).join('')
+    + '</div>'
+    + '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:16px;align-items:center">'
+    +   '<span style="font-size:11px;color:#7E93B5;min-width:60px">' + (ar?'المستخدم':'User') + '</span>'
+    +   chip(ar?'الكل':'All', 'all', logFilterUser, 'apSetLogUser')
+    +   users.slice(0,10).map(function(u){ return chip('@'+u, u, logFilterUser, 'apSetLogUser'); }).join('')
+    + '</div>'
+
+    + '<div style="display:flex;align-items:center;gap:10px;margin-bottom:12px;flex-wrap:wrap">'
+    +   '<div style="flex:1;font-size:11px;color:#7E93B5">'
+    +     (ar ? (list.length + ' حركة · يُحفظ السجل لمدة ' + LOG_RETENTION_DAYS + ' يوماً')
+              : (list.length + ' entries · kept for ' + LOG_RETENTION_DAYS + ' days')) + '</div>'
+    +   '<button onclick="apRenderLog()" style="padding:7px 14px;border-radius:8px;border:1px solid #24406e;background:transparent;color:#9FB4D4;cursor:pointer;font-size:11px;font-weight:700;font-family:inherit"><i class="ti ti-refresh"></i> ' + (ar?'تحديث':'Refresh') + '</button>'
+    +   '<button onclick="apPurgeLog()" style="padding:7px 14px;border-radius:8px;border:1px solid #5B2E2E;background:transparent;color:#FCA5A5;cursor:pointer;font-size:11px;font-weight:700;font-family:inherit"><i class="ti ti-trash"></i> ' + (ar?'حذف الأقدم من شهر':'Purge older than a month') + '</button>'
+    + '</div>'
+
+    + (list.length
+        ? '<div style="display:flex;flex-direction:column;gap:8px">'
+          + list.map(function(e){
+              var info = logActionInfo(e.action);
+              var when = '';
+              try{ when = new Date(e.at).toLocaleString(); }catch(x){ when = e.at || ''; }
+              return '<div style="background:#0E2140;border:1px solid #1B3157;border-radius:10px;padding:12px 14px">'
+                + '<div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">'
+                +   '<span style="background:' + info.colour + '22;color:' + info.colour + ';font-size:10px;font-weight:700;padding:3px 10px;border-radius:99px">'
+                +     '<i class="ti ' + info.icon + '"></i> ' + (ar ? info.ar : info.en) + '</span>'
+                +   '<span style="font-size:12px;color:#E6EDF7;font-weight:600" dir="auto">' + (e.label || e.entity || '') + '</span>'
+                +   '<div style="flex:1"></div>'
+                +   '<span style="font-size:11px;color:#7E93B5">' + (e.user_name || e.user_login || '') + ' <span style="color:#4A6285" dir="ltr">@' + (e.user_login||'') + '</span></span>'
+                +   '<span style="font-size:10px;color:#4A6285" dir="ltr">' + when + '</span>'
+                + '</div>'
+                + diffHtml(e)
+                + '</div>';
+            }).join('')
+          + '</div>'
+        : '<div style="background:#0E2140;border:1px solid #1B3157;border-radius:12px;padding:30px;text-align:center;color:#7E93B5;font-size:13px">'
+          + '<i class="ti ti-history" style="font-size:26px;display:block;margin-bottom:8px"></i>'
+          + (ar ? 'لا توجد حركات مسجّلة بعد' : 'No activity recorded yet') + '</div>');
+}
+
+function apSetLogAction(v){ logFilterAction = v; apDrawLog(); }
+function apSetLogUser(v){ logFilterUser = v; apDrawLog(); }
+
+async function apPurgeLog(){
+  var ar = (LNG === 'ar');
+  if(!confirm(ar ? ('حذف كل الحركات الأقدم من ' + LOG_RETENTION_DAYS + ' يوماً؟')
+                 : ('Delete every entry older than ' + LOG_RETENTION_DAYS + ' days?'))) return;
+  var n = await purgeOldLog();
+  alert(ar ? ('تم حذف ' + n + ' حركة.') : (n + ' entries deleted.'));
+  apRenderLog();
+}
+
+function apRenderPlanned(sec){
+  var body = document.getElementById('ap-body');
+  if(!body) return;
+  var ar = (LNG === 'ar');
+  var notes = {
+    users:   { ar:['إضافة وتعديل الحسابات والرتب','حقل الإيميل لكل مستخدم','مربعات اختيار لمناطق تغطية مدير الصيانة','تعطيل حساب بدل حذفه'],
+               en:['Add and edit accounts and roles','An email field for every user','Zone-coverage checkboxes for maintenance managers','Disable an account instead of deleting it'] },
+    log:     { ar:['كل العمليات من الدخول إلى الخروج','القيم قبل ← بعد','مدير النظام فقط','الحفظ لمدة شهر'],
+               en:['Every action from login to logout','Before → after values','System administrator only','Kept for one month'] },
+    lists:   { ar:['قوائم المهام والفئات والوحدات','المدن والمناطق وربطها','مدد الضمان الافتراضية'],
+               en:['Checklists, categories and units','Cities, zones and their mapping','Default warranty periods'] },
+    tickets: { ar:['رابط لكل عميل مع إمكانية الإلغاء','اختيار حقول نموذج العميل','تنبيه المدير عند وصول تذكرة','حماية من التذاكر الوهمية'],
+               en:['A link per client, revocable','Choose the customer form fields','Notify the manager on a new ticket','Protection against spam tickets'] }
+  };
+  var n = notes[sec.key] || { ar:[], en:[] };
+  var items = (ar ? n.ar : n.en);
+
+  body.innerHTML = apCard(
+      '<div style="display:flex;align-items:center;gap:10px;margin-bottom:12px">'
+    +   '<i class="ti ti-tools" style="font-size:20px;color:#A78BFA"></i>'
+    +   '<div style="font-size:14px;font-weight:700;color:#fff">'
+    +     (ar ? 'هذا القسم مخطط ولم يُبنَ بعد' : 'This section is planned, not built yet') + '</div>'
+    + '</div>'
+    + '<div style="font-size:12px;color:#9FB4D4;margin-bottom:12px">'
+    + (ar ? 'اتفقنا على محتواه بالكامل — هذا ما سيحتويه:' : 'Its content is already agreed — here is what it will hold:')
+    + '</div>'
+    + '<div style="font-size:12px;color:#CBD5E1;line-height:2">'
+    + items.map(function(i){ return '<div><i class="ti ti-point" style="color:#7C3AED"></i> ' + i + '</div>'; }).join('')
+    + '</div>');
 }
 
 function fillVisitClientSelect(){
@@ -4122,6 +4858,7 @@ async function rejectMaintRequest(id){
   if(!r) return;
   var why = prompt('سبب الرفض (اختياري) / Reason for rejecting (optional):', '');
   if(why === null) return;
+  logActivity('status', 'maintenance request', r.client, { status: r.status }, { status: 'rejected', reason: why || '' });
   r.status = 'rejected';
   if(why) r.notes = (r.notes ? r.notes + ' | ' : '') + 'Rejected: ' + why;
   await dbSave('maintenance_requests', { id: r.id, status: 'rejected', notes: r.notes });
@@ -4135,6 +4872,7 @@ async function completeMaintRequest(id){
   var r = maintRequests.find(function(x){ return x.id == id; });
   if(!r) return;
   if(!confirm('تأكيد إنهاء هذا الطلب؟\nMark this request as completed?')) return;
+  logActivity('status', 'maintenance request', r.client, { status: r.status }, { status: 'completed' });
   r.status = 'completed';
   r.closed_on = new Date().toISOString().split('T')[0];
   await dbSave('maintenance_requests', { id: r.id, status: 'completed', closed_on: r.closed_on });
@@ -4148,6 +4886,7 @@ async function holdMaintRequest(id){
   if(!r) return;
   var why = prompt('سبب التعليق / Reason for putting this on hold:', '');
   if(why === null) return;                       // cancelled
+  logActivity('status', 'maintenance request', r.client, { status: r.status }, { status: 'onhold', reason: why || '' });
   r.status = 'onhold';
   r.hold_reason = why || '';
   await dbSave('maintenance_requests', { id: r.id, status: 'onhold', hold_reason: r.hold_reason });
@@ -4220,6 +4959,10 @@ function applyRolePermissions(){
   // Visits are read-only for data entry — they may look and print, not create.
   // Spare Parts is manager-only for anything that changes or leaves the system;
   // everyone else can look at the inventory and its history, nothing more.
+  // The control panel button belongs to the system administrator alone.
+  var apBtn = document.getElementById('adminPanelBtn');
+  if(apBtn) apBtn.style.display = (typeof isSysAdmin === 'function' && isSysAdmin()) ? 'flex' : 'none';
+
   var partsManager = (curUserRole === 'manager');
   ['parts-clear-btn','parts-import-btn','parts-export-btn','parts-addinv-btn','parts-new-btn'].forEach(function(id){
     var e = document.getElementById(id);
@@ -4711,6 +5454,8 @@ async function deletePart(id){
       return;
     }
   }
+  logActivity('delete', 'part', (p.code ? p.code + ' — ' : '') + p.name,
+              logSnapshot(p, ['name','code','cat','unit','qty','min','supplier']), null);
   partsData = partsData.filter(function(x){ return String(x.id) !== String(id); });
   renderInvList();
   renderHistList();
@@ -4739,6 +5484,7 @@ async function deleteAllParts(){
       return;
     }
   }
+  logActivity('delete', 'parts', 'ALL SPARE PARTS (' + n + ')', { count: String(n) }, { count: '0' });
   partsData = [];
   histData = [];
   renderInvList();
@@ -5413,7 +6159,8 @@ function renderPartsRequests(){
             + '<button onclick="setRequestStatus('+req.id+',\'rejected\')" class="btn btn-o" style="flex:1;color:#C0392B;border-color:#F5C6C6"><i class="ti ti-x"></i> Reject</button>'
           : '')
       +   ((status==='approved'||status==='sent')
-          ? '<button onclick="openWarehouseSend('+req.id+')" class="btn btn-p" style="flex:2;background:'+(status==='sent'?'#2D7D3A':'#1D4E89')+'"><i class="ti ti-truck-delivery"></i> '+(status==='sent'?'Send Again to Warehouse':'Send to Warehouse')+'</button>'
+          ? ((typeof featureOn === 'function' && !featureOn('warehouse_email')) ? ''
+             : '<button onclick="openWarehouseSend('+req.id+')" class="btn btn-p" style="flex:2;background:'+(status==='sent'?'#2D7D3A':'#1D4E89')+'"><i class="ti ti-truck-delivery"></i> '+(status==='sent'?'Send Again to Warehouse':'Send to Warehouse')+'</button>')
           : '')
       +   (status==='rejected'
           ? '<button onclick="setRequestStatus('+req.id+',\'pending\')" class="btn btn-o" style="flex:1"><i class="ti ti-rotate"></i> Reopen</button>'
@@ -5424,6 +6171,10 @@ function renderPartsRequests(){
 }
 
 async function setRequestStatus(id, status){
+  try{
+    var _pr = partsRequests.find(function(x){ return x.id == id; });
+    if(_pr) logActivity('status', 'parts request', _pr.equipment || ('#'+id), { status: _pr.status }, { status: status });
+  }catch(e){}
   if(!_initSb()){ alert('لا يوجد اتصال بقاعدة البيانات / No database connection'); return; }
   try{
     var r = await _sb.from('parts_requests').update({ status: status }).eq('id', id).select();
@@ -6759,6 +7510,7 @@ async function deleteClient(id){
     }
 
     // Only drop it locally once the database confirms
+    logActivity('delete', 'client', cl.name, logSnapshot(cl, ['name','nickname','type','loc','phone','email']), null);
     clientOrders = clientOrders.filter(function(o){ return String(o.client_id) !== String(id); });
     clientsData  = clientsData.filter(function(c){ return String(c.id) !== String(id); });
     if(typeof acData !== 'undefined' && acData.client){
@@ -7432,6 +8184,9 @@ async function saveVisitDraft() {
   var visit = collectVisitData();
   visit.status = 'معلقة';
   if(currentVisitId) visit.id = currentVisitId;
+  logActivity(currentVisitId ? 'update' : 'create', 'visit',
+              (visit.client || '') + ' — ' + (visit.equipment || ''),
+              null, logSnapshot(visit, ['client','equipment','visit_type','tech','status','date']));
   var result = await dbSave('visits', visit);
   if(result && result[0]){
     var savedId = result[0].id;
@@ -8338,7 +9093,7 @@ async function showPublicReport(token){
   </div>
 
   <!-- AI Search Section -->
-  <div class="card" style="margin-bottom:16px">
+  <div class="card" id="ai-search-card" style="margin-bottom:16px">
     <div class="ch"><div class="ct"><i class="ti ti-robot" style="color:#7C3AED"></i> AI Diagram Search</div></div>
     <div style="padding:16px">
       <div style="display:grid;grid-template-columns:1fr 1fr auto;gap:10px;align-items:end;margin-bottom:12px">
@@ -8733,6 +9488,49 @@ async function showPublicReport(token){
       <button onclick="closeMod('partsImportModal')" class="btn btn-o" style="flex:1" data-en="Cancel" data-ar="إلغاء">Cancel</button>
       <button onclick="confirmPartsImport()" class="btn btn-p" style="flex:2" id="pi-confirm"><i class="ti ti-database-import"></i> <span data-en="Import" data-ar="استيراد">Import</span></button>
     </div>
+  </div>
+</div>
+
+
+<!-- ═══════════════════════════════════════════════════
+     CONTROL PANEL — a deliberately separate, darker
+     interface so it never feels like part of the daily
+     app. System administrator only.
+     ═══════════════════════════════════════════════════ -->
+<div id="adminPanel" style="display:none;position:fixed;inset:0;z-index:9990;background:#0B1B33;font-family:Tajawal,sans-serif;color:#E6EDF7">
+  <div style="display:flex;height:100%">
+
+    <!-- side nav -->
+    <div style="width:250px;flex-shrink:0;background:#071224;border-inline-end:1px solid #16294a;display:flex;flex-direction:column">
+      <div style="padding:18px 18px 14px;border-bottom:1px solid #16294a">
+        <div style="display:flex;align-items:center;gap:9px">
+          <div style="width:32px;height:32px;border-radius:8px;background:#7C3AED;display:flex;align-items:center;justify-content:center"><i class="ti ti-shield-lock" style="font-size:17px;color:#fff"></i></div>
+          <div>
+            <div style="font-size:14px;font-weight:700;color:#fff" data-en="Control Panel" data-ar="لوحة التحكم">Control Panel</div>
+            <div style="font-size:10px;color:#7E93B5" data-en="System Administrator" data-ar="مدير النظام">System Administrator</div>
+          </div>
+        </div>
+      </div>
+      <div id="ap-nav" style="flex:1;padding:10px 10px;overflow-y:auto"></div>
+      <div style="padding:12px;border-top:1px solid #16294a">
+        <button onclick="closeAdminPanel()" style="width:100%;padding:9px;border-radius:8px;border:1px solid #24406e;background:transparent;color:#9FB4D4;cursor:pointer;font-size:12px;font-weight:700;font-family:inherit">
+          <i class="ti ti-arrow-left"></i> <span data-en="Back to the system" data-ar="رجوع إلى النظام">Back to the system</span>
+        </button>
+      </div>
+    </div>
+
+    <!-- content -->
+    <div style="flex:1;overflow-y:auto">
+      <div style="padding:22px 26px;border-bottom:1px solid #16294a;background:#0E2140;display:flex;align-items:center;gap:12px;flex-wrap:wrap">
+        <div style="flex:1;min-width:200px">
+          <div id="ap-title" style="font-size:19px;font-weight:700;color:#fff"></div>
+          <div id="ap-sub" style="font-size:12px;color:#7E93B5;margin-top:2px"></div>
+        </div>
+        <div id="ap-user" style="font-size:12px;color:#9FB4D4"></div>
+      </div>
+      <div id="ap-body" style="padding:24px 26px"></div>
+    </div>
+
   </div>
 </div>
 
