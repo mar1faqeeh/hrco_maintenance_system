@@ -4316,6 +4316,17 @@ function makeTicketToken(){
 }
 
 // ── The public page ──────────────────────────────────────────────────────
+// The panel's editable priority list drives the ticket too, so a new priority
+// only has to be added in one place.
+function PRIORITY_OPTIONS(){
+  var rows = (typeof listValues === 'function') ? listValues('priority') : [];
+  if(!rows.length) rows = ['normal | Normal | عادية', 'urgent | Urgent | عاجلة', 'breakdown | Breakdown | توقف تام'];
+  return rows.map(function(row){
+    var p = String(row).split('|').map(function(x){ return x.trim(); });
+    return { value: p[0] || 'normal', en: p[1] || p[0] || '', ar: p[2] || p[1] || '' };
+  });
+}
+
 async function showTicketPortal(token){
   document.body.innerHTML = '<div id="tp-root" style="min-height:100vh;background:#F1F5F9;'
     + 'font-family:Tajawal,Arial,sans-serif;display:flex;align-items:flex-start;justify-content:center;padding:20px">'
@@ -4433,6 +4444,29 @@ async function showTicketPortal(token){
 
     +   lbl('Equipment')
     +   '<input type="text" id="tp-equipment" style="' + fld + '" placeholder="e.g. Combi oven, display fridge">'
+
+    // Scheduling preferences — the manager still decides, but this saves a
+    // phone call to ask when the site is actually accessible.
+    +   '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">'
+    +     '<div>' + lbl('Preferred date')
+    +       '<input type="date" id="tp-date" min="' + new Date().toISOString().split('T')[0] + '" style="' + fld + '"></div>'
+    +     '<div>' + lbl('Preferred time')
+    +       '<select id="tp-time" style="' + fld + '">'
+    +         '<option value="">— Any time —</option>'
+    +         '<option value="Morning (8:00 – 12:00)">Morning (8:00 – 12:00)</option>'
+    +         '<option value="Afternoon (12:00 – 16:00)">Afternoon (12:00 – 16:00)</option>'
+    +         '<option value="Evening (16:00 – 20:00)">Evening (16:00 – 20:00)</option>'
+    +         '<option value="After closing hours">After closing hours</option>'
+    +       '</select></div>'
+    +   '</div>'
+
+    +   lbl('Priority', true)
+    +   '<select id="tp-priority" style="' + fld + '">'
+    +     PRIORITY_OPTIONS().map(function(o){
+            return '<option value="' + o.value + '"' + (o.value === 'normal' ? ' selected' : '') + '>' + o.en + '</option>';
+          }).join('')
+    +   '</select>'
+    +   '<div style="font-size:11px;color:#A0AEC0;margin-top:4px">Choose "Breakdown" only if the equipment has stopped completely.</div>'
 
     +   lbl('Problem description', true)
     +   '<textarea id="tp-problem" rows="4" style="' + fld + ';resize:vertical"></textarea>'
@@ -4657,7 +4691,9 @@ async function submitTicket(token, clientId){
     problem: problem,
     attachments: _tpFiles.length ? JSON.stringify(_tpFiles) : null,
     visit_type: 'paid',
-    priority: 'normal',
+    priority: val('tp-priority') || 'normal',
+    preferred_date: val('tp-date') || null,
+    preferred_time: val('tp-time') || null,
     status: 'new',
     date: new Date().toISOString().split('T')[0],
     requested_by: contact,
@@ -7212,6 +7248,7 @@ function openMaintDetails(id){
         : '')
     + row('Notes / ملاحظات', r.notes, {pre:true})
     + row('Preferred Date / التاريخ المفضل', r.preferred_date)
+    + (r.preferred_time ? row('Preferred Time / الوقت المفضل', r.preferred_time) : '')
     + row('Requested by / مقدّم الطلب', r.requested_by)
     + row('Submitted / تاريخ الطلب', r.date)
     + (requestAttachments(r).length
