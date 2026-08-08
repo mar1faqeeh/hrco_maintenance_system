@@ -860,6 +860,16 @@ html,body{height:100%;overflow:auto;font-family:Tajawal,sans-serif;font-size:14p
         </div>
 
                 <div class="field" style="margin:0;grid-column:1/-1">
+          <label data-en="Photos or video" data-ar="صور أو فيديو">Photos or video</label>
+          <input type="file" id="mr-files" accept="image/*,video/*" multiple onchange="mrFilesChosen(this)"
+                 style="width:100%;padding:9px 12px;border:1.5px solid #D9E2EC;border-radius:8px;font-size:12px;font-family:inherit">
+          <div style="font-size:11px;color:#A0AEC0;margin-top:4px"
+               data-en="Up to 4 files · photos are compressed automatically"
+               data-ar="حتى 4 ملفات · الصور تُضغط تلقائياً">Up to 4 files · photos are compressed automatically</div>
+          <div id="mr-files-list" style="display:flex;gap:8px;flex-wrap:wrap;margin-top:9px"></div>
+        </div>
+
+        <div class="field" style="margin:0;grid-column:1/-1">
           <label data-en="Notes" data-ar="ملاحظات إضافية">Notes</label>
           <input type="text" id="mr-notes" placeholder="Access times, gate pass, contact preferences...">
         </div>
@@ -3251,6 +3261,8 @@ function clearMaintForm(){
   ['mr-client','mr-city','mr-location','mr-map','mr-contact','mr-phone','mr-date','mr-problem','mr-notes']
     .forEach(function(id){ var e=document.getElementById(id); if(e) e.value=''; });
   try{ clearRequestItems(); }catch(e){}
+  _mrFiles = [];
+  try{ renderMrFiles(); }catch(e){}
   if(typeof mrMicOn !== 'undefined' && mrMicOn) toggleMrMic();
   var _trb = document.getElementById('mr-tr-box'); if(_trb) _trb.textContent = '';
   setMapStatus('mr-map-status','');
@@ -4357,6 +4369,7 @@ async function showTicketPortal(token){
       orders = ro.data || [];
     }catch(e){}
   }
+  _tpOrders = orders;
 
   // A simple arithmetic challenge — no third-party service, works offline, and
   // stops the scripted submissions a public form attracts.
@@ -4388,9 +4401,17 @@ async function showTicketPortal(token){
     +   '<div id="tp-branch-wrap" style="display:' + (orders.length ? 'none' : 'block') + '">'
     +     lbl('Branch / Site')
     +     '<input type="text" id="tp-location" style="' + fld + '" placeholder="Branch or site name">'
-    +     lbl('City')
-    +     '<input type="text" id="tp-city" style="' + fld + '" placeholder="e.g. Riyadh">'
     +   '</div>'
+
+    // The city decides which maintenance manager receives the ticket, so it is
+    // always asked for — pre-filled from the chosen order when there is one.
+    +   lbl('City', true)
+    +   '<select id="tp-city" style="' + fld + '">'
+    +     '<option value="">— Select a city —</option>'
+    +     SAUDI_CITIES.map(function(c){
+            return '<option value="' + c[1] + '">' + c[1] + ' — ' + c[0] + '</option>';
+          }).join('')
+    +   '</select>'
 
     +   lbl('Location link')
     +   '<div style="display:flex;gap:8px;flex-wrap:wrap">'
@@ -4407,7 +4428,7 @@ async function showTicketPortal(token){
     +   '<input type="tel" id="tp-phone" dir="ltr" style="' + fld + '" placeholder="05XXXXXXXX">'
     +   '<div style="font-size:11px;color:#A0AEC0;margin-top:4px">We may contact you on WhatsApp about this request.</div>'
 
-    +   lbl('Email')
+    +   lbl('Email', true)
     +   '<input type="email" id="tp-email" dir="ltr" style="' + fld + '" placeholder="name@company.com">'
 
     +   lbl('Equipment')
@@ -4579,7 +4600,9 @@ async function submitTicket(token, clientId){
   }
 
   var contact = val('tp-contact'), phone = val('tp-phone'), problem = val('tp-problem'), email = val('tp-email');
-  if(!contact || !phone || !problem){ fail('Please fill in every field marked with *.'); return; }
+  if(!contact || !phone || !problem || !email || !val('tp-city')){
+    fail('Please fill in every field marked with *.'); return;
+  }
   if(phone.replace(/\D/g,'').length < 9){ fail('That mobile number does not look valid.'); return; }
   if(email && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)){ fail('That email address does not look valid.'); return; }
 
@@ -4597,17 +4620,16 @@ async function submitTicket(token, clientId){
     if(rc.data && rc.data.length) clientName = rc.data[0].name || rc.data[0].nickname || '';
   }catch(e){}
 
+  // The customer's chosen city wins — he knows where the machine actually is.
+  zone = cityZone(city);
   if(orderId){
     try{
       var ro = await _sb.from('client_orders').select('*').eq('id', orderId).limit(1);
       if(ro.data && ro.data.length){
-        city = ro.data[0].city || city;
-        zone = ro.data[0].zone || cityZone(city);
         if(!location) location = ro.data[0].name || '';
+        if(!city){ city = ro.data[0].city || ''; zone = ro.data[0].zone || cityZone(city); }
       }
     }catch(e){}
-  } else if(city){
-    zone = cityZone(city);
   }
 
   try{
@@ -4652,10 +4674,21 @@ async function submitTicket(token, clientId){
       console.log('ticket insert retry without optional columns:', res.error.message);
       var lean = {};
       ['client','city','zone','location','map_url','contact_person','contact_phone',
-       'equipment','problem','visit_type','priority','status','date','requested_by'].forEach(function(k){
+       'contact_email','equipment','problem','attachments',
+       'visit_type','priority','status','date','requested_by'].forEach(function(k){
         if(req[k] !== undefined && req[k] !== null && req[k] !== '') lean[k] = req[k];
       });
       res = await _sb.from('maintenance_requests').insert(lean).select();
+
+      // If it STILL fails, the attachments column itself is the missing one.
+      // Say so rather than quietly filing a ticket without the photos.
+      if(res.error && /attachments/i.test(res.error.message || '')){
+        delete lean.attachments;
+        res = await _sb.from('maintenance_requests').insert(lean).select();
+        if(!res.error && _tpFiles.length){
+          _tpAttachmentsDropped = true;
+        }
+      }
     }
 
     if(res.error) throw new Error(res.error.message);
@@ -4668,7 +4701,11 @@ async function submitTicket(token, clientId){
       +   '<div style="font-size:19px;font-weight:800;color:#1a202c;margin-top:14px">Request received</div>'
       +   '<div style="font-size:13px;color:#64748B;margin-top:10px;line-height:1.9">'
       +     (id ? 'Reference: <b style="color:#1D4E89">#' + id + '</b><br>' : '')
-      +     'Our maintenance team will contact you shortly.</div>'
+      +     'Our maintenance team will contact you shortly.'
+      +     (_tpAttachmentsDropped
+              ? '<div style="color:#C4680A;margin-top:10px">Your photos could not be attached — please send them on WhatsApp.</div>'
+              : '')
+      +     '</div>'
       + '</div></div>';
   }catch(e){
     var msg = String((e && e.message) || e || '');
@@ -4687,6 +4724,8 @@ async function submitTicket(token, clientId){
 // ── Portal helpers ───────────────────────────────────────────────────────
 var _tpChallenge = null;
 var _tpFiles = [];
+var _tpAttachmentsDropped = false;
+var _tpOrders = [];
 
 function tpOrderChanged(){
   var sel = document.getElementById('tp-order');
@@ -4694,6 +4733,17 @@ function tpOrderChanged(){
   if(!sel || !wrap) return;
   // "Other" lets the customer name a branch we have not registered yet.
   wrap.style.display = (sel.value === '__other__') ? 'block' : 'none';
+
+  // A listed order already knows its city — select it so the customer doesn't
+  // have to, while still leaving it changeable.
+  var citySel = document.getElementById('tp-city');
+  if(citySel && sel.value && sel.value !== '__other__'){
+    var o = (_tpOrders || []).find(function(x){ return String(x.id) === String(sel.value); });
+    if(o && o.city){
+      var hit = findCity(o.city);
+      if(hit) citySel.value = hit[1];
+    }
+  }
 }
 
 function tpUseMyLocation(){
@@ -6760,6 +6810,53 @@ function prefillSimilarRequest(src){
   if(firstRow) firstRow.focus();
 }
 
+
+// ── Photos on the internal request form ──────────────────────────────────
+// Reuses the portal's compression so a salesman's phone photo doesn't bloat
+// the row either.
+var _mrFiles = [];
+
+async function mrFilesChosen(input){
+  var files = Array.prototype.slice.call((input && input.files) || []);
+  if(input && input.value !== undefined) input.value = '';
+  var ar = (LNG === 'ar');
+
+  for(var i = 0; i < files.length; i++){
+    if(_mrFiles.length >= 4){
+      alert(ar ? 'يمكن إرفاق 4 ملفات كحد أقصى.' : 'You can attach up to 4 files.');
+      break;
+    }
+    var f = files[i];
+    if(f.size > 12 * 1024 * 1024){
+      alert((ar ? 'الملف كبير جداً (الحد 12 ميجابايت): ' : 'That file is larger than 12 MB: ') + f.name);
+      continue;
+    }
+    var isImg = /^image\//.test(f.type);
+    var data = isImg ? await tpCompressImage(f) : await tpReadFile(f);
+    if(!data) continue;
+    _mrFiles.push({ name: f.name, type: isImg ? 'image' : 'video', data: data });
+  }
+  renderMrFiles();
+}
+
+function renderMrFiles(){
+  var list = document.getElementById('mr-files-list');
+  if(!list) return;
+  list.innerHTML = _mrFiles.map(function(f, i){
+    return '<div style="position:relative;width:74px;height:74px;border-radius:9px;overflow:hidden;border:1px solid #D9E2EC;background:#F8FAFC">'
+      + (f.type === 'image'
+          ? '<img src="' + f.data + '" style="width:100%;height:100%;object-fit:cover">'
+          : '<div style="display:flex;align-items:center;justify-content:center;height:100%;color:#1D4E89"><i class="ti ti-video" style="font-size:26px"></i></div>')
+      + '<button type="button" onclick="removeMrFile(' + i + ')" style="position:absolute;top:2px;right:2px;width:20px;height:20px;border:none;border-radius:50%;background:rgba(192,57,43,.9);color:#fff;cursor:pointer;font-size:12px;line-height:1">×</button>'
+      + '</div>';
+  }).join('');
+}
+
+function removeMrFile(i){
+  _mrFiles.splice(i, 1);
+  renderMrFiles();
+}
+
 async function submitMaintRequest(){
   var val = function(id){ var e=document.getElementById(id); return e ? e.value.trim() : ''; };
   var client = val('mr-client');
@@ -6776,6 +6873,7 @@ async function submitMaintRequest(){
     })(),
     order_id: val('mr-order') || null,
     items: JSON.stringify(collectRequestItems()),
+    attachments: _mrFiles.length ? JSON.stringify(_mrFiles) : null,
     location: val('mr-location'),
     map_url: readMapField('mr-map'),
     contact_person: val('mr-contact'),
@@ -6972,6 +7070,9 @@ function renderMaintRequests(){
       +     '<span style="background:#E6F1FB;color:#1D4E89;font-size:10px;font-weight:700;padding:2px 8px;border-radius:99px">'+(MR_TYPE_LABEL[r.visit_type]||r.visit_type||'')+'</span>'
       +     (r.is_exception ? '<span style="background:#F3EDFF;color:#6D28D9;font-size:10px;font-weight:700;padding:2px 9px;border-radius:99px"><i class="ti ti-shield-check"></i> '+(LNG==='ar'?'استثناء':'Exception')+'</span>' : '')
       +     (r.source === 'customer' ? '<span style="background:#E7F6EC;color:#2D7D3A;font-size:10px;font-weight:700;padding:2px 9px;border-radius:99px"><i class="ti ti-user"></i> '+(LNG==='ar'?'من العميل':'From customer')+'</span>' : '')
+      +     (requestAttachments(r).length
+              ? '<span style="background:#EEF2F7;color:#4A5568;font-size:10px;font-weight:700;padding:2px 9px;border-radius:99px"><i class="ti ti-paperclip"></i> '+requestAttachments(r).length+'</span>'
+              : '')
       +   '</div>'
       +   (meta.length ? '<div style="font-size:11px;color:#718096;margin-top:5px;display:flex;flex-wrap:wrap;gap:10px">'+meta.join('')+'</div>' : '')
       +   '<div style="font-size:12px;color:#1a202c;margin-top:7px;white-space:pre-wrap">'+(r.problem||'')+'</div>'
@@ -7061,7 +7162,7 @@ function openMaintDetails(id){
     + row('Submitted / تاريخ الطلب', r.date)
     + (requestAttachments(r).length
         ? '<div style="margin:12px 0"><div style="font-size:12px;font-weight:700;color:#4A5568;margin-bottom:7px">'
-          + (LNG==='ar' ? 'مرفقات العميل' : 'Customer attachments') + ' (' + requestAttachments(r).length + ')</div>'
+          + (LNG==='ar' ? 'المرفقات' : 'Attachments') + ' (' + requestAttachments(r).length + ')</div>'
           + '<div style="display:flex;gap:8px;flex-wrap:wrap">'
           + requestAttachments(r).map(function(f, i){
               return f.type === 'video'
