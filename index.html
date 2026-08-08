@@ -5288,6 +5288,39 @@ async function apSaveCompany(){
   }
 }
 
+
+// ── Shared print letterhead ──────────────────────────────────────────────
+// Every printed sheet in the system uses these, so the company set in the
+// control panel appears on all of them, not just the visit report.
+function printHeadStyle(){
+  return '.co-head{display:flex;align-items:center;gap:14px;border-bottom:2px solid #1D4E89;padding-bottom:12px;margin-bottom:16px}'
+    + '.co-head img.co-logo{width:58px;height:58px;object-fit:contain}'
+    + '.co-head .co-name{font-size:17px;font-weight:800;color:#0F2D52}'
+    + '.co-head .co-sub{font-size:11px;color:#64748B;margin-top:2px}'
+    + '.co-band{width:100%;display:block;margin-bottom:14px}'
+    + '.co-foot{margin-top:22px;border-top:1px solid #D9E2EC;padding-top:9px;font-size:10px;color:#64748B;text-align:center}';
+}
+
+// A full-width letterhead image wins; otherwise the logo + company text.
+function printHeaderHtml(){
+  var band = appSettings['company_header_img'] || '';
+  if(band) return '<img src="' + band + '" class="co-band" alt="">';
+  var logo = companyLogo();
+  var sub = companyPrintHeader();
+  return '<div class="co-head">'
+    + (logo ? '<img src="' + logo + '" class="co-logo" alt="">' : '')
+    + '<div><div class="co-name">' + companyName() + '</div>'
+    + (sub ? '<div class="co-sub">' + sub + '</div>' : '')
+    + '</div></div>';
+}
+
+function printFooterHtml(){
+  var band = appSettings['company_footer_img'] || '';
+  if(band) return '<img src="' + band + '" class="co-band" style="margin:22px 0 0" alt="">';
+  return '<div class="co-foot">' + companyPrintFooter()
+    + '<br>' + new Date().toLocaleString() + '</div>';
+}
+
 // Show exactly what a printed sheet will look like at the top.
 function apPreviewPrint(){
   var ar = (LNG === 'ar');
@@ -6466,8 +6499,10 @@ function printMaintRequest(id){
     + 'th{background:#F8FAFC;color:#4A5568;font-weight:700;width:190px}'
     + '.sec{font-size:12px;font-weight:700;color:#0F2D52;margin:16px 0 6px}'
     + '.foot{margin-top:22px;font-size:10px;color:#A0AEC0;border-top:1px solid #D9E2EC;padding-top:8px}'
+    + printHeadStyle()
     + '@media print{body{padding:0}}'
     + '</style></head><body>'
+    + printHeaderHtml()
     + '<h1>طلب صيانة / Maintenance Request</h1>'
     + '<div class="sub">' + esc(companyName()) + ' &nbsp;|&nbsp; #' + esc(r.id) + '</div>'
     + '<div class="badges">'
@@ -6483,6 +6518,16 @@ function printMaintRequest(id){
     +   row('الشخص المسؤول / Contact', r.contact_person)
     +   row('الجوال / Phone', r.contact_phone)
     + '</table>'
+    + (requestItemsOf(r).length
+        ? '<div class="sec">البنود / Items</div><table>'
+          + '<tr><th style="width:40px">#</th><th style="width:auto">اسم البند / Item</th>'
+          +   '<th style="width:auto">الماركة والموديل / Model</th><th style="width:auto">الرقم التسلسلي / Serial</th></tr>'
+          + requestItemsOf(r).map(function(it, i){
+              return '<tr><td>' + (i+1) + '</td><td>' + esc(it.name||'') + '</td>'
+                + '<td>' + esc(it.model||'') + '</td><td>' + esc(it.serial||'') + '</td></tr>';
+            }).join('')
+          + '</table>'
+        : '')
     + '<div class="sec">المعدة / Equipment</div><table>'
     +   row('المعدة / Equipment', r.equipment)
     +   row('الماركة والموديل / Model', r.model)
@@ -6496,7 +6541,7 @@ function printMaintRequest(id){
     +   row('تاريخ الطلب / Submitted', r.date)
     +   (r.visit_id ? row('الزيارة المرتبطة / Linked Visit', '#'+r.visit_id) : '')
     + '</table>'
-    + '<div class="foot">Printed ' + new Date().toLocaleString() + '</div>'
+    + printFooterHtml()
     + '</body></html>';
 
   var w = window.open('', '_blank');
@@ -8030,10 +8075,12 @@ function buildWarehouseHtml(req, eq, extraMsg){
 
   return ''
   + '<div style="font-family:Tahoma,Arial,sans-serif;max-width:700px;margin:0 auto;color:#1a202c">'
-  + '<div style="background:#0F2D52;color:#fff;padding:16px 20px;border-radius:10px 10px 0 0">'
+  + '<div style="background:#0F2D52;color:#fff;padding:16px 20px;border-radius:10px 10px 0 0;display:flex;align-items:center;gap:12px">'
+  + (companyLogo() ? '<img src="'+companyLogo()+'" style="width:42px;height:42px;object-fit:contain;background:#fff;border-radius:8px;padding:3px" alt="">' : '')
+  + '<div>'
   +   '<div style="font-size:18px;font-weight:700">طلب قطع غيار / Spare Parts Request</div>'
   +   '<div style="font-size:12px;opacity:.85;margin-top:2px">'+companyName()+' — Request #'+req.id+'</div>'
-  + '</div>'
+  + '</div></div>'
   + '<div style="border:1px solid #D9E2EC;border-top:none;border-radius:0 0 10px 10px;padding:20px">'
   +   (extraMsg ? '<div style="background:#FDF0E0;border:1px solid #F5D5A8;border-radius:8px;padding:10px 12px;margin-bottom:16px;font-size:13px">'+extraMsg+'</div>' : '')
   +   '<table style="width:100%;border-collapse:collapse;font-size:13px;margin-bottom:16px">'
@@ -9160,6 +9207,7 @@ async function doSendEmail(){
     '<div dir="rtl" style="font-family:Arial,Tajawal,sans-serif;max-width:600px;margin:0 auto;background:#fff;border-radius:12px;overflow:hidden;box-shadow:0 4px 20px rgba(0,0,0,.08)">',
     // Header
     '<div style="background:#0F2D52;padding:24px 28px;color:#fff">',
+    (companyLogo() ? '<img src="'+companyLogo()+'" style="width:46px;height:46px;object-fit:contain;background:#fff;border-radius:8px;padding:3px;margin-bottom:10px" alt="">' : ''),
     '<div style="font-size:22px;font-weight:700">🔧 كشف زيارة صيانة</div>',
     '<div style="font-size:13px;color:#7EC8E3;margin-top:4px">Maintenance Visit Report — ' + (company('short')||'') + '</div>',
     '</div>',
