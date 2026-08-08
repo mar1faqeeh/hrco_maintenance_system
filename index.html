@@ -3794,10 +3794,10 @@ function isSysAdmin(){
 var appSettings = {};
 
 var FEATURE_FLAGS = [
-  { key:'customer_tickets',  def:false, built:false,
+  { key:'customer_tickets',  def:false, built:true,
     en:'Customer Ticket Portal', ar:'بوابة تذاكر العملاء',
-    enDesc:'A public link customers use to raise a maintenance ticket.',
-    arDesc:'رابط عام يفتح منه العميل تذكرة صيانة تصل لمدير الصيانة.' },
+    enDesc:'Customers raise tickets from a private link. Create the links in the Ticket Portal section.',
+    arDesc:'العميل يفتح تذكرة من رابط خاص به. أنشئ الروابط من قسم "بوابة التذاكر".' },
   { key:'ai_diagram_search', def:false, built:true,
     en:'AI Diagram Search', ar:'البحث عن الرسومات بالذكاء الاصطناعي',
     enDesc:'Search the web for exploded-view drawings. Needs the search keys configured.',
@@ -4039,6 +4039,14 @@ async function apToggleFeature(key){
   logActivity('setting', 'feature', (_f ? _f.en : key), { value: String(!next) }, { value: String(next) });
   applyFeatureFlags();
   apRenderFeatures();
+
+  // Turning this on alone changes nothing visible — each client still needs
+  // a link — so say where to go next instead of leaving him hunting.
+  if(key === 'customer_tickets' && next){
+    alert((LNG==='ar')
+      ? 'تم تفعيل البوابة.\n\nالخطوة التالية: افتح قسم "بوابة التذاكر" وأنشئ رابطاً لكل عميل، ثم أرسله له.'
+      : 'The portal is on.\n\nNext step: open the Ticket Portal section, create a link for each client and send it to them.');
+  }
 }
 
 
@@ -4470,6 +4478,19 @@ async function submitTicket(token, clientId){
 
   try{
     var res = await _sb.from('maintenance_requests').insert(req).select();
+
+    // If the database is missing an optional column (the portal SQL not run
+    // yet), drop the extras and file the ticket anyway rather than losing it.
+    if(res.error && /column|schema cache/i.test(res.error.message || '')){
+      console.log('ticket insert retry without optional columns:', res.error.message);
+      var lean = {};
+      ['client','city','zone','contact_person','contact_phone','equipment','problem',
+       'visit_type','priority','status','date','requested_by'].forEach(function(k){
+        if(req[k] !== undefined && req[k] !== null && req[k] !== '') lean[k] = req[k];
+      });
+      res = await _sb.from('maintenance_requests').insert(lean).select();
+    }
+
     if(res.error) throw new Error(res.error.message);
     var id = (res.data && res.data[0]) ? res.data[0].id : '';
     document.getElementById('tp-root').innerHTML =
@@ -4483,7 +4504,13 @@ async function submitTicket(token, clientId){
       +     'سيتواصل معك فريق الصيانة قريباً.</div>'
       + '</div></div>';
   }catch(e){
-    fail('تعذّر إرسال الطلب. حاول مرة أخرى.<br>Could not submit — please try again.');
+    var msg = String((e && e.message) || e || '');
+    var hint = /permission|policy|row-level|RLS/i.test(msg)
+      ? 'صلاحيات قاعدة البيانات تمنع الإرسال — شغّل ملف ticket_portal.sql.<br>Database policy blocked the insert — run ticket_portal.sql.'
+      : (/column|schema cache/i.test(msg)
+          ? 'قاعدة البيانات تنقصها أعمدة — شغّل ملف ticket_portal.sql.<br>Missing columns — run ticket_portal.sql.'
+          : 'تعذّر إرسال الطلب. حاول مرة أخرى.<br>Could not submit — please try again.');
+    fail(hint + '<div style="font-size:10px;color:#A0AEC0;margin-top:6px" dir="ltr">' + msg + '</div>');
     console.log('ticket submit failed:', e);
   }
 }
