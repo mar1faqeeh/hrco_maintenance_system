@@ -794,19 +794,16 @@ html,body{height:100%;overflow:auto;font-family:Tajawal,sans-serif;font-size:14p
           </select>
         </div>
 
-        <div class="field" style="margin:0">
-          <label data-en="Equipment" data-ar="المعدة">Equipment</label>
-          <input type="text" id="mr-equipment" placeholder="e.g. Combi Oven, Ice Maker">
-        </div>
-
-        <div class="field" style="margin:0">
-          <label data-en="Brand &amp; Model" data-ar="الماركة والموديل">Brand &amp; Model</label>
-          <input type="text" id="mr-model" placeholder="e.g. Rational SCC 61">
-        </div>
-
-        <div class="field" style="margin:0">
-          <label data-en="Serial No." data-ar="الرقم التسلسلي">Serial No.</label>
-          <input type="text" id="mr-serial" placeholder="From the rating plate" dir="ltr">
+        <div class="field" style="margin:0;grid-column:1/-1">
+          <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:6px">
+            <label style="margin:0" data-en="Items Needing Service" data-ar="البنود المطلوب صيانتها">Items Needing Service</label>
+            <div style="flex:1"></div>
+            <button type="button" onclick="addItemRow()" style="display:flex;align-items:center;gap:5px;padding:6px 13px;border-radius:8px;border:1px solid #1D4E89;background:#1D4E89;color:#fff;cursor:pointer;font-size:11px;font-weight:700;font-family:inherit">
+              <i class="ti ti-plus"></i> <span data-en="Add item" data-ar="إضافة بند">Add item</span>
+            </button>
+          </div>
+          <div id="mr-item-rows" style="display:flex;flex-direction:column;gap:8px"></div>
+          <div id="mr-items-hint" style="font-size:11px;color:#A0AEC0;margin-top:6px"></div>
         </div>
 
         <div class="field" style="margin:0">
@@ -856,7 +853,7 @@ html,body{height:100%;overflow:auto;font-family:Tajawal,sans-serif;font-size:14p
           <div id="mr-map-status" style="font-size:11px;margin-top:5px;color:#718096"></div>
         </div>
 
-        <div class="field" style="margin:0;grid-column:1/-1">
+                <div class="field" style="margin:0;grid-column:1/-1">
           <label data-en="Notes" data-ar="ملاحظات إضافية">Notes</label>
           <input type="text" id="mr-notes" placeholder="Access times, gate pass, contact preferences...">
         </div>
@@ -1641,7 +1638,7 @@ function go(pg){
   if(pg==='archive') loadArchive();
   if(pg==='signature'){ try{ fillSummaryClient(); fillSummaryOrder(); }catch(e){} }
   if(pg==='client-orders'){ renderClientOrders(); attachCityAutocomplete('co-city','co-city-dd','co-city-zone'); }
-  if(pg==='maint-requests'){ fillMaintClientList(); fillRequestOrders(); attachCityAutocomplete('mr-city','mr-city-dd','mr-city-zone'); loadMaintRequests().then(renderMaintRequests); }
+  if(pg==='maint-requests'){ fillMaintClientList(); fillRequestOrders(); refreshRequestItemsMode(); attachCityAutocomplete('mr-city','mr-city-dd','mr-city-zone'); loadMaintRequests().then(renderMaintRequests); }
   if(pg==='settings'){renderTaskEditor();renderUsersList();try{checkDBStatus();}catch(e){}}
 }
 function setBn(b){document.querySelectorAll('.bn').forEach(function(x){x.style.color='#A0AEC0';});b.style.color='#1D4E89';}
@@ -3243,8 +3240,9 @@ var MR_STATUS = {
 };
 
 function clearMaintForm(){
-  ['mr-client','mr-city','mr-location','mr-map','mr-contact','mr-phone','mr-equipment','mr-model','mr-serial','mr-date','mr-problem','mr-notes']
+  ['mr-client','mr-city','mr-location','mr-map','mr-contact','mr-phone','mr-date','mr-problem','mr-notes']
     .forEach(function(id){ var e=document.getElementById(id); if(e) e.value=''; });
+  try{ clearRequestItems(); }catch(e){}
   if(typeof mrMicOn !== 'undefined' && mrMicOn) toggleMrMic();
   var _trb = document.getElementById('mr-tr-box'); if(_trb) _trb.textContent = '';
   setMapStatus('mr-map-status','');
@@ -4699,6 +4697,8 @@ function fillRequestOrders(){
 }
 
 function onRequestOrderChange(){
+  mrSelectedItems = {};
+  try{ refreshRequestItemsMode(); }catch(e){}
   var sel = document.getElementById('mr-order');
   var info = document.getElementById('mr-coverage');
   if(!sel || !info) return;
@@ -4849,6 +4849,146 @@ function triggerMrTranslate(){
   _mrTrTimer = setTimeout(function(){ showMrTr(_mrTrLang, null); }, 1200);
 }
 
+
+// ── Items needing service (repeatable rows) ──────────────────────────────
+// One request can cover several machines: each row is an item with its own
+// name, model and serial. When the chosen order has an uploaded item list,
+// the name field suggests from it.
+function requestItemsOf(r){
+  var v = r && r.items;
+  if(!v) return [];
+  if(Array.isArray(v)) return v;
+  try{ var a = JSON.parse(v); return Array.isArray(a) ? a : []; }catch(e){ return []; }
+}
+
+function requestOrderItems(){
+  var sel = document.getElementById('mr-order');
+  if(!sel || !sel.value) return [];
+  var o = clientOrders.find(function(x){ return String(x.id) === String(sel.value); });
+  return o ? orderItems(o) : [];
+}
+
+function addItemRow(name, model, serial){
+  var wrap = document.getElementById('mr-item-rows');
+  if(!wrap) return;
+  var ar = (LNG === 'ar');
+  var st = 'padding:9px 12px;border:1.5px solid #D9E2EC;border-radius:8px;font-size:13px;font-family:inherit;outline:none;width:100%';
+  var esc = function(v){ return String(v||'').replace(/"/g,'&quot;'); };
+  var n = wrap.querySelectorAll('.mr-item-row').length + 1;
+
+  var row = document.createElement('div');
+  row.className = 'mr-item-row';
+  row.style.cssText = 'display:grid;grid-template-columns:26px 1.4fr 1fr 1fr 38px;gap:8px;align-items:center';
+  row.innerHTML =
+      '<div class="mr-item-no" style="font-size:11px;color:#A0AEC0;text-align:center">' + n + '</div>'
+    + '<div style="position:relative">'
+    +   '<input type="text" class="mr-item-name" list="mr-order-items" value="' + esc(name) + '" style="' + st + '" placeholder="' + (ar ? 'اسم البند' : 'Item name') + '">'
+    + '</div>'
+    + '<input type="text" class="mr-item-model" value="' + esc(model) + '" style="' + st + '" placeholder="' + (ar ? 'الماركة والموديل' : 'Brand & model') + '">'
+    + '<input type="text" class="mr-item-serial" dir="ltr" value="' + esc(serial) + '" style="' + st + '" placeholder="' + (ar ? 'الرقم التسلسلي' : 'Serial no.') + '">'
+    + '<button type="button" onclick="removeItemRow(this)" title="' + (ar ? 'حذف البند' : 'Remove item') + '" style="border:1px solid #FCEBEB;background:#FCEBEB;color:#C0392B;border-radius:8px;padding:9px 0;cursor:pointer;font-family:inherit"><i class="ti ti-trash"></i></button>';
+  wrap.appendChild(row);
+  renumberItemRows();
+  var inp = row.querySelector('.mr-item-name');
+  if(inp && !name) inp.focus();
+}
+
+function removeItemRow(btn){
+  var wrap = document.getElementById('mr-item-rows');
+  var row = btn && btn.closest('.mr-item-row');
+  if(!row || !wrap) return;
+  // never leave the form with no row at all
+  if(wrap.querySelectorAll('.mr-item-row').length <= 1){
+    row.querySelectorAll('input').forEach(function(i){ i.value = ''; });
+    return;
+  }
+  row.remove();
+  renumberItemRows();
+}
+
+function renumberItemRows(){
+  var rows = document.querySelectorAll('#mr-item-rows .mr-item-row');
+  Array.prototype.forEach.call(rows, function(r, i){
+    var n = r.querySelector('.mr-item-no');
+    if(n) n.textContent = (i + 1);
+  });
+  var hint = document.getElementById('mr-items-hint');
+  if(hint){
+    var avail = requestOrderItems().length;
+    hint.textContent = avail
+      ? ((LNG==='ar') ? ('اكتب في "اسم البند" للاقتراح من ' + avail + ' صنف في هذا الأوردر')
+                      : ('Type in "Item name" to pick from the ' + avail + ' items on this order'))
+      : ((LNG==='ar') ? 'أضف كل معدة يفترض أن يعاينها الفني في نفس الزيارة.'
+                      : 'Add every machine the technician should look at on the same visit.');
+  }
+}
+
+// Feed the order's item list into the rows' datalist.
+function refreshRequestItemsMode(){
+  var dl = document.getElementById('mr-order-items');
+  if(!dl){
+    dl = document.createElement('datalist');
+    dl.id = 'mr-order-items';
+    document.body.appendChild(dl);
+  }
+  var items = requestOrderItems();
+  dl.innerHTML = items.map(function(it){
+    var label = String(it.name || it.code || '').replace(/"/g,'&quot;');
+    return '<option value="' + label + '">' + (it.code ? String(it.code).replace(/</g,'&lt;') : '') + '</option>';
+  }).join('');
+  var wrap = document.getElementById('mr-item-rows');
+  if(wrap && !wrap.querySelectorAll('.mr-item-row').length) addItemRow();
+  renumberItemRows();
+}
+
+function collectRequestItems(){
+  var out = [];
+  document.querySelectorAll('#mr-item-rows .mr-item-row').forEach(function(r){
+    var g = function(cls){ var e = r.querySelector(cls); return e ? e.value.trim() : ''; };
+    var name = g('.mr-item-name'), model = g('.mr-item-model'), serial = g('.mr-item-serial');
+    if(name || model || serial) out.push({ name: name, model: model, serial: serial });
+  });
+  return out;
+}
+
+function clearRequestItems(){
+  var wrap = document.getElementById('mr-item-rows');
+  if(wrap) wrap.innerHTML = '';
+  refreshRequestItemsMode();
+}
+
+// Start a new request pre-filled with everything that stays the same for the
+// client — only the machine and the fault normally change.
+function prefillSimilarRequest(src){
+  if(!src) return;
+  var set = function(id, v){ var e = document.getElementById(id); if(e) e.value = v || ''; };
+  set('mr-client', src.client);
+  set('mr-city', src.city);
+  set('mr-location', src.location);
+  set('mr-contact', src.contact_person);
+  set('mr-phone', src.contact_phone);
+  set('mr-map', src.map_url);
+  var t = document.getElementById('mr-type'); if(t && src.visit_type) t.value = src.visit_type;
+  var pr = document.getElementById('mr-priority'); if(pr && src.priority) pr.value = src.priority;
+
+  try{ onRequestClientTyped(); }catch(e){}
+  var osel = document.getElementById('mr-order');
+  if(osel && src.order_id){
+    osel.value = String(src.order_id);
+    try{ onRequestOrderChange(); }catch(e){}
+  }
+  try{ showCityZone('mr-city','mr-city-zone'); }catch(e){}
+
+  // The parts that DO change are left blank and focused
+  var prob = document.getElementById('mr-problem');
+  if(prob){ prob.value = ''; }
+  try{ clearRequestItems(); }catch(e){}
+  var card = document.getElementById('mr-form-card');
+  if(card) card.scrollIntoView({ block:'start' });
+  var firstRow = document.querySelector('#mr-item-rows .mr-item-name');
+  if(firstRow) firstRow.focus();
+}
+
 async function submitMaintRequest(){
   var val = function(id){ var e=document.getElementById(id); return e ? e.value.trim() : ''; };
   var client = val('mr-client');
@@ -4864,15 +5004,18 @@ async function submitMaintRequest(){
       return (_o && _o.zone) ? _o.zone : cityZone(val('mr-city'));
     })(),
     order_id: val('mr-order') || null,
+    items: JSON.stringify(collectRequestItems()),
     location: val('mr-location'),
     map_url: readMapField('mr-map'),
     contact_person: val('mr-contact'),
     contact_phone: val('mr-phone'),
     visit_type: val('mr-type') || 'paid',
     priority: val('mr-priority') || 'normal',
-    equipment: val('mr-equipment'),
-    model: val('mr-model'),
-    serial_no: val('mr-serial'),
+    // The first row doubles as the request's main machine, so everything that
+    // already reads equipment/model/serial (the visit, the print sheet) still works.
+    equipment: (collectRequestItems()[0] || {}).name || '',
+    model:     (collectRequestItems()[0] || {}).model || '',
+    serial_no: (collectRequestItems()[0] || {}).serial || '',
     preferred_date: val('mr-date') || null,
     problem: problem,
     notes: val('mr-notes'),
@@ -4887,10 +5030,17 @@ async function submitMaintRequest(){
   if(saved && saved[0]) req.id = saved[0].id; else req.id = Date.now();
 
   maintRequests.unshift(req);
+
+  // Offer to raise another one for the same client without retyping everything
+  var again = confirm((LNG==='ar')
+    ? '✅ تم إرسال طلب الصيانة بنجاح.\n\nهل تريد إنشاء طلب آخر لنفس العميل؟'
+    : '✅ Maintenance request submitted.\n\nRaise another request for the same client?');
+
   clearMaintForm();
   setMaintFilter('new');
   updateMaintBadge();
-  alert('✅ تم إرسال طلب الصيانة بنجاح\nMaintenance request submitted successfully!');
+
+  if(again) prefillSimilarRequest(req);
 }
 
 async function loadMaintRequests(){
@@ -4989,7 +5139,14 @@ function renderMaintRequests(){
       var _ro = clientOrders.find(function(x){ return String(x.id) === String(r.order_id); });
       if(_ro) meta.push('<i class="ti ti-package"></i> ' + (_ro.name || ''));
     }
-    if(r.equipment) meta.push('<i class="ti ti-tool"></i> ' + r.equipment + (r.model ? ' — ' + r.model : ''));
+    var _ri = requestItemsOf(r);
+    if(_ri.length){
+      meta.push('<i class="ti ti-tool"></i> ' + (_ri[0].name || '') + (_ri[0].model ? ' — ' + _ri[0].model : ''));
+      if(_ri.length > 1) meta.push('<i class="ti ti-list-check"></i> +' + (_ri.length - 1) + ' '
+        + ((LNG==='ar') ? 'بند آخر' : (_ri.length === 2 ? 'more item' : 'more items')));
+    } else if(r.equipment){
+      meta.push('<i class="ti ti-tool"></i> ' + r.equipment + (r.model ? ' — ' + r.model : ''));
+    }
     if(r.serial_no) meta.push('<i class="ti ti-hash"></i> ' + r.serial_no);
     if(r.contact_person) meta.push('<i class="ti ti-user"></i> ' + r.contact_person + (r.contact_phone ? ' · ' + r.contact_phone : ''));
     if(r.preferred_date) meta.push('<i class="ti ti-calendar"></i> preferred ' + r.preferred_date);
@@ -5113,6 +5270,14 @@ function openMaintDetails(id){
 
     + '<div style="font-size:11px;font-weight:700;color:#0F2D52;margin:14px 0 2px">Request / الطلب</div>'
     + row('Problem / وصف العطل', r.problem, {pre:true})
+    + (requestItemsOf(r).length
+        ? row('Items / البنود',
+            requestItemsOf(r).map(function(it, i){
+              return (i+1) + '. ' + (it.name || '')
+                + (it.model ? '  ·  ' + it.model : '')
+                + (it.serial ? '  ·  ' + it.serial : '');
+            }).join('\n'), {pre:true})
+        : '')
     + row('Notes / ملاحظات', r.notes, {pre:true})
     + row('Preferred Date / التاريخ المفضل', r.preferred_date)
     + row('Requested by / مقدّم الطلب', r.requested_by)
