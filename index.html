@@ -816,7 +816,34 @@ html,body{height:100%;overflow:auto;font-family:Tajawal,sans-serif;font-size:14p
 
         <div class="field" style="margin:0;grid-column:1/-1">
           <label data-en="Problem Description *" data-ar="وصف العطل *">Problem Description *</label>
-          <textarea id="mr-problem" rows="3" placeholder="What is the customer reporting?" data-ph-en="What is the customer reporting?" data-ph-ar="ما الذي يشتكي منه العميل؟" style="width:100%;padding:9px 12px;border:1.5px solid #D9E2EC;border-radius:8px;font-size:13px;font-family:inherit;outline:none;resize:vertical"></textarea>
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;flex-wrap:wrap">
+            <button type="button" id="mrMicBtn" onclick="toggleMrMic()" style="display:flex;align-items:center;gap:6px;padding:6px 14px;border-radius:99px;font-size:12px;font-weight:600;cursor:pointer;border:none;background:#E6F1FB;color:#1D4E89;font-family:inherit">
+              <div id="mrMpulse" style="width:8px;height:8px;border-radius:50%;background:#1D4E89;flex-shrink:0"></div>
+              <span id="mr-mic-label" data-en="Voice Input" data-ar="إدخال صوتي">Voice Input</span>
+            </button>
+            <div style="display:flex;gap:4px" id="mr-lang-pills">
+              <button type="button" onclick="setMrLang('ar',this)" style="padding:4px 10px;border-radius:99px;border:1px solid #D9E2EC;background:#E6F1FB;color:#1D4E89;cursor:pointer;font-size:11px;font-weight:700;font-family:inherit">ع</button>
+              <button type="button" onclick="setMrLang('en',this)" style="padding:4px 10px;border-radius:99px;border:1px solid #D9E2EC;background:#fff;color:#718096;cursor:pointer;font-size:11px;font-weight:700;font-family:inherit">EN</button>
+              <button type="button" onclick="setMrLang('ur',this)" style="padding:4px 10px;border-radius:99px;border:1px solid #D9E2EC;background:#fff;color:#718096;cursor:pointer;font-size:11px;font-weight:700;font-family:inherit">اردو</button>
+              <button type="button" onclick="setMrLang('tl',this)" style="padding:4px 10px;border-radius:99px;border:1px solid #D9E2EC;background:#fff;color:#718096;cursor:pointer;font-size:11px;font-weight:700;font-family:inherit">FIL</button>
+            </div>
+          </div>
+
+          <textarea id="mr-problem" rows="3" oninput="triggerMrTranslate()" placeholder="Write or speak what the customer is reporting…" data-ph-en="Write or speak what the customer is reporting…" data-ph-ar="اكتب أو سجّل صوتياً ما يشتكي منه العميل…" style="width:100%;padding:9px 12px;border:1.5px solid #D9E2EC;border-radius:8px;font-size:13px;font-family:inherit;outline:none;resize:vertical"></textarea>
+
+          <div style="border:1px solid #D9E2EC;border-radius:8px;overflow:hidden;margin-top:8px">
+            <div style="display:flex;align-items:center;gap:8px;padding:7px 12px;background:#F8FAFC;border-bottom:1px solid #D9E2EC;flex-wrap:wrap">
+              <i class="ti ti-language" style="color:#718096;font-size:14px"></i>
+              <span style="font-size:11px;color:#718096;flex:1" data-en="Live Translation" data-ar="ترجمة فورية">Live Translation</span>
+              <div style="display:flex;border:1px solid #D9E2EC;border-radius:6px;overflow:hidden" id="mr-tr-tabs">
+                <button type="button" onclick="showMrTr('en',this)" style="font-size:11px;padding:3px 9px;background:#1D4E89;color:#fff;cursor:pointer;border:none;font-family:inherit">EN</button>
+                <button type="button" onclick="showMrTr('ar',this)" style="font-size:11px;padding:3px 9px;background:#fff;color:#718096;cursor:pointer;border:none;font-family:inherit">ع</button>
+                <button type="button" onclick="showMrTr('ur',this)" style="font-size:11px;padding:3px 9px;background:#fff;color:#718096;cursor:pointer;border:none;font-family:inherit">اردو</button>
+                <button type="button" onclick="showMrTr('tl',this)" style="font-size:11px;padding:3px 9px;background:#fff;color:#718096;cursor:pointer;border:none;font-family:inherit">FIL</button>
+              </div>
+            </div>
+            <div id="mr-tr-box" style="padding:10px 12px;font-size:12px;color:#4A5568;min-height:38px"></div>
+          </div>
         </div>
 
         <div class="field" style="margin:0;grid-column:1/-1">
@@ -3218,6 +3245,8 @@ var MR_STATUS = {
 function clearMaintForm(){
   ['mr-client','mr-city','mr-location','mr-map','mr-contact','mr-phone','mr-equipment','mr-model','mr-serial','mr-date','mr-problem','mr-notes']
     .forEach(function(id){ var e=document.getElementById(id); if(e) e.value=''; });
+  if(typeof mrMicOn !== 'undefined' && mrMicOn) toggleMrMic();
+  var _trb = document.getElementById('mr-tr-box'); if(_trb) _trb.textContent = '';
   setMapStatus('mr-map-status','');
   var _mz = document.getElementById('mr-city-zone'); if(_mz) _mz.innerHTML = '';
   _mrClientId = null;
@@ -4706,6 +4735,118 @@ function onRequestOrderChange(){
     info.innerHTML = '<i class="ti ti-cash"></i> ' + ((LNG==='ar') ? 'خارج الضمان — زيارة مدفوعة' : 'Out of warranty — chargeable visit');
     info.style.color = '#C4680A';
   }
+}
+
+
+// ── Voice + live translation for the request's problem description ───────
+// Deliberately separate from the visit-notes version: that one is bound to
+// #pg-newvisit and its own textarea, so reusing it here would break both.
+var mrMicOn = false, _mrRecog = null, _mrLang = 'ar', _mrTrTimer = null, _mrTrLang = 'en';
+var MR_LOCALES = { ar:'ar-SA', en:'en-US', ur:'ur-PK', tl:'tl-PH' };
+
+function setMrLang(l, el){
+  _mrLang = l;
+  var wrap = document.getElementById('mr-lang-pills');
+  if(wrap){
+    Array.prototype.forEach.call(wrap.querySelectorAll('button'), function(b){
+      b.style.background = '#fff'; b.style.color = '#718096';
+    });
+  }
+  if(el){ el.style.background = '#E6F1FB'; el.style.color = '#1D4E89'; }
+  var ta = document.getElementById('mr-problem');
+  if(ta) ta.style.direction = (l === 'en' || l === 'tl') ? 'ltr' : 'rtl';
+  // Switching language mid-recording restarts it in the new one
+  if(mrMicOn){ toggleMrMic(); setTimeout(toggleMrMic, 250); }
+}
+
+function toggleMrMic(){
+  var SpeechRec = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if(!SpeechRec){
+    alert((LNG==='ar')
+      ? 'الإدخال الصوتي غير مدعوم في هذا المتصفح. استخدم Chrome أو Edge.'
+      : 'Voice input is not supported in this browser. Please use Chrome or Edge.');
+    return;
+  }
+  var btn = document.getElementById('mrMicBtn');
+  var pulse = document.getElementById('mrMpulse');
+  var label = document.getElementById('mr-mic-label');
+  var ta = document.getElementById('mr-problem');
+
+  if(mrMicOn){
+    mrMicOn = false;
+    if(_mrRecog){ _mrRecog.onend = null; try{ _mrRecog.stop(); }catch(e){} }
+    if(btn){ btn.style.background = '#E6F1FB'; btn.style.color = '#1D4E89'; }
+    if(pulse){ pulse.style.background = '#1D4E89'; pulse.style.animation = ''; }
+    if(label) label.textContent = (LNG==='ar') ? 'إدخال صوتي' : 'Voice Input';
+    return;
+  }
+
+  _mrRecog = new SpeechRec();
+  _mrRecog.lang = MR_LOCALES[_mrLang] || 'ar-SA';
+  _mrRecog.continuous = true;
+  _mrRecog.interimResults = true;
+
+  var base = ta ? ta.value : '';
+  _mrRecog.onresult = function(ev){
+    var finalTxt = '', interim = '';
+    for(var i = ev.resultIndex; i < ev.results.length; i++){
+      var t = ev.results[i][0].transcript;
+      if(ev.results[i].isFinal) finalTxt += t + ' '; else interim += t;
+    }
+    if(finalTxt){ base = (base ? base + ' ' : '') + finalTxt.trim(); }
+    if(ta){ ta.value = (base + (interim ? ' ' + interim : '')).trim(); }
+    triggerMrTranslate();
+  };
+  _mrRecog.onerror = function(e){
+    console.log('mr voice error:', e.error);
+    if(e.error === 'not-allowed'){
+      alert((LNG==='ar') ? 'تم رفض إذن الميكروفون.' : 'Microphone permission was denied.');
+      mrMicOn = true; toggleMrMic();
+    }
+  };
+  // Keep listening if the browser stops on a pause
+  _mrRecog.onend = function(){ if(mrMicOn){ try{ _mrRecog.start(); }catch(e){} } };
+
+  try{ _mrRecog.start(); }catch(e){ console.log('mr voice start failed:', e); return; }
+
+  mrMicOn = true;
+  if(btn){ btn.style.background = '#FCEBEB'; btn.style.color = '#C0392B'; }
+  if(pulse){ pulse.style.background = '#C0392B'; pulse.style.animation = 'pulse 1s infinite'; }
+  if(label) label.textContent = (LNG==='ar') ? 'يسجّل... (اضغط للإيقاف)' : 'Recording... (tap to stop)';
+}
+
+function showMrTr(l, el){
+  _mrTrLang = l;
+  var tabs = document.getElementById('mr-tr-tabs');
+  if(tabs){
+    Array.prototype.forEach.call(tabs.querySelectorAll('button'), function(b){
+      b.style.background = '#fff'; b.style.color = '#718096';
+    });
+    if(!el){
+      el = Array.prototype.filter.call(tabs.querySelectorAll('button'), function(b){
+        return b.getAttribute('onclick').indexOf("'" + l + "'") !== -1;
+      })[0];
+    }
+  }
+  if(el){ el.style.background = '#1D4E89'; el.style.color = '#fff'; }
+
+  var box = document.getElementById('mr-tr-box');
+  var ta = document.getElementById('mr-problem');
+  var src = ta ? ta.value.trim() : '';
+  if(!box) return;
+  if(!src){ box.textContent = ''; return; }
+
+  box.innerHTML = '<span style="color:#A0AEC0;font-size:12px"><i class="ti ti-loader" style="animation:spin 1s linear infinite;display:inline-block"></i> '
+    + ((LNG==='ar') ? 'جاري الترجمة...' : 'Translating...') + '</span>';
+  translateText(src, l).then(function(res){
+    box.textContent = res;
+    box.style.direction = (l === 'ar' || l === 'ur') ? 'rtl' : 'ltr';
+  });
+}
+
+function triggerMrTranslate(){
+  clearTimeout(_mrTrTimer);
+  _mrTrTimer = setTimeout(function(){ showMrTr(_mrTrLang, null); }, 1200);
 }
 
 async function submitMaintRequest(){
