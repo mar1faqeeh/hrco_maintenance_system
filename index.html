@@ -5161,6 +5161,32 @@ function apRenderGeneral(){
     + '</div>'
 
     + group(ar?'بيانات الشركة':'Company details', ['name_en','name_ar','short','phone','email','website','address','cr'])
+    // per-document print style
+    + '<div style="background:#0E2140;border:1px solid #1B3157;border-radius:12px;padding:18px;margin-bottom:14px">'
+    +   '<div style="font-size:13px;font-weight:700;color:#fff;margin-bottom:4px">' + (ar?'شكل الطباعة لكل صفحة':'Print style per document') + '</div>'
+    +   '<div style="font-size:11px;color:#7E93B5;margin-bottom:14px">'
+    +     (ar ? 'رسمية: ترويسة وتذييل كاملان — للمستندات التي تخرج للعميل. مخففة: الشعار في الزاوية وسطر تذييل — للقوائم الداخلية.'
+                : 'Official: full header and footer — for anything that reaches a customer. Light: logo in the corner and a slim footer — for internal lists.')
+    +   '</div>'
+    +   PRINT_DOCS.map(function(d){
+          var cur = printStyleFor(d.key);
+          var btn = function(mode, label){
+            var on = (cur === mode);
+            return '<button onclick="apSetPrintStyle(\'' + d.key + '\',\'' + mode + '\')" style="padding:7px 14px;border-radius:8px;cursor:pointer;font-size:11px;font-weight:700;font-family:inherit;'
+              + 'border:1px solid ' + (on ? '#7C3AED' : '#24406e') + ';background:' + (on ? '#7C3AED' : 'transparent') + ';color:' + (on ? '#fff' : '#9FB4D4') + '">'
+              + label + '</button>';
+          };
+          return '<div style="display:flex;align-items:center;gap:12px;padding:10px 0;border-bottom:1px solid #16294a;flex-wrap:wrap">'
+            + '<i class="ti ' + d.icon + '" style="color:#7C3AED;font-size:16px"></i>'
+            + '<div style="flex:1;min-width:150px;font-size:13px;color:#E6EDF7">' + (ar ? d.ar : d.en) + '</div>'
+            + '<div style="display:flex;gap:6px">'
+            +   btn('full',  (ar?'رسمية':'Official'))
+            +   btn('light', (ar?'مخففة':'Light'))
+            + '</div></div>';
+        }).join('')
+    +   '<div id="cmp-print-status" style="font-size:11px;color:#7E93B5;margin-top:10px"></div>'
+    + '</div>'
+
     + group(ar?'الطباعة':'Printing', ['print_header','print_footer'])
     + group(ar?'الإيميلات':'Emails', ['email_warehouse','email_reports','email_manager','email_admin'])
 
@@ -5175,6 +5201,28 @@ function apRenderGeneral(){
 
 // Letterhead images are embedded in every printed report, so they're saved
 // straight away (not held with the text fields) and size-capped.
+
+async function apSetPrintStyle(doc, mode){
+  var ar = (LNG === 'ar');
+  var before = printStyleFor(doc);
+  if(before === mode) return;
+  var ok = await saveAppSetting('print_style_' + doc, mode);
+  if(!ok){
+    alert(ar ? 'تعذّر الحفظ — تحقّق من جدول app_settings.' : 'Could not save — check the app_settings table.');
+    return;
+  }
+  appSettings['print_style_' + doc] = mode;
+  var d = PRINT_DOCS.find(function(x){ return x.key === doc; });
+  logActivity('setting', 'print style', (ar ? d.ar : d.en), { style: before }, { style: mode });
+  apRenderGeneral();
+  var st = document.getElementById('cmp-print-status');
+  if(st){
+    st.textContent = (ar ? 'تم الحفظ · ' : 'Saved · ') + (ar ? d.ar : d.en) + ' → '
+      + (mode === 'full' ? (ar?'رسمية':'Official') : (ar?'مخففة':'Light'));
+    st.style.color = '#34D399';
+  }
+}
+
 function apLetterheadChosen(input, kind){
   var ar = (LNG === 'ar');
   var f = input && input.files && input.files[0];
@@ -5289,6 +5337,23 @@ async function apSaveCompany(){
 }
 
 
+// ── Print styles ─────────────────────────────────────────────────────────
+// Each printable document can be set to a FULL letterhead (header + footer
+// bands, for anything that leaves the company) or a LIGHT one (just the logo
+// in the top corner and a slim footer line, for internal lists).
+var PRINT_DOCS = [
+  { key:'visit',   en:'Visit report',        ar:'كشف الزيارة',      icon:'ti-file-check',    def:'full' },
+  { key:'request', en:'Maintenance request', ar:'طلب الصيانة',      icon:'ti-headset',       def:'full' },
+  { key:'reports', en:'Reports list',        ar:'قائمة التقارير',   icon:'ti-report',        def:'light' },
+  { key:'archive', en:'Archive list',        ar:'قائمة الأرشيف',    icon:'ti-archive',       def:'light' }
+];
+
+function printStyleFor(doc){
+  var d = PRINT_DOCS.find(function(x){ return x.key === doc; });
+  var v = appSettings['print_style_' + doc];
+  return (v === 'full' || v === 'light') ? v : (d ? d.def : 'full');
+}
+
 // ── Shared print letterhead ──────────────────────────────────────────────
 // Every printed sheet in the system uses these, so the company set in the
 // control panel appears on all of them, not just the visit report.
@@ -5298,14 +5363,25 @@ function printHeadStyle(){
     + '.co-head .co-name{font-size:17px;font-weight:800;color:#0F2D52}'
     + '.co-head .co-sub{font-size:11px;color:#64748B;margin-top:2px}'
     + '.co-band{width:100%;display:block;margin-bottom:14px}'
-    + '.co-foot{margin-top:22px;border-top:1px solid #D9E2EC;padding-top:9px;font-size:10px;color:#64748B;text-align:center}';
+    + '.co-foot{margin-top:22px;border-top:1px solid #D9E2EC;padding-top:9px;font-size:10px;color:#64748B;text-align:center}'
+    + '.co-light{display:flex;justify-content:flex-start;margin-bottom:12px}'
+    + '.co-light img{height:38px;object-fit:contain}'
+    + '.co-light .co-lname{font-size:13px;font-weight:700;color:#0F2D52}';
 }
 
 // A full-width letterhead image wins; otherwise the logo + company text.
-function printHeaderHtml(){
+function printHeaderHtml(doc){
+  var logo = companyLogo();
+
+  // Light: just the mark in the top corner, so the page stays about the data.
+  if(doc && printStyleFor(doc) === 'light'){
+    return '<div class="co-light">'
+      + (logo ? '<img src="' + logo + '" alt="">' : '<span class="co-lname">' + companyName() + '</span>')
+      + '</div>';
+  }
+
   var band = appSettings['company_header_img'] || '';
   if(band) return '<img src="' + band + '" class="co-band" alt="">';
-  var logo = companyLogo();
   var sub = companyPrintHeader();
   return '<div class="co-head">'
     + (logo ? '<img src="' + logo + '" class="co-logo" alt="">' : '')
@@ -5314,7 +5390,12 @@ function printHeaderHtml(){
     + '</div></div>';
 }
 
-function printFooterHtml(){
+function printFooterHtml(doc){
+  // A slim text line for light documents; the full band otherwise.
+  if(doc && printStyleFor(doc) === 'light'){
+    return '<div class="co-foot">' + companyPrintFooter()
+      + '  ·  ' + new Date().toLocaleString() + '</div>';
+  }
   var band = appSettings['company_footer_img'] || '';
   if(band) return '<img src="' + band + '" class="co-band" style="margin:22px 0 0" alt="">';
   return '<div class="co-foot">' + companyPrintFooter()
@@ -6502,7 +6583,7 @@ function printMaintRequest(id){
     + printHeadStyle()
     + '@media print{body{padding:0}}'
     + '</style></head><body>'
-    + printHeaderHtml()
+    + printHeaderHtml('request')
     + '<h1>طلب صيانة / Maintenance Request</h1>'
     + '<div class="sub">' + esc(companyName()) + ' &nbsp;|&nbsp; #' + esc(r.id) + '</div>'
     + '<div class="badges">'
@@ -6541,7 +6622,7 @@ function printMaintRequest(id){
     +   row('تاريخ الطلب / Submitted', r.date)
     +   (r.visit_id ? row('الزيارة المرتبطة / Linked Visit', '#'+r.visit_id) : '')
     + '</table>'
-    + printFooterHtml()
+    + printFooterHtml('request')
     + '</body></html>';
 
   var w = window.open('', '_blank');
@@ -9627,13 +9708,13 @@ function printListSheet(title, rows, note){
     + printHeadStyle()
     + '@media print{body{padding:0} thead{display:table-header-group}}'
     + '</style></head><body>'
-    + printHeaderHtml()
+    + printHeaderHtml('archive')
     + '<h1>' + title + '</h1>'
     + '<div class="meta">' + rows.length + (ar ? ' سجل' : ' record(s)')
     +   (note ? '  ·  ' + esc(note) : '') + '</div>'
     + '<table><thead><tr>' + head.map(function(h){ return '<th>' + h + '</th>'; }).join('') + '</tr></thead>'
     + '<tbody>' + body + '</tbody></table>'
-    + printFooterHtml()
+    + printFooterHtml('archive')
     + '</body></html>';
 
   var w = window.open('', '_blank');
@@ -9693,7 +9774,7 @@ function printReports(){
     + printHeadStyle()
     + '@media print{body{padding:0} thead{display:table-header-group}}'
     + '</style></head><body>'
-    + printHeaderHtml()
+    + printHeaderHtml('reports')
     + '<h1>' + (ar ? 'تقرير الزيارات' : 'Visits Report') + '</h1>'
     + '<div class="meta">' + rows.length + (ar ? ' نتيجة' : ' result(s)')
     +   (f.length ? '  ·  ' + esc(f.join('  ·  ')) : '') + '</div>'
@@ -10459,6 +10540,21 @@ function _doPrintVisit(id, v, techSigImg, clientSigImg, visitDateTime, vtype, pa
   };
   var headerSrc = asImgSrc(appSettings['company_header_img'] || HEADER);
   var footerSrc = asImgSrc(appSettings['company_footer_img'] || FOOTER);
+
+  // The visit report can also be printed "light": logo in the corner instead
+  // of the full letterhead band, and a slim text footer.
+  var _lightVisit = (typeof printStyleFor === 'function') && printStyleFor('visit') === 'light';
+  var _logo = (typeof companyLogo === 'function') ? companyLogo() : '';
+  var visitHeaderBlock = _lightVisit
+    ? ('<div style="display:flex;justify-content:flex-start;padding:16px 20px 0">'
+        + (_logo ? '<img src="' + _logo + '" style="height:40px;object-fit:contain">'
+                 : '<span style="font-size:14px;font-weight:700;color:#0F2D52">' + companyName() + '</span>')
+        + '</div>')
+    : ('<img src="' + headerSrc + '" class="header-img" alt="">');
+  var visitFooterBlock = _lightVisit
+    ? ('<div style="margin-top:auto;border-top:1px solid #D9E2EC;padding:9px 20px;font-size:10px;color:#64748B;text-align:center">'
+        + companyPrintFooter() + '  ·  ' + new Date().toLocaleString() + '</div>')
+    : ('<img src="' + footerSrc + '" class="footer-img" alt="">');
   var hasTechSig = techSigImg && techSigImg.length > 500;
   var hasClientSig = clientSigImg && clientSigImg.length > 500;
   var visitPhotosArr = printPhotos || [];
@@ -10502,7 +10598,7 @@ function _doPrintVisit(id, v, techSigImg, clientSigImg, visitDateTime, vtype, pa
     + '@media print { .no-print{display:none!important} body{-webkit-print-color-adjust:exact;print-color-adjust:exact} .page{width:100%;min-height:auto} }'
     + '</style></head><body>'
     + '<div class="page">'
-    + '<img src="' + headerSrc + '" class="header-img" alt="">'
+    + visitHeaderBlock
     + '<div class="content">'
     + '<div class="report-title">'
     + '<div><div class="title-ar">كشف زيارة صيانة</div><div class="title-en">Maintenance Visit Report</div></div>'
@@ -10566,7 +10662,7 @@ function _doPrintVisit(id, v, techSigImg, clientSigImg, visitDateTime, vtype, pa
     + '</div>'
     + '</div>'
     + '</div>'
-    + '<img src="' + footerSrc + '" class="footer-img" alt="">'
+    + visitFooterBlock
     + '</div>'
     + '<div class="no-print" style="text-align:center;padding:16px;background:#F0F4F8">'
     + '<button onclick="window.print()" style="padding:10px 32px;background:#0F2D52;color:#fff;border:none;border-radius:8px;cursor:pointer;font-size:15px;font-family:Tajawal,Arial,sans-serif;font-weight:700;margin-left:10px">🖨️ طباعة / Print</button>'
