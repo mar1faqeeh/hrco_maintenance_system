@@ -3860,7 +3860,7 @@ var AP_SECTIONS = [
   { key:'users',    icon:'ti-users',            en:'Users & Roles',   ar:'المستخدمون والصلاحيات' },
   { key:'log',      icon:'ti-history',          en:'Activity Log',    ar:'سجل الحركات' },
   { key:'lists',    icon:'ti-list-details',     en:'Lists & Settings',ar:'القوائم والإعدادات' },
-  { key:'tickets',  icon:'ti-ticket',           en:'Ticket Portal',   ar:'بوابة التذاكر',         planned:true }
+  { key:'tickets',  icon:'ti-ticket',           en:'Ticket Portal',   ar:'بوابة التذاكر' }
 ];
 var apSection = 'overview';
 
@@ -3929,6 +3929,7 @@ function apGo(key){
   else if(key === 'lists') apRenderLists();
   else if(key === 'dash'){ _apDash = null; apRenderDashboard(); }
   else if(key === 'general'){ _cmpLogoPending = null; apRenderGeneral(); }
+  else if(key === 'tickets') apRenderTickets();
   else apRenderPlanned(sec);
 }
 
@@ -4277,6 +4278,215 @@ async function apToggleUserActive(login){
   apRenderUsers();
 }
 
+
+
+// ══════════════════════════════════════
+// CUSTOMER TICKET PORTAL
+// A public link the customer opens to raise a ticket. It lands in the same
+// maintenance_requests table the manager already works from, tagged as coming
+// from the customer — no second pipeline to maintain.
+// ══════════════════════════════════════
+
+function ticketLinkFor(token){
+  return window.location.origin + window.location.pathname + '?ticket=' + token;
+}
+
+function makeTicketToken(){
+  return 'T' + Math.random().toString(36).slice(2, 10) + Date.now().toString(36).slice(-4);
+}
+
+// ── The public page ──────────────────────────────────────────────────────
+async function showTicketPortal(token){
+  document.body.innerHTML = '<div id="tp-root" style="min-height:100vh;background:#F1F5F9;'
+    + 'font-family:Tajawal,Arial,sans-serif;display:flex;align-items:center;justify-content:center;padding:20px">'
+    + '<div style="color:#64748B;font-size:14px">جاري التحميل… / Loading…</div></div>';
+
+  try{ await loadAppSettings(); }catch(e){}
+
+  var root = document.getElementById('tp-root');
+  var ar = true; // customers are addressed in Arabic first, with English beneath
+
+  var shell = function(inner){
+    return '<div style="background:#fff;max-width:620px;width:100%;border-radius:14px;'
+      + 'box-shadow:0 4px 24px rgba(15,45,82,.10);overflow:hidden">' + inner + '</div>';
+  };
+  var head = function(){
+    var logo = companyLogo();
+    return '<div style="background:#0F2D52;color:#fff;padding:20px 24px;display:flex;align-items:center;gap:14px">'
+      + (logo ? '<img src="' + logo + '" style="width:46px;height:46px;object-fit:contain;background:#fff;border-radius:9px;padding:4px">' : '')
+      + '<div><div style="font-size:17px;font-weight:800">' + companyName() + '</div>'
+      + '<div style="font-size:12px;opacity:.85;margin-top:2px">طلب صيانة / Maintenance Request</div></div></div>';
+  };
+  var message = function(icon, colour, title, text){
+    return shell(head() + '<div style="padding:34px 26px;text-align:center">'
+      + '<i class="ti ' + icon + '" style="font-size:40px;color:' + colour + '"></i>'
+      + '<div style="font-size:16px;font-weight:700;color:#1a202c;margin-top:12px">' + title + '</div>'
+      + '<div style="font-size:13px;color:#64748B;margin-top:6px;line-height:1.7">' + text + '</div></div>');
+  };
+
+  // The switch in the control panel closes the door for everyone at once.
+  if(!featureOn('customer_tickets')){
+    root.innerHTML = message('ti-lock', '#C4680A',
+      'الخدمة غير متاحة حالياً',
+      'Service temporarily unavailable.<br>يرجى التواصل مع الشركة مباشرة.');
+    return;
+  }
+
+  // Resolve the link to its client
+  var client = null;
+  if(_initSb()){
+    try{
+      var r = await _sb.from('clients').select('*').eq('ticket_token', token).limit(1);
+      if(r.data && r.data.length) client = r.data[0];
+    }catch(e){ console.log('ticket lookup:', e); }
+  }
+  if(!client){
+    root.innerHTML = message('ti-link-off', '#C0392B',
+      'هذا الرابط غير صالح',
+      'This link is not valid or has been revoked.');
+    return;
+  }
+
+  // The client's projects give us the city — and therefore the right manager
+  var orders = [];
+  if(_initSb()){
+    try{
+      var ro = await _sb.from('client_orders').select('*').eq('client_id', client.id);
+      orders = ro.data || [];
+    }catch(e){}
+  }
+
+  var fld = 'width:100%;padding:11px 13px;border:1.5px solid #D9E2EC;border-radius:9px;'
+    + 'font-size:14px;font-family:inherit;outline:none;box-sizing:border-box';
+
+  root.innerHTML = shell(head()
+    + '<div style="padding:22px 24px">'
+    +   '<div style="background:#E6F1FB;color:#1D4E89;border-radius:9px;padding:10px 13px;font-size:13px;margin-bottom:18px">'
+    +     '<i class="ti ti-building"></i> ' + (client.nickname || client.name) + '</div>'
+
+    +   (orders.length
+          ? '<label style="display:block;font-size:12px;font-weight:700;color:#4A5568;margin-bottom:5px">الفرع أو المشروع / Branch or project</label>'
+            + '<select id="tp-order" style="' + fld + ';margin-bottom:14px">'
+            + '<option value="">— اختر / select —</option>'
+            + orders.map(function(o){
+                return '<option value="' + o.id + '">' + (o.name || '') + (o.city ? ' — ' + o.city : '') + '</option>';
+              }).join('')
+            + '</select>'
+          : '<label style="display:block;font-size:12px;font-weight:700;color:#4A5568;margin-bottom:5px">المدينة / City</label>'
+            + '<input type="text" id="tp-city" style="' + fld + ';margin-bottom:14px" placeholder="مثال: الرياض">')
+
+    +   '<label style="display:block;font-size:12px;font-weight:700;color:#4A5568;margin-bottom:5px">اسم المسؤول / Contact name *</label>'
+    +   '<input type="text" id="tp-contact" style="' + fld + ';margin-bottom:14px">'
+
+    +   '<label style="display:block;font-size:12px;font-weight:700;color:#4A5568;margin-bottom:5px">رقم الجوال / Mobile *</label>'
+    +   '<input type="tel" id="tp-phone" dir="ltr" style="' + fld + ';margin-bottom:14px" placeholder="05XXXXXXXX">'
+
+    +   '<label style="display:block;font-size:12px;font-weight:700;color:#4A5568;margin-bottom:5px">المعدة / Equipment</label>'
+    +   '<input type="text" id="tp-equipment" style="' + fld + ';margin-bottom:14px" placeholder="مثال: فرن، ثلاجة، غسالة أطباق">'
+
+    +   '<label style="display:block;font-size:12px;font-weight:700;color:#4A5568;margin-bottom:5px">وصف العطل / Problem *</label>'
+    +   '<textarea id="tp-problem" rows="4" style="' + fld + ';resize:vertical;margin-bottom:6px"></textarea>'
+
+    +   '<div id="tp-err" style="display:none;font-size:12px;color:#C0392B;margin-bottom:10px"></div>'
+
+    +   '<button id="tp-send" onclick="submitTicket(\'' + token + '\',' + client.id + ')" '
+    +     'style="width:100%;padding:13px;border:none;border-radius:9px;background:#1D4E89;color:#fff;'
+    +     'font-size:15px;font-weight:700;cursor:pointer;font-family:inherit;margin-top:8px">'
+    +     '<i class="ti ti-send"></i> إرسال الطلب / Submit</button>'
+    + '</div>');
+}
+
+async function submitTicket(token, clientId){
+  var err = document.getElementById('tp-err');
+  var btn = document.getElementById('tp-send');
+  var val = function(id){ var e = document.getElementById(id); return e ? e.value.trim() : ''; };
+  var fail = function(msg){
+    if(err){ err.style.display = 'block'; err.innerHTML = msg; }
+    if(btn){ btn.disabled = false; btn.style.opacity = '1'; }
+  };
+
+  var contact = val('tp-contact'), phone = val('tp-phone'), problem = val('tp-problem');
+  if(!contact || !phone || !problem){
+    fail('الرجاء تعبئة الحقول المطلوبة (*).<br>Please fill in the required fields.'); return;
+  }
+  if(phone.replace(/\D/g,'').length < 9){
+    fail('رقم الجوال غير صحيح.<br>That mobile number is not valid.'); return;
+  }
+
+  if(btn){ btn.disabled = true; btn.style.opacity = '.6'; btn.innerHTML = 'جاري الإرسال… / Sending…'; }
+
+  var orderId = val('tp-order') || null;
+  var city = val('tp-city');
+  var zone = 'other';
+  var clientName = '';
+
+  try{
+    var rc = await _sb.from('clients').select('name,nickname').eq('id', clientId).limit(1);
+    if(rc.data && rc.data.length) clientName = rc.data[0].name || rc.data[0].nickname || '';
+  }catch(e){}
+
+  if(orderId){
+    try{
+      var ro = await _sb.from('client_orders').select('*').eq('id', orderId).limit(1);
+      if(ro.data && ro.data.length){
+        city = ro.data[0].city || city;
+        zone = ro.data[0].zone || cityZone(city);
+      }
+    }catch(e){}
+  } else if(city){
+    zone = cityZone(city);
+  }
+
+  // A public form needs a ceiling, or one bad actor floods the manager's page.
+  try{
+    var since = new Date(Date.now() - 24*3600*1000).toISOString().split('T')[0];
+    var rl = await _sb.from('maintenance_requests').select('id')
+      .eq('client_id', clientId).eq('source', 'customer').gte('date', since);
+    if(rl.data && rl.data.length >= 10){
+      fail('تم استلام عدد كبير من الطلبات اليوم. يرجى التواصل معنا هاتفياً.'
+         + '<br>Too many requests today — please call us instead.');
+      return;
+    }
+  }catch(e){}
+
+  var req = {
+    client: clientName,
+    client_id: clientId,
+    order_id: orderId,
+    city: city,
+    zone: zone,
+    contact_person: contact,
+    contact_phone: phone,
+    equipment: val('tp-equipment'),
+    problem: problem,
+    visit_type: 'paid',
+    priority: 'normal',
+    status: 'new',
+    date: new Date().toISOString().split('T')[0],
+    requested_by: contact,
+    requested_by_login: 'customer:' + token,
+    source: 'customer'
+  };
+
+  try{
+    var res = await _sb.from('maintenance_requests').insert(req).select();
+    if(res.error) throw new Error(res.error.message);
+    var id = (res.data && res.data[0]) ? res.data[0].id : '';
+    document.getElementById('tp-root').innerHTML =
+        '<div style="background:#fff;max-width:620px;width:100%;border-radius:14px;box-shadow:0 4px 24px rgba(15,45,82,.10);overflow:hidden">'
+      + '<div style="padding:38px 26px;text-align:center">'
+      +   '<i class="ti ti-circle-check" style="font-size:46px;color:#2D7D3A"></i>'
+      +   '<div style="font-size:18px;font-weight:800;color:#1a202c;margin-top:14px">تم استلام طلبك</div>'
+      +   '<div style="font-size:13px;color:#64748B;margin-top:8px;line-height:1.8">'
+      +     'Your request has been received.<br>'
+      +     (id ? 'رقم الطلب / Reference: <b style="color:#1D4E89">#' + id + '</b><br>' : '')
+      +     'سيتواصل معك فريق الصيانة قريباً.</div>'
+      + '</div></div>';
+  }catch(e){
+    fail('تعذّر إرسال الطلب. حاول مرة أخرى.<br>Could not submit — please try again.');
+    console.log('ticket submit failed:', e);
+  }
+}
 
 // ══════════════════════════════════════
 // ACTIVITY LOG
@@ -5446,6 +5656,112 @@ function apPreviewPrint(){
   w.document.close();
 }
 
+
+// ── Ticket Portal section of the control panel ───────────────────────────
+async function apRenderTickets(){
+  var body = document.getElementById('ap-body');
+  if(!body) return;
+  var ar = (LNG === 'ar');
+
+  if(!_initSb()){
+    body.innerHTML = apCard('<div style="color:#F87171;font-size:13px"><i class="ti ti-alert-triangle"></i> '
+      + (ar ? 'لا يوجد اتصال بقاعدة البيانات.' : 'No database connection.') + '</div>');
+    return;
+  }
+
+  body.innerHTML = '<div style="color:#7E93B5;font-size:13px">' + (ar?'جاري التحميل…':'Loading…') + '</div>';
+  try{ await loadClients(); }catch(e){}
+
+  var on = featureOn('customer_tickets');
+  var withLink = clientsData.filter(function(c){ return c.ticket_token; });
+
+  var rows = clientsData.map(function(c){
+    var has = !!c.ticket_token;
+    return '<div style="background:#0E2140;border:1px solid ' + (has ? '#2E5A8F' : '#1B3157') + ';border-radius:10px;padding:12px 15px;display:flex;align-items:center;gap:12px;flex-wrap:wrap">'
+      + '<div style="flex:1;min-width:180px">'
+      +   '<div style="font-size:13px;font-weight:700;color:#fff">' + (c.nickname || c.name || '') + '</div>'
+      +   (has
+            ? '<div style="font-size:10px;color:#7E93B5;margin-top:3px;word-break:break-all" dir="ltr">' + ticketLinkFor(c.ticket_token) + '</div>'
+            : '<div style="font-size:11px;color:#64748B;margin-top:3px">' + (ar?'لا يوجد رابط':'no link yet') + '</div>')
+      + '</div>'
+      + (has
+          ? '<button onclick="apCopyTicketLink(\'' + c.ticket_token + '\')" style="padding:7px 12px;border-radius:8px;border:1px solid #24406e;background:transparent;color:#9FB4D4;cursor:pointer;font-size:11px;font-weight:700;font-family:inherit"><i class="ti ti-copy"></i> ' + (ar?'نسخ':'Copy') + '</button>'
+            + '<button onclick="apRevokeTicketLink(' + c.id + ')" style="padding:7px 12px;border-radius:8px;border:1px solid #5B2E2E;background:transparent;color:#FCA5A5;cursor:pointer;font-size:11px;font-weight:700;font-family:inherit"><i class="ti ti-link-off"></i> ' + (ar?'إلغاء':'Revoke') + '</button>'
+          : '<button onclick="apCreateTicketLink(' + c.id + ')" style="padding:7px 14px;border-radius:8px;border:none;background:#7C3AED;color:#fff;cursor:pointer;font-size:11px;font-weight:700;font-family:inherit"><i class="ti ti-link"></i> ' + (ar?'إنشاء رابط':'Create link') + '</button>')
+      + '</div>';
+  }).join('');
+
+  body.innerHTML =
+      '<div style="background:' + (on ? '#0E2140' : '#3A2410') + ';border:1px solid ' + (on ? '#2E5A8F' : '#7A4A16') + ';border-radius:12px;padding:15px 18px;margin-bottom:16px">'
+    +   '<div style="font-size:13px;font-weight:700;color:' + (on ? '#34D399' : '#FBBF24') + '">'
+    +     '<i class="ti ' + (on ? 'ti-circle-check' : 'ti-alert-triangle') + '"></i> '
+    +     (on ? (ar?'البوابة مفعّلة':'The portal is on') : (ar?'البوابة متوقفة':'The portal is off')) + '</div>'
+    +   '<div style="font-size:11px;color:#9FB4D4;margin-top:5px">'
+    +     (on ? (ar ? 'الروابط تعمل والعملاء يستطيعون فتح تذاكر.' : 'Links work and customers can raise tickets.')
+           : (ar ? 'الروابط تعرض رسالة "الخدمة غير متاحة". فعّلها من قسم مميزات النظام.'
+                 : 'Links show a "service unavailable" message. Turn it on in System Features.'))
+    +   '</div></div>'
+
+    + '<div style="display:flex;align-items:center;gap:10px;margin-bottom:12px;flex-wrap:wrap">'
+    +   '<div style="flex:1;font-size:12px;color:#7E93B5">'
+    +     (ar ? (withLink.length + ' من ' + clientsData.length + ' عميل لديهم رابط')
+             : (withLink.length + ' of ' + clientsData.length + ' clients have a link')) + '</div>'
+    +   '<button onclick="apRenderTickets()" style="padding:7px 14px;border-radius:8px;border:1px solid #24406e;background:transparent;color:#9FB4D4;cursor:pointer;font-size:11px;font-weight:700;font-family:inherit"><i class="ti ti-refresh"></i> ' + (ar?'تحديث':'Refresh') + '</button>'
+    + '</div>'
+
+    + '<div style="display:flex;flex-direction:column;gap:8px">'
+    +   (rows || '<div style="color:#7E93B5;font-size:12px">' + (ar?'لا يوجد عملاء بعد':'No clients yet') + '</div>')
+    + '</div>'
+
+    + '<div style="margin-top:16px;font-size:11px;color:#64748B;line-height:1.9">'
+    +   (ar ? 'الرابط خاص بكل عميل — التذكرة تصل مربوطة به تلقائياً، وتظهر في صفحة طلبات الصيانة. الحد الأقصى 10 تذاكر لكل عميل يومياً.'
+           : 'Each link belongs to one client — tickets arrive already linked to them and appear in Maintenance Requests. Limit: 10 tickets per client per day.')
+    + '</div>';
+}
+
+async function apCreateTicketLink(clientId){
+  var ar = (LNG === 'ar');
+  var token = makeTicketToken();
+  try{
+    var r = await _sb.from('clients').update({ ticket_token: token }).eq('id', clientId).select();
+    if(r.error) throw new Error(r.error.message);
+  }catch(e){
+    alert((ar ? 'تعذّر إنشاء الرابط: ' : 'Could not create the link: ') + e.message);
+    return;
+  }
+  var c = clientsData.find(function(x){ return String(x.id) === String(clientId); });
+  if(c) c.ticket_token = token;
+  logActivity('create', 'ticket link', (c ? (c.nickname || c.name) : ('#' + clientId)), null, { link: 'created' });
+  apRenderTickets();
+}
+
+async function apRevokeTicketLink(clientId){
+  var ar = (LNG === 'ar');
+  if(!confirm(ar ? 'إلغاء الرابط؟ لن يعمل بعدها ولن يتمكن العميل من فتح تذاكر.'
+                 : 'Revoke this link? It will stop working immediately.')) return;
+  try{
+    var r = await _sb.from('clients').update({ ticket_token: null }).eq('id', clientId).select();
+    if(r.error) throw new Error(r.error.message);
+  }catch(e){
+    alert((ar ? 'تعذّر الإلغاء: ' : 'Could not revoke: ') + e.message);
+    return;
+  }
+  var c = clientsData.find(function(x){ return String(x.id) === String(clientId); });
+  if(c){ logActivity('delete', 'ticket link', (c.nickname || c.name), { link: 'active' }, null); c.ticket_token = null; }
+  apRenderTickets();
+}
+
+function apCopyTicketLink(token){
+  var ar = (LNG === 'ar');
+  var link = ticketLinkFor(token);
+  var done = function(){ alert(ar ? ('تم نسخ الرابط:\n' + link) : ('Link copied:\n' + link)); };
+  if(navigator.clipboard && navigator.clipboard.writeText){
+    navigator.clipboard.writeText(link).then(done, function(){ prompt(ar?'انسخ الرابط:':'Copy the link:', link); });
+  } else {
+    prompt(ar ? 'انسخ الرابط:' : 'Copy the link:', link);
+  }
+}
+
 function apRenderPlanned(sec){
   var body = document.getElementById('ap-body');
   if(!body) return;
@@ -6340,6 +6656,7 @@ function renderMaintRequests(){
       +     '<span style="background:'+pr.bg+';color:'+pr.fg+';font-size:10px;font-weight:700;padding:2px 8px;border-radius:99px">'+pr.label+'</span>'
       +     '<span style="background:#E6F1FB;color:#1D4E89;font-size:10px;font-weight:700;padding:2px 8px;border-radius:99px">'+(MR_TYPE_LABEL[r.visit_type]||r.visit_type||'')+'</span>'
       +     (r.is_exception ? '<span style="background:#F3EDFF;color:#6D28D9;font-size:10px;font-weight:700;padding:2px 9px;border-radius:99px"><i class="ti ti-shield-check"></i> '+(LNG==='ar'?'استثناء':'Exception')+'</span>' : '')
+      +     (r.source === 'customer' ? '<span style="background:#E7F6EC;color:#2D7D3A;font-size:10px;font-weight:700;padding:2px 9px;border-radius:99px"><i class="ti ti-user"></i> '+(LNG==='ar'?'من العميل':'From customer')+'</span>' : '')
       +   '</div>'
       +   (meta.length ? '<div style="font-size:11px;color:#718096;margin-top:5px;display:flex;flex-wrap:wrap;gap:10px">'+meta.join('')+'</div>' : '')
       +   '<div style="font-size:12px;color:#1a202c;margin-top:7px;white-space:pre-wrap">'+(r.problem||'')+'</div>'
@@ -10946,6 +11263,11 @@ window.addEventListener('load', async function() {
   if(reportToken){
     await showPublicReport(reportToken);
     return; // Don't show login or load system
+  }
+  var ticketToken = urlParams.get('ticket');
+  if(ticketToken){
+    await showTicketPortal(ticketToken);
+    return; // Customers never see the app itself
   }
   await loadVisitsFromDB();
   await loadAC();
