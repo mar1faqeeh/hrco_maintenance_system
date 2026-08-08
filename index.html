@@ -4668,28 +4668,20 @@ async function submitTicket(token, clientId){
   try{
     var res = await _sb.from('maintenance_requests').insert(req).select();
 
-    // If a column is missing (the SQL has not been run yet), file the ticket
-    // with the core fields rather than losing the customer's report.
-    if(res.error && /column|schema cache/i.test(res.error.message || '')){
-      console.log('ticket insert retry without optional columns:', res.error.message);
-      var lean = {};
-      ['client','city','zone','location','map_url','contact_person','contact_phone',
-       'contact_email','equipment','problem','attachments',
-       'visit_type','priority','status','date','requested_by'].forEach(function(k){
-        if(req[k] !== undefined && req[k] !== null && req[k] !== '') lean[k] = req[k];
-      });
-      res = await _sb.from('maintenance_requests').insert(lean).select();
-
-      // If it STILL fails, the attachments column itself is the missing one.
-      // Say so rather than quietly filing a ticket without the photos.
-      if(res.error && /attachments/i.test(res.error.message || '')){
-        delete lean.attachments;
-        res = await _sb.from('maintenance_requests').insert(lean).select();
-        if(!res.error && _tpFiles.length){
-          _tpAttachmentsDropped = true;
-        }
-      }
+    // Postgres names the offending column, so drop exactly that one and try
+    // again rather than guessing which fields the database is missing.
+    var dropped = [];
+    for(var attempt = 0; attempt < 6 && res.error; attempt++){
+      var m = String(res.error.message || '').match(/'([a-z_]+)' column/i);
+      if(!m) break;
+      var badCol = m[1];
+      if(!(badCol in req)) break;
+      delete req[badCol];
+      dropped.push(badCol);
+      res = await _sb.from('maintenance_requests').insert(req).select();
     }
+    if(dropped.indexOf('attachments') !== -1 && _tpFiles.length) _tpAttachmentsDropped = true;
+    if(dropped.length) console.log('ticket filed without missing columns:', dropped.join(', '));
 
     if(res.error) throw new Error(res.error.message);
     var id = (res.data && res.data[0]) ? res.data[0].id : '';
