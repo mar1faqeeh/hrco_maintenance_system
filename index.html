@@ -592,6 +592,7 @@ html,body{height:100%;overflow:auto;font-family:Tajawal,sans-serif;font-size:14p
     <div style="display:flex;gap:8px">
       <button class="btn btn-o" id="parts-addinv-btn" onclick="openMod('partModal')"><i class="ti ti-package-import"></i><span id="t-add-inv">Add Inventory</span></button>
       <button class="btn btn-p" id="parts-new-btn" onclick="openMod('partModal')"><i class="ti ti-plus"></i><span id="t-new-part">New Part</span></button>
+      <button class="btn btn-o" id="parts-count-btn" onclick="openStocktake()"><i class="ti ti-clipboard-check"></i> <span data-en="Stocktake" data-ar="جرد المخزون">Stocktake</span></button>
       <button class="btn btn-o" id="parts-export-btn" onclick="exportPartsExcel()"><i class="ti ti-file-download"></i> <span data-en="Export Excel" data-ar="تصدير إكسل">Export Excel</span></button>
       <button class="btn btn-o" id="parts-import-btn" onclick="document.getElementById('parts-import-file').click()"><i class="ti ti-file-spreadsheet"></i> <span data-en="Import Excel" data-ar="استيراد إكسل">Import Excel</span></button>
       <input type="file" id="parts-import-file" accept=".xlsx,.xls,.csv" style="display:none" onchange="onPartsFileChosen(this)">
@@ -618,6 +619,8 @@ html,body{height:100%;overflow:auto;font-family:Tajawal,sans-serif;font-size:14p
         <button class="ftab" onclick="setStockF('out',this)">Out</button>
       </div>
     </div>
+    <div id="stock-zone-picker" style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-bottom:8px"></div>
+    <div id="stock-zone-notice" style="display:none;font-size:11px;color:#718096;background:#F8FAFC;border-radius:7px;padding:7px 11px;margin-bottom:10px"></div>
     <div id="parts-cat-filter" style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px"></div>
     <div class="tbl"><div class="thd" style="grid-template-columns:110px 2fr 1.1fr 0.9fr 0.9fr 1fr 118px"><div data-en="Code" data-ar="الكود">Code</div><div data-en="Part Name" data-ar="اسم القطعة">Part Name</div><div data-en="Category" data-ar="الفئة">Category</div><div data-en="Qty" data-ar="الكمية">Qty</div><div data-en="Min" data-ar="الحد الأدنى">Min</div><div data-en="Status" data-ar="الحالة">Status</div><div></div></div><div id="invList"></div></div>
   </div>
@@ -1445,6 +1448,7 @@ function lgSuccess(u, restoring){
     try{ loadTaskTemplates(); }catch(e){}
     try{ loadClientOrders().then(function(){ if(typeof renderClientGrid==='function') renderClientGrid(); }); }catch(e){}
     try{ loadAppSettings(); }catch(e){}
+    try{ loadPartStock().then(function(){ if(typeof renderInvList==='function' && document.getElementById('invList')) renderInvList(); }); }catch(e){}
     go(curUserRole === 'salesman'   ? 'maint-requests'
      : curUserRole === 'data_entry' ? 'clients'
      : 'dashboard');
@@ -1575,6 +1579,7 @@ async function refreshAll(){
     try{ await loadTaskTemplates(); }catch(e){}
     try{ await loadClientOrders(); }catch(e){}
     try{ await loadAppSettings(); }catch(e){}
+    try{ await loadPartStock(); }catch(e){}
     updatePendingBadge();
     // repaint the page currently on screen
     var current = 'dashboard';
@@ -1647,7 +1652,7 @@ function go(pg){
     resetNewVisitForm();
   }
   if(pg==='technicians'){renderTechGrid();renderTechCharts();}
-  if(pg==='parts'){renderPartCatFilter();renderInvList();renderHistList();}
+  if(pg==='parts'){renderStockZonePicker();updateStockZoneNotice();renderPartCatFilter();renderInvList();renderHistList();}
   if(pg==='parts-request'){loadEquipmentData().then(function(){renderEquipGrid();});}
   if(pg==='parts-orders'){loadPartsRequests();}
   if(pg==='clients'){renderClientGrid();renderDonut();renderTopClients();}
@@ -5504,16 +5509,19 @@ function dashWidgetHtml(key){
 
   if(key === 'lowstock'){
     var low = (typeof partsData !== 'undefined' ? partsData : []).filter(function(p){
-      return (parseInt(p.qty,10)||0) <= (parseInt(p.min,10)||0);
+      return (typeof partQty === 'function')
+        ? (partQty(p, 'all') <= partMin(p, 'all'))
+        : ((parseInt(p.qty,10)||0) <= (parseInt(p.min,10)||0));
     });
     var rowsL = low.slice(0,6).map(function(p){
-      var out = (parseInt(p.qty,10)||0) === 0;
+      var out = ((typeof partQty === 'function') ? partQty(p, 'all') : (parseInt(p.qty,10)||0)) === 0;
       return '<div style="display:flex;align-items:center;gap:9px;padding:9px 16px;border-bottom:1px solid #F0F4F8">'
         + '<div style="flex:1;min-width:0"><div style="font-size:12px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'
         + (typeof partName === 'function' ? partName(p) : p.name) + '</div>'
         + '<div style="font-size:10px;color:#1D4E89;font-weight:600" dir="ltr">' + (p.code||'') + '</div></div>'
         + '<span style="font-size:11px;font-weight:700;color:' + (out ? '#C0392B' : '#C4680A') + '">'
-        + (parseInt(p.qty,10)||0) + ' / ' + (parseInt(p.min,10)||0) + '</span></div>';
+        + ((typeof partQty === 'function') ? partQty(p,'all') : (parseInt(p.qty,10)||0))
+        + ' / ' + ((typeof partMin === 'function') ? partMin(p,'all') : (parseInt(p.min,10)||0)) + '</span></div>';
     }).join('');
     return dashCard('ti-package', title + ' <span style="color:#C0392B">(' + low.length + ')</span>',
       rowsL || dashEmpty(ar ? 'المخزون ضمن الحدود' : 'Stock is within limits'),
@@ -7740,7 +7748,7 @@ function applyRolePermissions(){
   if(apBtn) apBtn.style.display = (typeof isSysAdmin === 'function' && isSysAdmin()) ? 'flex' : 'none';
 
   var partsManager = (curUserRole === 'manager');
-  ['parts-clear-btn','parts-import-btn','parts-export-btn','parts-addinv-btn','parts-new-btn'].forEach(function(id){
+  ['parts-clear-btn','parts-import-btn','parts-export-btn','parts-addinv-btn','parts-new-btn','parts-count-btn'].forEach(function(id){
     var e = document.getElementById(id);
     if(e) e.style.display = partsManager ? '' : 'none';
   });
@@ -7919,7 +7927,14 @@ function renderPartCatFilter(){
   mk('all', (LNG === 'ar') ? 'الكل' : 'All');
   PART_CATEGORIES.forEach(function(c){ mk(c.key, c.key); });
 }
-function stk(p){if(p.qty===0)return{l:t('stockOut'),c:'b-d'};if(p.qty<=p.min)return{l:t('stockLow'),c:'b-w'};return{l:t('stockOk'),c:'b-s'};}
+function stk(p){
+  // Status always reflects the zone currently on screen.
+  var q = (typeof partQty === 'function') ? partQty(p) : p.qty;
+  var m = (typeof partMin === 'function') ? partMin(p) : p.min;
+  if(q === 0) return { l: t('stockOut'), c: 'b-d' };
+  if(q <= m)  return { l: t('stockLow'), c: 'b-w' };
+  return { l: t('stockOk'), c: 'b-s' };
+}
 
 // ── Deleting spare parts ─────────────────────────────────────────────────
 
@@ -8428,6 +8443,379 @@ function unitLabel(u){
   return (LNG === 'ar') ? m.ar : m.en;
 }
 
+
+// ══════════════════════════════════════
+// PER-MANAGER STOCK
+// Each maintenance manager owns HIS OWN store. The parts catalogue is shared
+// (one code, one name), but the quantities belong to a manager, not to a
+// place — add a manager in the control panel and he starts with an empty
+// store of his own. There are deliberately no transfers between stores.
+// ══════════════════════════════════════
+var partStock = {};        // { partId: { ownerLogin: {qty, min, id} } }
+var stockOwner = null;     // whose store is on screen ('all' = every store)
+
+// Every maintenance manager is a store owner. The system admin keeps one too,
+// so parts bought centrally have somewhere to live.
+function storeOwners(){
+  var out = [];
+  Object.keys(USERS || {}).forEach(function(login){
+    var u = USERS[login] || {};
+    if(u.active === false || u.active === 'false') return;
+    if(u.role === 'manager' || u.role === 'sysadmin') out.push({ login: login, name: u.name || login, role: u.role });
+  });
+  return out;
+}
+
+function ownerName(login){
+  if(login === 'all') return (LNG==='ar') ? 'كل المخازن' : 'All stores';
+  var u = (USERS || {})[login];
+  return u ? (u.name || login) : login;
+}
+
+// The store a stock edit would land in — never 'all'.
+function activeStore(){
+  if(stockOwner && stockOwner !== 'all') return stockOwner;
+  return curUserLogin;
+}
+
+function defaultStore(){
+  if(isSysAdmin()) return 'all';
+  return curUserLogin;
+}
+
+// A manager may only change HIS OWN store. The system admin may touch any.
+function canEditStore(login){
+  if(!canManageParts()) return false;
+  if(isSysAdmin()) return true;
+  return login === curUserLogin;
+}
+
+function partQty(p, owner){
+  owner = owner || stockOwner || 'all';
+  var rec = partStock[p.id] || {};
+  if(owner === 'all'){
+    return Object.keys(rec).reduce(function(sum, k){
+      return sum + (parseInt(rec[k].qty, 10) || 0);
+    }, 0);
+  }
+  return rec[owner] ? (parseInt(rec[owner].qty, 10) || 0) : 0;
+}
+
+function partMin(p, owner){
+  owner = owner || stockOwner || 'all';
+  var rec = partStock[p.id] || {};
+  if(owner === 'all'){
+    var total = Object.keys(rec).reduce(function(sum, k){
+      return sum + (parseInt(rec[k].min, 10) || 0);
+    }, 0);
+    return total || (parseInt(p.min, 10) || 0);
+  }
+  return rec[owner] && rec[owner].min != null ? (parseInt(rec[owner].min, 10) || 0)
+                                              : (parseInt(p.min, 10) || 0);
+}
+
+async function loadPartStock(){
+  if(!_initSb()) return;
+  try{
+    var r = await _sb.from('part_stock').select('*');
+    if(r.error){ console.log('loadPartStock:', r.error.message); return; }
+    partStock = {};
+    (r.data || []).forEach(function(row){
+      if(!partStock[row.part_id]) partStock[row.part_id] = {};
+      partStock[row.part_id][row.owner] = { qty: row.qty, min: row.min, id: row.id };
+    });
+  }catch(e){ console.log('loadPartStock error:', e); }
+}
+
+// Write one store's line for one part. Only that row is touched, so two
+// managers can never overwrite each other's numbers.
+async function saveStock(partId, owner, qty, min){
+  if(!partStock[partId]) partStock[partId] = {};
+  var cur = partStock[partId][owner] || {};
+  var next = {
+    qty: (qty != null) ? qty : (cur.qty || 0),
+    min: (min != null) ? min : (cur.min != null ? cur.min : 2)
+  };
+  partStock[partId][owner] = { qty: next.qty, min: next.min, id: cur.id };
+
+  if(!_initSb()) return true;
+  try{
+    var r = await _sb.from('part_stock')
+      .upsert({ part_id: partId, owner: owner, qty: next.qty, min: next.min },
+              { onConflict: 'part_id,owner' })
+      .select();
+    if(r.error){ console.error('saveStock:', r.error); return false; }
+    if(r.data && r.data[0]) partStock[partId][owner].id = r.data[0].id;
+    return true;
+  }catch(e){ console.error('saveStock:', e); return false; }
+}
+
+// The store picker above the inventory.
+
+// ── Stocktake ────────────────────────────────────────────────────────────
+// A manager counts what is physically on his shelves and enters it. The
+// system records the DIFFERENCE as a movement, so a count is auditable
+// rather than a silent overwrite.
+var _stkCounts = {};
+
+function openStocktake(){
+  var ar = (LNG === 'ar');
+  var store = activeStore();
+
+  if(stockOwner === 'all'){
+    alert(ar ? 'اختر مخزناً أولاً — الجرد يكون لمخزن واحد.'
+             : 'Pick a store first — a stocktake covers one store.');
+    return;
+  }
+  if(!canEditStore(store)){
+    alert(ar ? ('هذا مخزن ' + ownerName(store) + ' — لا يمكنك جرده.')
+             : ("This is " + ownerName(store) + "'s store — you cannot count it."));
+    return;
+  }
+
+  _stkCounts = {};
+  var t = document.getElementById('stk-title');
+  if(t) t.textContent = (ar ? 'جرد مخزن: ' : 'Stocktake — ') + ownerName(store);
+  var intro = document.getElementById('stk-intro');
+  if(intro){
+    var fresh = storeIsEmpty(store);
+    intro.innerHTML = (ar
+      ? ((fresh ? '<b>جرد افتتاحي.</b> ' : '')
+         + 'اكتب الكمية <b>الموجودة فعلياً</b> أمام كل قطعة. اترك الحقل فارغاً لما لم تجرده — لن يتغيّر. يُسجَّل الفرق في سجل الحركة.')
+      : ((fresh ? '<b>Opening count.</b> ' : '')
+         + 'Enter what is <b>physically on the shelf</b> for each part. Leave a box empty to skip it — nothing changes. The difference is recorded in the movement history.'));
+  }
+  var sb = document.getElementById('stk-search');
+  if(sb) sb.value = '';
+  renderStocktake();
+  openMod('stocktakeModal');
+}
+
+function renderStocktake(){
+  var list = document.getElementById('stk-list');
+  if(!list) return;
+  var ar = (LNG === 'ar');
+  var store = activeStore();
+  var box = document.getElementById('stk-search');
+  var q = box ? box.value.trim().toLowerCase() : '';
+
+  var rows = partsData.filter(function(p){
+    if(!q) return true;
+    return String(p.name||'').toLowerCase().indexOf(q) !== -1
+        || String(p.code||'').toLowerCase().indexOf(q) !== -1
+        || partName(p).toLowerCase().indexOf(q) !== -1;
+  });
+
+  if(!rows.length){
+    list.innerHTML = '<div style="padding:20px;text-align:center;color:#A0AEC0;font-size:12px">'
+      + (ar ? 'لا توجد نتائج' : 'No matching parts') + '</div>';
+    updateStocktakeSummary();
+    return;
+  }
+
+  list.innerHTML = rows.map(function(p){
+    var sys = partQty(p, store);
+    var counted = _stkCounts[p.id];
+    var diff = (counted === undefined || counted === '') ? null : (parseInt(counted, 10) - sys);
+    return '<div style="display:grid;grid-template-columns:1fr 78px 92px 84px;gap:9px;align-items:center;padding:9px 12px;border-bottom:1px solid #F0F4F8">'
+      + '<div style="min-width:0">'
+      +   '<div style="font-size:12px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"><bdi>' + partName(p) + '</bdi></div>'
+      +   (p.code ? '<div style="font-size:10px;color:#1D4E89;font-weight:600" dir="ltr">' + p.code + '</div>' : '')
+      + '</div>'
+      + '<div style="text-align:center;font-size:12px;color:#718096">' + sys + '</div>'
+      + '<input type="number" min="0" value="' + (counted === undefined ? '' : counted) + '" '
+      +   'oninput="setStocktakeCount(' + p.id + ', this.value)" '
+      +   'style="width:100%;padding:7px 9px;border:1.5px solid #D9E2EC;border-radius:7px;font-size:13px;font-family:inherit;text-align:center;outline:none">'
+      + '<div style="text-align:center;font-size:12px;font-weight:700;color:'
+      +   (diff === null ? '#CBD5E1' : (diff === 0 ? '#2D7D3A' : (diff > 0 ? '#1D4E89' : '#C0392B'))) + '">'
+      +   (diff === null ? '—' : (diff > 0 ? '+' + diff : String(diff)))
+      + '</div></div>';
+  }).join('');
+
+  // header row
+  list.insertAdjacentHTML('afterbegin',
+      '<div style="display:grid;grid-template-columns:1fr 78px 92px 84px;gap:9px;padding:8px 12px;background:#F8FAFC;'
+    + 'border-bottom:1px solid #D9E2EC;font-size:10px;font-weight:700;color:#718096;position:sticky;top:0;z-index:2">'
+    + '<div>' + (ar ? 'القطعة' : 'Part') + '</div>'
+    + '<div style="text-align:center">' + (ar ? 'بالنظام' : 'System') + '</div>'
+    + '<div style="text-align:center">' + (ar ? 'المعدود' : 'Counted') + '</div>'
+    + '<div style="text-align:center">' + (ar ? 'الفرق' : 'Diff') + '</div></div>');
+
+  updateStocktakeSummary();
+}
+
+function setStocktakeCount(partId, v){
+  if(v === '' || v === null){ delete _stkCounts[partId]; }
+  else _stkCounts[partId] = v;
+  // Only the summary and this row's difference change — re-rendering the whole
+  // list here would steal focus while the manager is typing.
+  updateStocktakeSummary();
+  var row = event && event.target ? event.target.parentElement : null;
+  if(row){
+    var p = partsData.find(function(x){ return String(x.id) === String(partId); });
+    var sys = p ? partQty(p, activeStore()) : 0;
+    var cell = row.lastElementChild;
+    if(cell){
+      if(v === '' || v === null){ cell.textContent = '—'; cell.style.color = '#CBD5E1'; }
+      else {
+        var d = parseInt(v, 10) - sys;
+        cell.textContent = d > 0 ? ('+' + d) : String(d);
+        cell.style.color = (d === 0) ? '#2D7D3A' : (d > 0 ? '#1D4E89' : '#C0392B');
+      }
+    }
+  }
+}
+
+function updateStocktakeSummary(){
+  var el = document.getElementById('stk-summary');
+  if(!el) return;
+  var ar = (LNG === 'ar');
+  var store = activeStore();
+  var counted = 0, diffs = 0, up = 0, down = 0;
+  Object.keys(_stkCounts).forEach(function(id){
+    var v = _stkCounts[id];
+    if(v === '' || v === null) return;
+    counted++;
+    var p = partsData.find(function(x){ return String(x.id) === String(id); });
+    if(!p) return;
+    var d = parseInt(v, 10) - partQty(p, store);
+    if(d !== 0){ diffs++; if(d > 0) up++; else down++; }
+  });
+  el.innerHTML = counted
+    ? '<span style="color:#1D4E89;font-weight:700">' + counted + '</span> '
+      + (ar ? 'قطعة مجرودة · ' : 'counted · ')
+      + '<span style="color:' + (diffs ? '#C4680A' : '#2D7D3A') + ';font-weight:700">' + diffs + '</span> '
+      + (ar ? ('فرق (' + up + ' زيادة، ' + down + ' نقص)') : ('with a difference (' + up + ' up, ' + down + ' down)'))
+    : '<span style="color:#A0AEC0">' + (ar ? 'لم تُدخل أي كمية بعد' : 'Nothing counted yet') + '</span>';
+}
+
+async function applyStocktake(){
+  var ar = (LNG === 'ar');
+  var store = activeStore();
+  if(!canEditStore(store)){
+    alert(ar ? 'لا يمكنك جرد هذا المخزن.' : 'You cannot count this store.');
+    return;
+  }
+
+  var changes = [];
+  Object.keys(_stkCounts).forEach(function(id){
+    var v = _stkCounts[id];
+    if(v === '' || v === null) return;
+    var p = partsData.find(function(x){ return String(x.id) === String(id); });
+    if(!p) return;
+    var sys = partQty(p, store);
+    var cnt = parseInt(v, 10);
+    if(isNaN(cnt) || cnt === sys) return;
+    changes.push({ p: p, from: sys, to: cnt, diff: cnt - sys });
+  });
+
+  if(!changes.length){
+    alert(ar ? 'لا توجد فروقات — المخزون مطابق.' : 'No differences — the store matches the system.');
+    closeMod('stocktakeModal');
+    return;
+  }
+
+  var preview = changes.slice(0, 8).map(function(c){
+    return '• ' + (c.p.code ? c.p.code + ' — ' : '') + c.p.name + ': ' + c.from + ' → ' + c.to
+      + ' (' + (c.diff > 0 ? '+' : '') + c.diff + ')';
+  }).join('\n') + (changes.length > 8 ? ('\n… +' + (changes.length - 8)) : '');
+
+  if(!confirm((ar ? ('اعتماد الجرد على ' + changes.length + ' قطعة؟\n\n') : ('Apply the count to ' + changes.length + ' part(s)?\n\n')) + preview)) return;
+
+  var today = new Date().toISOString().split('T')[0];
+  for(var i = 0; i < changes.length; i++){
+    var c = changes[i];
+    await saveStock(c.p.id, store, c.to, null);
+    var mv = { part_id: c.p.id, type: (c.diff > 0 ? 'in' : 'out'), qty: Math.abs(c.diff),
+               owner: store, dest: ownerName(store), tech: (curUser || 'Manager'),
+               note: (ar ? 'تسوية جرد' : 'Stocktake adjustment'), date: today };
+    try{ await dbSave('parts_history', mv); }catch(e){}
+    histData.unshift(Object.assign({ id: Date.now() + i, partId: c.p.id }, mv));
+  }
+
+  logActivity('update', 'stocktake', ownerName(store),
+              { parts: String(changes.length) },
+              { adjusted: changes.map(function(c){ return (c.p.code || c.p.name) + ':' + c.from + '→' + c.to; }).join(', ') });
+
+  closeMod('stocktakeModal');
+  renderInvList();
+  renderHistList();
+  updateStockZoneNotice();   // the store may no longer be empty
+  alert(ar ? ('✅ تم اعتماد الجرد — عُدّلت ' + changes.length + ' قطعة.')
+           : ('✅ Stocktake applied — ' + changes.length + ' part(s) adjusted.'));
+}
+
+function renderStockZonePicker(){
+  var host = document.getElementById('stock-zone-picker');
+  if(!host) return;
+  if(stockOwner === null) stockOwner = defaultStore();
+  var ar = (LNG === 'ar');
+  var owners = storeOwners();
+
+  // Someone who owns no store still needs a sensible view
+  if(stockOwner !== 'all' && !owners.some(function(o){ return o.login === stockOwner; })){
+    stockOwner = owners.length ? owners[0].login : 'all';
+  }
+
+  host.innerHTML = '<span style="font-size:11px;color:#718096;font-weight:600">'
+      + (ar ? 'المخزن:' : 'Store:') + '</span>'
+    + [{ login:'all' }].concat(owners).map(function(o){
+        var on = (stockOwner === o.login);
+        var mine = (o.login === curUserLogin);
+        return '<button onclick="setStockZone(\'' + o.login + '\')" style="padding:5px 12px;border-radius:99px;'
+          + 'font-size:11px;font-weight:700;cursor:pointer;font-family:inherit;'
+          + 'border:1px solid ' + (on ? '#1D4E89' : '#D9E2EC') + ';'
+          + 'background:' + (on ? '#1D4E89' : '#fff') + ';color:' + (on ? '#fff' : '#718096') + '">'
+          + ownerName(o.login)
+          + (mine && !on ? ' <span style="color:#2D7D3A">•</span>' : '')
+          + '</button>';
+      }).join('');
+}
+
+function setStockZone(owner){
+  stockOwner = owner;
+  renderStockZonePicker();
+  renderInvList();
+  updateStockZoneNotice();
+}
+
+// A quiet line explaining why the edit buttons are missing, instead of leaving
+// someone wondering whether the page is broken.
+function updateStockZoneNotice(){
+  var el = document.getElementById('stock-zone-notice');
+  if(!el) return;
+  var ar = (LNG === 'ar');
+  if(stockOwner === 'all'){
+    el.style.display = 'block';
+    el.innerHTML = '<i class="ti ti-info-circle"></i> '
+      + (ar ? 'العرض مجموع كل المخازن — اختر مخزناً للتعديل عليه.'
+            : 'Showing the total across every store — pick a store to edit it.');
+  } else if(canManageParts() && !canEditStore(stockOwner)){
+    el.style.display = 'block';
+    el.innerHTML = '<i class="ti ti-eye"></i> '
+      + (ar ? ('مخزن ' + ownerName(stockOwner) + ' — للاطلاع فقط.')
+            : (ownerName(stockOwner) + "'s store — view only."));
+  } else if(canEditStore(stockOwner) && storeIsEmpty(stockOwner) && partsData.length){
+    // A brand-new store reads as "everything is out of stock" — say why, and
+    // point at the fastest way to fill it.
+    el.style.display = 'block';
+    el.innerHTML = '<i class="ti ti-package"></i> '
+      + (ar ? 'هذا المخزن فارغ — استخدم "جرد المخزون" لإدخال الكميات الموجودة لديك دفعة واحدة.'
+            : 'This store is empty — use "Stocktake" to enter everything on your shelves in one pass.');
+  } else {
+    el.style.display = 'none';
+  }
+}
+
+// True when a store has no quantity recorded for any part yet.
+function storeIsEmpty(owner){
+  if(!owner || owner === 'all') return false;
+  return !partsData.some(function(p){
+    var rec = partStock[p.id];
+    return rec && rec[owner] && (parseInt(rec[owner].qty, 10) || 0) > 0;
+  });
+}
+
 function renderInvList(q,sf){
   sf=sf||stF;q=q||'';
   var el=document.getElementById('invList');if(!el)return;el.innerHTML='';
@@ -8446,11 +8834,11 @@ function renderInvList(q,sf){
             : '')
       +   '</div>'
       + '<div class="tc2" style="padding-inline-end:10px;white-space:nowrap"><bdi>' + catLabel(p.cat) + '</bdi></div>'
-      + '<div class="tc" style="font-weight:700">' + p.qty + ' <span class="tc2">' + unitLabel(p.unit) + '</span></div>'
+      + '<div class="tc" style="font-weight:700">' + partQty(p) + ' <span class="tc2">' + unitLabel(p.unit) + '</span></div>'
       + '<div class="tc2">' + p.min + ' ' + unitLabel(p.unit) + '</div>'
       + '<div><span class="bdg ' + st.c + '">' + st.l + '</span></div>'
       + '<div style="display:flex;gap:2px;justify-content:flex-end">'
-      +   (curUserRole === 'manager'
+      +   ((canManageParts() && stockOwner !== 'all' && canEditStore(stockOwner))
             ? '<button class="rbtn" onclick="quickAdd(' + p.id + ')" title="' + (LNG==='ar'?'إضافة كمية':'Add stock') + '"><i class="ti ti-package-import"></i></button>'
             : '')
       +   '<button class="rbtn" onclick="showPH(' + p.id + ')" title="' + (LNG==='ar'?'السجل':'History') + '"><i class="ti ti-history"></i></button>'
@@ -8481,13 +8869,48 @@ function filterHist(q){renderHistList(q,'all');}
 function setStockF(f,b){stF=f;document.querySelectorAll('#tab-inv .ftab').forEach(function(x){x.style.background='';x.style.color='#718096';});b.style.background='#1D4E89';b.style.color='#fff';renderInvList('',f);}
 function switchPTab(tab,el){document.querySelectorAll('.ptab').forEach(function(t){t.style.color='#718096';t.style.borderBottomColor='transparent';t.style.fontWeight='';});el.style.color='#1D4E89';el.style.borderBottomColor='#1D4E89';el.style.fontWeight='600';document.getElementById('tab-inv').style.display=tab==='inv'?'block':'none';document.getElementById('tab-hist').style.display=tab==='hist'?'block':'none';}
 function quickAdd(id){
-  if(!canManageParts()){ denyParts(); return; }var p=partsData.find(function(x){return x.id===id;});if(!p)return;var qty=parseInt(prompt((LNG==='ar'?'إضافة كمية إلى: ':'Add stock for: ')+p.name+'\n'+(LNG==='ar'?'الحالي: ':'Current: ')+p.qty+' '+unitLabel(p.unit)));if(isNaN(qty)||qty<=0)return;p.qty+=qty;histData.unshift({id:Date.now(),partId:p.id,type:'in',qty:qty,dest:'—',tech:'Manager',note:'Stock added',date:new Date().toISOString().split('T')[0]});renderInvList();}
+  if(!canManageParts()){ denyParts(); return; }
+  var p = partsData.find(function(x){ return x.id === id; });
+  if(!p) return;
+  var ar = (LNG === 'ar');
+
+  // Stock belongs to a zone — never to "all", and never to someone else's zone.
+  var store = activeStore();
+  if(stockOwner === 'all'){
+    alert(ar ? 'اختر مخزناً أولاً — لا يمكن الإضافة إلى "كل المخازن".'
+             : 'Pick a store first — stock cannot be added to "All stores".');
+    return;
+  }
+  if(!canEditStore(store)){
+    alert(ar ? ('هذا مخزن ' + ownerName(store) + ' — لا يمكنك التعديل عليه.')
+             : ("This is " + ownerName(store) + "'s store — you cannot change it."));
+    return;
+  }
+
+  var cur = partQty(p, store);
+  var qty = parseInt(prompt((ar ? 'إضافة كمية إلى: ' : 'Add stock for: ') + p.name
+    + '\n' + (ar ? 'المخزن: ' : 'Store: ') + ownerName(store)
+    + '\n' + (ar ? 'الحالي: ' : 'Current: ') + cur + ' ' + unitLabel(p.unit)), 10);
+  if(isNaN(qty) || qty <= 0) return;
+
+  saveStock(p.id, store, cur + qty, null).then(function(){
+    logActivity('update', 'stock', (p.code ? p.code + ' — ' : '') + p.name + ' · ' + ownerName(store),
+                { qty: String(cur) }, { qty: String(cur + qty) });
+    histData.unshift({ id: Date.now(), partId: p.id, type: 'in', qty: qty, owner: store,
+      dest: ownerName(store), tech: curUser || 'Manager', note: 'Stock added',
+      date: new Date().toISOString().split('T')[0] });
+    renderInvList();
+    renderHistList();
+    updateStockZoneNotice();
+  });
+}
 function showPH(id){switchPTab('hist',document.getElementById('ptab-hist'));renderHistList(partsData.find(function(x){return x.id===id;})||{name:''}.name,'all');}
 async function savePart(){
   if(!canManageParts()){ denyParts(); return; }
   var name=document.getElementById('ap-name').value.trim();
   if(!name){alert('Enter part name');return;}
   var qty=parseInt(document.getElementById('ap-qty').value)||0;
+  var _seedStore = (typeof activeStore === 'function') ? activeStore() : curUserLogin;
   var min2=parseInt(document.getElementById('ap-min').value)||2;
   var np={
     name: name,
@@ -8501,20 +8924,31 @@ async function savePart(){
   };
   var ex=findExistingPart(np);
   if(ex){
-    ex.qty+=qty;
-    var updP={id:ex.id,qty:ex.qty};
+    var updP={id:ex.id};
     if(!ex.code && np.code){ ex.code=np.code; updP.code=np.code; }
-    await dbSave('parts',updP);
+    if(Object.keys(updP).length>1) await dbSave('parts',updP);
   } else {
     var saved=await dbSave('parts',np);
     if(saved&&saved[0]) np.id=saved[0].id;
     else np.id=Date.now();
     partsData.push(np);
   }
+
+  // The catalogue entry is shared, but its opening quantity belongs to the
+  // zone the manager is working in.
+  var _pid = ex ? ex.id : np.id;
+  if(qty > 0 || !ex){
+    var _before = partQty({ id:_pid }, _seedStore);
+    await saveStock(_pid, _seedStore, _before + qty, min2);
+    logActivity(ex ? 'update' : 'create', 'stock',
+                (np.code ? np.code + ' — ' : '') + np.name + ' · ' + ownerName(_seedStore),
+                ex ? { qty: String(_before) } : null, { qty: String(_before + qty), min: String(min2) });
+  }
+
   if(qty>0){
-    var nh={part_id:(ex?ex.id:np.id),type:'in',qty:qty,dest:'—',tech:'Manager',note:'Stock added',date:new Date().toISOString().split('T')[0]};
+    var nh={part_id:_pid,type:'in',qty:qty,owner:_seedStore,dest:ownerName(_seedStore),tech:(curUser||'Manager'),note:'Stock added',date:new Date().toISOString().split('T')[0]};
     await dbSave('parts_history',nh);
-    histData.unshift(Object.assign({id:Date.now(),partId:(ex?ex.id:np.id)},nh));
+    histData.unshift(Object.assign({id:Date.now(),partId:_pid},nh));
   }
   closeMod('partModal');
   renderInvList();
@@ -12520,6 +12954,31 @@ async function showPublicReport(token){
     <div class="mf">
       <button onclick="closeMod('orderItemsPickModal')" class="btn btn-o" style="flex:1" data-en="Cancel" data-ar="إلغاء">Cancel</button>
       <button onclick="addPickedOrderItems()" class="btn btn-p" style="flex:2"><i class="ti ti-plus"></i> <span id="oip-add-label" data-en="Add selected" data-ar="إضافة المحدد">Add selected</span></button>
+    </div>
+  </div>
+</div>
+
+
+<!-- STOCKTAKE — count a store and record the differences -->
+<div id="stocktakeModal" class="modal" style="display:none">
+  <div class="mbox" style="max-width:760px">
+    <div class="mh">
+      <div class="mhtitle"><i class="ti ti-clipboard-check"></i> <span id="stk-title">Stocktake</span></div>
+      <button class="mclose" onclick="closeMod('stocktakeModal')"><i class="ti ti-x"></i></button>
+    </div>
+    <div class="mb">
+      <div id="stk-intro" style="font-size:12px;color:#718096;background:#F8FAFC;border-radius:8px;padding:10px 12px;margin-bottom:12px"></div>
+      <div style="position:relative;margin-bottom:10px">
+        <i class="ti ti-search" style="position:absolute;top:50%;transform:translateY(-50%);inset-inline-start:10px;color:#A0AEC0;font-size:14px;pointer-events:none"></i>
+        <input type="text" id="stk-search" oninput="renderStocktake()" data-ph-en="Search by name or code…" data-ph-ar="ابحث بالاسم أو الكود…" placeholder="Search by name or code…"
+               style="width:100%;padding:9px 34px;border:1.5px solid #D9E2EC;border-radius:8px;font-size:13px;font-family:inherit;outline:none">
+      </div>
+      <div id="stk-list" style="max-height:380px;overflow-y:auto;border:1.5px solid #D9E2EC;border-radius:8px"></div>
+      <div id="stk-summary" style="font-size:12px;margin-top:10px"></div>
+    </div>
+    <div class="mf">
+      <button onclick="closeMod('stocktakeModal')" class="btn btn-o" style="flex:1" data-en="Cancel" data-ar="إلغاء">Cancel</button>
+      <button onclick="applyStocktake()" class="btn btn-p" style="flex:2"><i class="ti ti-device-floppy"></i> <span data-en="Apply the count" data-ar="اعتماد الجرد">Apply the count</span></button>
     </div>
   </div>
 </div>
