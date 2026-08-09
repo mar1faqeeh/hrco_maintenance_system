@@ -1699,6 +1699,21 @@ function initChart(){
 // ══════════════════════════════════════
 var visData=[{client:'Ritz Carlton — B3',tech:'أحمد العتيبي',type:'warranty',status:'Pending',date:'2026-05-10',equip:'Cold Room'},{client:'Al-Aseel Restaurant',tech:'محمد الحربي',type:'contract',status:'Completed',date:'2026-05-10',equip:'Central Kitchen'},{client:"McDonald's — Main Branch",tech:'سامي القحطاني',type:'paid',status:'Completed',date:'2026-05-09',equip:'Display Fridge'},{client:'Hilton Hotel — Storage',tech:'خالد الرشيدي',type:'warranty',status:'Pending',date:'2026-05-09',equip:'Cold Storage'},{client:'Burger King — Central Kitchen',tech:'سامي القحطاني',type:'paid',status:'Pending',date:'2026-05-08',equip:'Central Kitchen'},{client:'King Faisal Hospital',tech:'خالد الرشيدي',type:'contract',status:'Completed',date:'2026-05-08',equip:'Cold Room'},{client:'KFC Saudi Arabia',tech:'أحمد العتيبي',type:'contract',status:'Completed',date:'2026-05-07',equip:'Industrial Freezer'}];
 var visFil='all';
+// The order name says WHICH branch or project a record belongs to — far more
+// useful in a list than the equipment alone, since one client has many sites.
+function orderNameOf(orderId){
+  if(!orderId || typeof clientOrders === 'undefined') return '';
+  var o = clientOrders.find(function(x){ return String(x.id) === String(orderId); });
+  return o ? (o.name || '') : '';
+}
+
+// "Client — Order" for list rows, falling back to the client alone.
+function clientOrderLine(clientName, orderId){
+  var on = orderNameOf(orderId);
+  var cl = clientName || '—';
+  return on ? (cl + ' — ' + on) : cl;
+}
+
 function renderVisits(f,q){
   visFil=f||visFil;q=q||document.getElementById('visSearch').value||'';
   var body=document.getElementById('visBody');if(!body)return;body.innerHTML='';
@@ -1715,7 +1730,10 @@ function renderVisits(f,q){
     var rid = r.id||'';
     var stb = stBadge[r.status]||'b-g';
     var tlbl = typeLabel[r.visit_type]||typeLabel[r.type]||r.visit_type||r.type||'—';
-    row.innerHTML='<div class="tc"><div style="font-weight:500">'+(r.client||'—')+'</div><div class="tc2">'+(r.equipment||r.equip||'—')+'</div></div>'
+    var _on = orderNameOf(r.order_id);
+    row.innerHTML='<div class="tc"><div style="font-weight:500">'+(r.client||'—')
+      + (_on ? ' <span style="color:#1D4E89">— '+_on+'</span>' : '')
+      + '</div><div class="tc2">'+(r.equipment||r.equip||'—')+'</div></div>'
       +'<div class="tc">'+(r.tech||'—')+'</div>'
       +'<div class="tc"><span class="bdg b-i" style="font-size:10px">'+tlbl+'</span></div>'
       +'<div class="tc tc2"><div>'+(r.date||'—')+'</div><div style="font-size:10px;color:#A0AEC0">'+(r.time||'')+'</div></div>'
@@ -7155,6 +7173,9 @@ function renderMaintRequests(){
       + '<div style="flex:1;min-width:220px">'
       +   '<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">'
       +     '<span style="font-size:14px;font-weight:700;color:#1a202c">'+(r.client||'—')+'</span>'
+      +     (orderNameOf(r.order_id)
+              ? '<span style="font-size:13px;font-weight:600;color:#1D4E89">— '+orderNameOf(r.order_id)+'</span>'
+              : '')
       +     '<span style="background:'+st.bg+';color:'+st.fg+';font-size:10px;font-weight:700;padding:2px 8px;border-radius:99px">'+st.label+'</span>'
       +     '<span style="background:'+pr.bg+';color:'+pr.fg+';font-size:10px;font-weight:700;padding:2px 8px;border-radius:99px">'+pr.label+'</span>'
       +     '<span style="background:#E6F1FB;color:#1D4E89;font-size:10px;font-weight:700;padding:2px 8px;border-radius:99px">'+(MR_TYPE_LABEL[r.visit_type]||r.visit_type||'')+'</span>'
@@ -10538,7 +10559,7 @@ function printListSheet(title, rows, note){
   var head = ar ? ['#','العميل','المعدة','الفني','النوع','الحالة','التاريخ']
                 : ['#','Client','Equipment','Technician','Type','Status','Date'];
   var body = rows.map(function(r, i){
-    return '<tr><td>' + (i+1) + '</td><td>' + esc(r.client) + '</td>'
+    return '<tr><td>' + (i+1) + '</td><td>' + esc(clientOrderLine(r.client, r.order_id)) + '</td>'
       + '<td>' + esc(r.equipment || r.equip) + '</td><td>' + esc(r.tech) + '</td>'
       + '<td>' + esc(r.visit_type || r.type) + '</td><td>' + esc(r.status) + '</td>'
       + '<td>' + esc(r.date) + '</td></tr>';
@@ -10601,7 +10622,7 @@ function printReports(){
   var body = rows.map(function(r, i){
     return '<tr>'
       + '<td>' + (i+1) + '</td>'
-      + '<td>' + esc(r.client) + '</td>'
+      + '<td>' + esc(clientOrderLine(r.client, r.order_id)) + '</td>'
       + '<td>' + esc(r.equip || r.equipment) + '</td>'
       + '<td>' + esc(r.tech) + '</td>'
       + '<td>' + esc(r.type) + '</td>'
@@ -11241,7 +11262,10 @@ function renderArchiveBody(data, q) {
   if (!fl.length) { body.innerHTML = '<div style="padding:20px;text-align:center;color:#A0AEC0">No records found</div>'; return; }
   fl.forEach(function(r) {
     var row = document.createElement('div'); row.className = 'trow'; row.style.gridTemplateColumns = '2fr 1.2fr 1fr 1fr 0.8fr 70px';
-    row.innerHTML = '<div class="tc"><div style="font-weight:500">'+(r.client||'—')+'</div><div class="tc2">'+(r.equipment||r.equip||'—')+'</div></div>'
+    var _aon = orderNameOf(r.order_id);
+    row.innerHTML = '<div class="tc"><div style="font-weight:500">'+(r.client||'—')
+      + (_aon ? ' <span style="color:#1D4E89">— '+_aon+'</span>' : '')
+      + '</div><div class="tc2">'+(r.equipment||r.equip||'—')+'</div></div>'
       + '<div class="tc">'+(r.tech||'—')+'</div>'
       + '<div class="tc"><span class="bdg b-i" style="font-size:10px">'+(r.visit_type||r.type||'—')+'</span></div>'
       + '<div class="tc2">'+(r.date||'—')+'</div>'
