@@ -4127,6 +4127,10 @@ var FEATURE_FLAGS = [
     en:'Customer Ticket Portal', ar:'بوابة تذاكر العملاء',
     enDesc:'Customers raise tickets from a private link. Create the links in the Ticket Portal section.',
     arDesc:'العميل يفتح تذكرة من رابط خاص به. أنشئ الروابط من قسم "بوابة التذاكر".' },
+  { key:'ticket_notify',  def:true, built:true,
+    en:'Email the manager on a new ticket', ar:'تنبيه المدير عند وصول تذكرة',
+    enDesc:'Emails the manager covering that zone as soon as a customer raises a ticket.',
+    arDesc:'يُرسل بريداً لمدير المنطقة فور فتح العميل تذكرة جديدة.' },
   { key:'maintenance_contracts', def:true, built:true,
     en:'Maintenance Contracts', ar:'عقود الصيانة',
     enDesc:'Periodic contracts with a fixed item list and a card per item on every visit.',
@@ -4941,6 +4945,113 @@ function tpRemoveFile(i){
   tpDrawFiles();
 }
 
+
+// ── Telling the manager a ticket arrived ─────────────────────────────────
+// The portal works, but a ticket that nobody sees is worse than no portal.
+// The email goes to the manager who actually owns that zone, so it lands with
+// the person who can act on it rather than in a shared inbox.
+async function ticketRecipients(zone){
+  var out = [];
+
+  if(_initSb()){
+    try{
+      var r = await _sb.from('system_users').select('*');
+      (r.data || []).forEach(function(u){
+        if(!u.email) return;
+        if(u.active === false) return;
+        if(u.role !== 'manager' && u.role !== 'sysadmin') return;
+
+        var zones = [];
+        try{ zones = Array.isArray(u.zones) ? u.zones : JSON.parse(u.zones || '[]'); }catch(e){ zones = []; }
+
+        // A manager gets it when the zone is his; the sysadmin only as a
+        // fallback, so he isn't copied on every ticket in the company.
+        if(u.role === 'manager' && zones.indexOf(zone) !== -1) out.push(u.email);
+      });
+    }catch(e){ console.log('ticketRecipients:', e); }
+  }
+
+  // Nobody covers that zone — fall back to the addresses in the company profile
+  if(!out.length){
+    [company('email_manager'), company('email_admin'), company('email')].forEach(function(e){
+      if(e && out.indexOf(e) === -1) out.push(e);
+    });
+  }
+  return out.filter(Boolean);
+}
+
+function ticketNotifyHtml(req, id){
+  var row = function(label, value, strong){
+    if(!value) return '';
+    return '<tr><td style="padding:7px 10px;border-bottom:1px solid #F0F4F8;color:#718096;font-size:12px;white-space:nowrap">'
+      + label + '</td><td style="padding:7px 10px;border-bottom:1px solid #F0F4F8;font-size:13px;'
+      + (strong ? 'font-weight:700;color:#1a202c' : 'color:#1a202c') + '">' + value + '</td></tr>';
+  };
+
+  var pr = (PRIORITY_OPTIONS().find(function(o){ return o.value === req.priority; }) || {}).en || req.priority || '';
+  var urgent = (req.priority === 'breakdown' || req.priority === 'urgent');
+  var att = 0;
+  try{ att = req.attachments ? JSON.parse(req.attachments).length : 0; }catch(e){}
+
+  return '<div style="font-family:Tajawal,Arial,sans-serif;max-width:600px;margin:0 auto;border:1px solid #E2E8F0;border-radius:12px;overflow:hidden">'
+    + '<div style="background:' + (urgent ? '#8C2F26' : '#0F2D52') + ';color:#fff;padding:18px 22px;display:flex;align-items:center;gap:12px">'
+    +   (companyLogo() ? '<img src="' + companyLogo() + '" style="width:40px;height:40px;object-fit:contain;background:#fff;border-radius:8px;padding:3px">' : '')
+    +   '<div><div style="font-size:16px;font-weight:700">New customer ticket'
+    +     (urgent ? ' — ' + pr.toUpperCase() : '') + '</div>'
+    +   '<div style="font-size:12px;opacity:.85">' + companyName() + (id ? (' · #' + id) : '') + '</div></div></div>'
+    + '<div style="padding:18px 22px">'
+    +   '<table style="width:100%;border-collapse:collapse">'
+    +     row('Client', req.client, true)
+    +     row('Branch / site', req.location)
+    +     row('City', req.city)
+    +     row('Zone', zoneLabel(req.zone))
+    +     row('Priority', pr, urgent)
+    +     row('Preferred date', req.preferred_date)
+    +     row('Preferred time', req.preferred_time)
+    +     row('Equipment', req.equipment)
+    +     row('Contact', req.contact_person)
+    +     row('Mobile', req.contact_phone)
+    +     row('Email', req.contact_email)
+    +     row('Attachments', att ? (att + ' file(s) — open the system to view them') : '')
+    +   '</table>'
+    +   '<div style="margin-top:14px">'
+    +     '<div style="font-size:12px;color:#718096;margin-bottom:4px">Problem as the customer described it</div>'
+    +     '<div style="background:#F8FAFC;border-radius:8px;padding:12px;font-size:13px;line-height:1.7;white-space:pre-wrap">'
+    +       String(req.problem || '').replace(/</g,'&lt;') + '</div>'
+    +   '</div>'
+    +   (req.map_url ? '<div style="margin-top:12px"><a href="' + req.map_url + '" style="color:#1D4E89;font-size:13px">Open the location on the map</a></div>' : '')
+    +   '<div style="margin-top:16px;font-size:12px;color:#718096">'
+    +     'It is waiting in Maintenance Requests, marked as coming from the customer.</div>'
+    + '</div>'
+    + '<div style="background:#F8FAFC;padding:12px;text-align:center;font-size:11px;color:#718096">' + companyPrintFooter() + '</div>'
+    + '</div>';
+}
+
+// Fire-and-forget: a failed notification must never cost the customer his
+// ticket, which is already saved by this point.
+async function notifyTicketArrived(req, id){
+  try{
+    if(!featureOn('ticket_notify')) return;
+    var to = await ticketRecipients(req.zone);
+    if(!to.length){ console.log('ticket notify: nobody to send to'); return; }
+
+    var pr = (req.priority === 'breakdown' || req.priority === 'urgent') ? '[' + String(req.priority).toUpperCase() + '] ' : '';
+    var subject = pr + (company('short') || '') + ' — new ticket from ' + (req.client || '') + (id ? (' #' + id) : '');
+
+    for(var i = 0; i < to.length; i++){
+      var res = await fetchWithTimeout('https://luuvvbevhdtpzywlrtux.supabase.co/functions/v1/send-email', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + SKEY },
+        body: JSON.stringify({ to: to[i], subject: subject, html: ticketNotifyHtml(req, id) })
+      }, 30000);
+      var data = await res.json().catch(function(){ return {}; });
+      if(!res.ok || !(data.id || data.success)) console.log('ticket notify failed for', to[i], data);
+    }
+  }catch(e){
+    console.log('ticket notify error:', e);
+  }
+}
+
 async function submitTicket(token, clientId){
   var err = document.getElementById('tp-err');
   var btn = document.getElementById('tp-send');
@@ -5045,6 +5156,10 @@ async function submitTicket(token, clientId){
 
     if(res.error) throw new Error(res.error.message);
     var id = (res.data && res.data[0]) ? res.data[0].id : '';
+
+    // Tell the manager — after the save, and never blocking the confirmation
+    try{ notifyTicketArrived(req, id); }catch(e){}
+
     _tpFiles = [];
     document.getElementById('tp-root').innerHTML =
         '<div style="background:#fff;max-width:640px;width:100%;border-radius:14px;box-shadow:0 4px 24px rgba(15,45,82,.10);overflow:hidden;margin:auto">'
