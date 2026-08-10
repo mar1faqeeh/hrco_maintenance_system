@@ -1332,11 +1332,20 @@ function lgRole(r){
   LG_ROLE=r;
   var mb=document.getElementById('lg-role-mgr'),tb=document.getElementById('lg-role-tech');
   if(r==='manager'){mb.style.background='#1D4E89';mb.style.color='#fff';mb.style.border='none';tb.style.background='#fff';tb.style.color='#4A5568';tb.style.border='1px solid #D9E2EC';document.getElementById('lg-email').value='manager';document.getElementById('lg-pass').value='';}
-  else{tb.style.background='#1D4E89';tb.style.color='#fff';tb.style.border='none';mb.style.background='#fff';mb.style.color='#4A5568';mb.style.border='1px solid #D9E2EC';document.getElementById('lg-email').value='ahmed';document.getElementById('lg-pass').value='tech1234';}
+  else{tb.style.background='#1D4E89';tb.style.color='#fff';tb.style.border='none';mb.style.background='#fff';mb.style.color='#4A5568';mb.style.border='1px solid #D9E2EC';document.getElementById('lg-email').value='ahmed';document.getElementById('lg-pass').value='';}
 }
 function populateLoginDropdown(){
   // Disabled accounts are hidden from the picker as well as blocked at login.
   var sel = document.getElementById('lg-email');
+  // Never carry a password across a user change — whoever is picked next must
+  // type their own.
+  if(sel && !sel._clearsPass){
+    sel._clearsPass = true;
+    sel.addEventListener('change', function(){
+      var pw = document.getElementById('lg-pass');
+      if(pw) pw.value = '';
+    });
+  }
   if(!sel) return;
   var current = sel.value;
   sel.innerHTML = '';
