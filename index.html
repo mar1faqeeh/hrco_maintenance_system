@@ -1452,6 +1452,13 @@ function lgSuccess(u, restoring){
     try{ loadClientOrders().then(function(){ if(typeof renderClientGrid==='function') renderClientGrid(); }); }catch(e){}
     try{ loadAppSettings(); }catch(e){}
     try{ loadPartStock().then(function(){ if(typeof renderInvList==='function' && document.getElementById('invList')) renderInvList(); }); }catch(e){}
+    try{ loadContracts().then(function(){
+      // repaint whichever contract view is on screen
+      if(typeof renderContracts === 'function' && document.getElementById('ct-list')) renderContracts();
+      if(typeof renderContractDetail === 'function' && _cdContractId
+         && document.getElementById('pg-contract-detail')
+         && document.getElementById('pg-contract-detail').style.display !== 'none') renderContractDetail();
+    }); }catch(e){}
     go(curUserRole === 'salesman'   ? 'maint-requests'
      : curUserRole === 'data_entry' ? 'clients'
      : 'dashboard');
@@ -11333,6 +11340,14 @@ async function saveContract(){
   }catch(e){
     alert((ar ? 'تعذّر الحفظ: ' : 'Could not save: ') + e.message); return;
   }
+
+  // dbSave returns null when there's no database. Without this the contract
+  // would sit in memory, look saved, and vanish on the next sign-in.
+  if(!saved || !saved.length){
+    alert(ar ? 'لم يُحفظ العقد في قاعدة البيانات.\n\nتأكّد من تشغيل ملف contracts_tables.sql، ثم أعد المحاولة.'
+             : 'The contract was NOT saved to the database.\n\nMake sure contracts_tables.sql has been run, then try again.');
+    return;
+  }
   if(saved && saved[0]) rec.id = saved[0].id;
 
   if(_editingContract){
@@ -11782,10 +11797,17 @@ async function confirmContractItemsImport(){
         serial: (u === 0) ? (it.serial || '') : '',
         location: ''
       };
+      var ok = false;
       try{
         var saved = await dbSave('contract_items', rec);
-        if(saved && saved[0]) rec.id = saved[0].id; else rec.id = Date.now() + made;
-      }catch(e){ rec.id = Date.now() + made; }
+        if(saved && saved[0]){ rec.id = saved[0].id; ok = true; }
+      }catch(e){}
+      if(!ok){
+        alert(ar ? 'تعذّر حفظ المعدات في قاعدة البيانات — تأكّد من تشغيل ملف contracts_tables.sql.'
+                 : 'The equipment could not be saved — make sure contracts_tables.sql has been run.');
+        renderContractDetail();
+        return;
+      }
       contractItems.push(rec);
       made++;
     }
