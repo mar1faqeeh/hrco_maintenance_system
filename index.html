@@ -11156,6 +11156,227 @@ async function loadContracts(){
 
 
 
+
+// ── Parts needed across a contract ───────────────────────────────────────
+// Each card records what its own machine needs. Gathering them answers the
+// question the manager actually has: what do I order from the warehouse?
+var _psScope = 'current';   // 'current' = latest card per machine · 'all' = every visit
+
+function parsePartsNeeded(text){
+  return String(text || '').split(',').map(function(chunk){
+    var t = chunk.trim();
+    if(!t) return null;
+    // stored as "CODE — Name"; a hand-typed part has no code
+    var m = t.split('—');
+    if(m.length >= 2){
+      return { code: m[0].trim(), name: m.slice(1).join('—').trim() };
+    }
+    return { code: '', name: t };
+  }).filter(Boolean);
+}
+
+function partsSummaryRows(){
+  var items = itemsOfContract(_cdContractId);
+  var cards;
+  if(_psScope === 'current'){
+    // Only the newest card per machine — an old fault that was already fixed
+    // shouldn't keep appearing on the order list.
+    cards = items.map(function(it){ return latestCard(it.id); }).filter(Boolean);
+  } else {
+    cards = contractCards.filter(function(k){ return String(k.contract_id) === String(_cdContractId); });
+  }
+
+  var tally = {};
+  cards.forEach(function(k){
+    var it = items.find(function(x){ return String(x.id) === String(k.item_id); }) || {};
+    parsePartsNeeded(k.parts_needed).forEach(function(p){
+      var key = (p.code || p.name).toLowerCase();
+      if(!tally[key]) tally[key] = { code: p.code, name: p.name, qty: 0, machines: [] };
+      tally[key].qty++;
+      tally[key].machines.push((it.name || '') + (k.visit_date ? (' · ' + k.visit_date) : ''));
+    });
+  });
+
+  return Object.keys(tally).map(function(k){ return tally[k]; })
+    .sort(function(a, b){ return b.qty - a.qty; });
+}
+
+function openPartsSummary(){
+  _psScope = 'current';
+  renderPartsSummary();
+  openMod('partsSummaryModal');
+}
+
+function setPartsScope(v){ _psScope = v; renderPartsSummary(); }
+
+function renderPartsSummary(){
+  var ar = (LNG === 'ar');
+  var c = contractsData.find(function(x){ return String(x.id) === String(_cdContractId); });
+  var rows = partsSummaryRows();
+
+  var t = document.getElementById('ps-title');
+  if(t) t.textContent = (ar ? 'القطع المطلوبة — ' : 'Parts needed — ') + (c ? (c.name || '') : '');
+
+  var tabs = document.getElementById('ps-scope');
+  if(tabs){
+    tabs.innerHTML = [
+      { k:'current', en:'Outstanding now', ar:'المطلوب حالياً' },
+      { k:'all',     en:'Every visit',     ar:'كل الزيارات' }
+    ].map(function(o){
+      var on = (_psScope === o.k);
+      return '<button onclick="setPartsScope(\'' + o.k + '\')" style="padding:6px 14px;border-radius:99px;'
+        + 'font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;'
+        + 'border:1px solid ' + (on ? '#1D4E89' : '#D9E2EC') + ';'
+        + 'background:' + (on ? '#1D4E89' : '#fff') + ';color:' + (on ? '#fff' : '#718096') + '">'
+        + (ar ? o.ar : o.en) + '</button>';
+    }).join('');
+  }
+
+  var note = document.getElementById('ps-note');
+  if(note){
+    note.textContent = (_psScope === 'current')
+      ? (ar ? 'من آخر بطاقة فحص لكل جهاز — أي ما هو مطلوب فعلاً الآن.'
+            : 'From the newest card of each machine — what is actually outstanding now.')
+      : (ar ? 'كل ما طُلب عبر تاريخ العقد، بما فيه ما رُكّب سابقاً.'
+            : 'Everything requested over the life of the contract, including parts already fitted.');
+  }
+
+  var host = document.getElementById('ps-body');
+  if(!host) return;
+
+  if(!rows.length){
+    host.innerHTML = '<div style="padding:30px;text-align:center;color:#A0AEC0;font-size:13px">'
+      + '<i class="ti ti-checks" style="font-size:26px;display:block;margin-bottom:8px;color:#2D7D3A"></i>'
+      + (ar ? 'لا توجد قطع مطلوبة' : 'No parts are needed') + '</div>';
+    return;
+  }
+
+  var total = rows.reduce(function(n, r){ return n + r.qty; }, 0);
+  host.innerHTML =
+      '<div style="font-size:12px;color:#4A5568;margin-bottom:10px">'
+    +   '<b style="color:#1D4E89">' + rows.length + '</b> ' + (ar ? 'صنف' : 'part(s)')
+    +   ' · <b style="color:#1D4E89">' + total + '</b> ' + (ar ? 'قطعة إجمالاً' : 'pieces in total') + '</div>'
+    + '<div style="border:1.5px solid #D9E2EC;border-radius:8px;overflow:hidden">'
+    + '<div style="display:grid;grid-template-columns:1fr 110px 60px;gap:9px;padding:8px 12px;background:#F8FAFC;'
+    +   'border-bottom:1px solid #D9E2EC;font-size:10px;font-weight:700;color:#718096">'
+    +   '<div>' + (ar ? 'القطعة' : 'Part') + '</div>'
+    +   '<div>' + (ar ? 'الكود' : 'Code') + '</div>'
+    +   '<div style="text-align:center">' + (ar ? 'العدد' : 'Qty') + '</div></div>'
+    + rows.map(function(r){
+        // Whether the store can actually supply it — the manager's next question
+        var p = partsData.find(function(x){
+          return (r.code && String(x.code||'').toLowerCase() === r.code.toLowerCase())
+              || String(x.name||'').toLowerCase() === r.name.toLowerCase();
+        });
+        var have = p ? partQty(p) : null;
+        var short = (have !== null) && (have < r.qty);
+        return '<div style="display:grid;grid-template-columns:1fr 110px 60px;gap:9px;padding:9px 12px;border-bottom:1px solid #F0F4F8;font-size:12px">'
+          + '<div><div style="font-weight:600"><bdi>' + (p ? partName(p) : r.name) + '</bdi></div>'
+          +   '<div style="font-size:10px;color:#A0AEC0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'
+          +     r.machines.slice(0, 3).join(' · ') + (r.machines.length > 3 ? (' +' + (r.machines.length - 3)) : '')
+          +   '</div>'
+          +   (have === null
+                ? '<div style="font-size:10px;color:#C4680A"><i class="ti ti-alert-circle"></i> ' + (ar?'غير موجودة في الكتالوج':'not in the catalogue') + '</div>'
+                : (short
+                    ? '<div style="font-size:10px;color:#C0392B"><i class="ti ti-alert-triangle"></i> ' + (ar?('المتوفر ' + have):('only ' + have + ' in stock')) + '</div>'
+                    : '<div style="font-size:10px;color:#2D7D3A"><i class="ti ti-circle-check"></i> ' + (ar?('متوفر ' + have):(have + ' in stock')) + '</div>'))
+          + '</div>'
+          + '<div style="color:#1D4E89;font-weight:600" dir="ltr">' + (r.code || '—') + '</div>'
+          + '<div style="text-align:center;font-weight:700">' + r.qty + '</div>'
+          + '</div>';
+      }).join('')
+    + '</div>';
+}
+
+function copyPartsSummary(){
+  var ar = (LNG === 'ar');
+  var rows = partsSummaryRows();
+  if(!rows.length){ alert(ar ? 'لا توجد قطع مطلوبة.' : 'No parts are needed.'); return; }
+  var c = contractsData.find(function(x){ return String(x.id) === String(_cdContractId); });
+  var text = (c ? (c.name + '\n') : '')
+    + rows.map(function(r){ return (r.code ? (r.code + ' — ') : '') + r.name + '  ×' + r.qty; }).join('\n');
+
+  var done = function(){ alert(ar ? 'تم نسخ القائمة.' : 'The list was copied.'); };
+  if(navigator.clipboard && navigator.clipboard.writeText){
+    navigator.clipboard.writeText(text).then(done, function(){ prompt(ar ? 'انسخ القائمة:' : 'Copy the list:', text); });
+  } else {
+    prompt(ar ? 'انسخ القائمة:' : 'Copy the list:', text);
+  }
+}
+
+function exportPartsSummaryExcel(){
+  var ar = (LNG === 'ar');
+  var rows = partsSummaryRows();
+  if(!rows.length){ alert(ar ? 'لا توجد قطع مطلوبة.' : 'No parts are needed.'); return; }
+  var c = contractsData.find(function(x){ return String(x.id) === String(_cdContractId); });
+  var cl = clientsData.find(function(x){ return String(x.id) === String((c||{}).client_id); });
+
+  var esc = function(v){
+    return String(v==null?'':v).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+      .replace(/"/g,'&quot;').replace(/\r?\n/g,' ');
+  };
+  var cell = function(v, style){
+    return '<Cell' + (style ? (' ss:StyleID="' + style + '"') : '') + '><Data ss:Type="String">' + esc(v) + '</Data></Cell>';
+  };
+
+  var head = ar ? ['القطعة','الكود','العدد المطلوب','المتوفر بالمخزن','الأجهزة']
+                : ['Part','Code','Needed','In stock','Machines'];
+
+  var xml = '<?xml version="1.0" encoding="UTF-8"?><?mso-application progid="Excel.Sheet"?>'
+    + '<Workbook xmlns="urn:schemas-microsoft-com:office:spreadsheet" '
+    +   'xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" '
+    +   'xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet">'
+    + '<Styles>'
+    +   '<Style ss:ID="ttl"><Font ss:Bold="1" ss:Size="13" ss:Color="#0F2D52"/></Style>'
+    +   '<Style ss:ID="sub"><Font ss:Size="10" ss:Color="#718096"/></Style>'
+    +   '<Style ss:ID="hdr"><Font ss:Bold="1" ss:Color="#FFFFFF"/><Interior ss:Color="#1D4E89" ss:Pattern="Solid"/>'
+    +     '<Alignment ss:Horizontal="Center" ss:WrapText="1"/></Style>'
+    +   '<Style ss:ID="short"><Font ss:Bold="1" ss:Color="#C0392B"/></Style>'
+    +   '<Style ss:ID="wrap"><Alignment ss:Vertical="Top" ss:WrapText="1"/></Style>'
+    + '</Styles>'
+    + '<Worksheet ss:Name="' + (ar ? 'القطع المطلوبة' : 'Parts Needed') + '"><Table>'
+    + '<Column ss:AutoFitWidth="0" ss:Width="230"/><Column ss:AutoFitWidth="0" ss:Width="110"/>'
+    + '<Column ss:AutoFitWidth="0" ss:Width="80"/><Column ss:AutoFitWidth="0" ss:Width="100"/>'
+    + '<Column ss:AutoFitWidth="0" ss:Width="300"/>'
+    + '<Row><Cell ss:StyleID="ttl"><Data ss:Type="String">'
+    +   esc(companyName() + ' — ' + (ar ? 'قطع الغيار المطلوبة' : 'Spare parts needed')) + '</Data></Cell></Row>'
+    + '<Row><Cell ss:StyleID="sub"><Data ss:Type="String">'
+    +   esc((cl ? (cl.nickname || cl.name) : '') + ' · ' + ((c||{}).name || '') + ' · '
+        + (_psScope === 'current' ? (ar ? 'المطلوب حالياً' : 'outstanding now') : (ar ? 'كل الزيارات' : 'every visit')))
+    +   '</Data></Cell></Row><Row></Row>'
+    + '<Row>' + head.map(function(h){ return '<Cell ss:StyleID="hdr"><Data ss:Type="String">' + esc(h) + '</Data></Cell>'; }).join('') + '</Row>';
+
+  rows.forEach(function(r){
+    var p = partsData.find(function(x){
+      return (r.code && String(x.code||'').toLowerCase() === r.code.toLowerCase())
+          || String(x.name||'').toLowerCase() === r.name.toLowerCase();
+    });
+    var have = p ? partQty(p) : null;
+    var short = (have !== null) && (have < r.qty);
+    xml += '<Row>'
+      + cell(p ? p.name : r.name)
+      + cell(r.code)
+      + cell(String(r.qty), short ? 'short' : '')
+      + cell(have === null ? (ar ? 'غير موجودة' : 'not in catalogue') : String(have), short ? 'short' : '')
+      + cell(r.machines.join(' · '), 'wrap')
+      + '</Row>';
+  });
+
+  xml += '</Table></Worksheet></Workbook>';
+
+  try{
+    var blob = new Blob(['\ufeff' + xml], { type:'application/vnd.ms-excel;charset=utf-8' });
+    var url = URL.createObjectURL(blob);
+    var a = document.createElement('a');
+    a.href = url;
+    a.download = companyShortSlug() + '-Parts-' + String((c||{}).name || '').replace(/[^\w\u0600-\u06FF-]/g,'_') + '.xls';
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    setTimeout(function(){ URL.revokeObjectURL(url); }, 1000);
+  }catch(e){
+    alert((ar ? 'تعذّر إنشاء الملف: ' : 'Could not create the file: ') + e.message);
+  }
+}
+
 // ── Edit / delete a contract ─────────────────────────────────────────────
 function editContract(){
   if(!canManageClientRecords()){ denyClientEdit(); return; }
@@ -14508,6 +14729,7 @@ async function showPublicReport(token){
       <div class="ps" id="cd-sub"></div>
     </div>
     <div style="display:flex;gap:8px;flex-wrap:wrap">
+      <button class="btn btn-p" onclick="openPartsSummary()"><i class="ti ti-shopping-cart"></i> <span data-en="Parts needed" data-ar="القطع المطلوبة">Parts needed</span></button>
       <button class="btn btn-o" onclick="printContractRound()"><i class="ti ti-printer"></i> <span data-en="Print" data-ar="طباعة">Print</span></button>
       <button class="btn btn-o" onclick="exportContractExcel()"><i class="ti ti-file-spreadsheet"></i> <span data-en="Export Excel" data-ar="تصدير إكسل">Export Excel</span></button>
       <button class="btn btn-o" id="cd-edit-btn" onclick="editContract()"><i class="ti ti-pencil"></i> <span data-en="Edit" data-ar="تعديل">Edit</span></button>
@@ -14876,6 +15098,26 @@ async function showPublicReport(token){
     <div class="mf">
       <button onclick="closeMod('contractItemsImportModal')" class="btn btn-o" style="flex:1" data-en="Cancel" data-ar="إلغاء">Cancel</button>
       <button onclick="confirmContractItemsImport()" class="btn btn-p" style="flex:2"><i class="ti ti-plus"></i> <span id="cii-add-label" data-en="Create the cards" data-ar="إنشاء البطاقات">Create the cards</span></button>
+    </div>
+  </div>
+</div>
+
+
+<!-- SPARE PARTS NEEDED ACROSS A CONTRACT -->
+<div id="partsSummaryModal" class="modal" style="display:none">
+  <div class="mbox" style="max-width:660px">
+    <div class="mh">
+      <div class="mhtitle"><i class="ti ti-shopping-cart"></i> <span id="ps-title">Parts needed</span></div>
+      <button class="mclose" onclick="closeMod('partsSummaryModal')"><i class="ti ti-x"></i></button>
+    </div>
+    <div class="mb">
+      <div id="ps-scope" style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px"></div>
+      <div id="ps-note" style="font-size:11px;color:#718096;margin-bottom:12px"></div>
+      <div id="ps-body" style="max-height:380px;overflow-y:auto"></div>
+    </div>
+    <div class="mf">
+      <button onclick="copyPartsSummary()" class="btn btn-o" style="flex:1"><i class="ti ti-copy"></i> <span data-en="Copy list" data-ar="نسخ القائمة">Copy list</span></button>
+      <button onclick="exportPartsSummaryExcel()" class="btn btn-p" style="flex:1"><i class="ti ti-file-spreadsheet"></i> <span data-en="Export Excel" data-ar="تصدير إكسل">Export Excel</span></button>
     </div>
   </div>
 </div>
