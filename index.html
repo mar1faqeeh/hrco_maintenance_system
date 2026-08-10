@@ -234,6 +234,7 @@ html,body{height:100%;overflow:auto;font-family:Tajawal,sans-serif;font-size:14p
         <div class="nav-item" onclick="go('parts-orders')" id="nav-parts-orders"><i class="ti ti-clipboard-list"></i><span>Parts Orders</span><span class="nbadge" id="po-badge" style="display:none">0</span></div>
         <div class="nav-item" onclick="go('maint-requests')" id="nav-maint-requests"><i class="ti ti-headset"></i><span>Maintenance Requests</span><span class="nbadge" id="mr-badge" style="display:none">0</span></div>
         <div class="nav-item" onclick="go('clients')" id="nav-clients"><i class="ti ti-building"></i><span id="t-clients">Clients</span></div>
+        <div class="nav-item" onclick="go('contracts')" id="nav-contracts"><i class="ti ti-file-certificate"></i><span data-en="Maintenance Contracts" data-ar="عقود الصيانة">Maintenance Contracts</span></div>
         <div class="sb-sec" id="sb-rep">Reports</div>
         <div class="nav-item" onclick="go('reports')" id="nav-reports"><i class="ti ti-chart-bar"></i><span id="t-reports">Reports</span></div>
         <div class="nav-item" onclick="go('archive')" id="nav-archive"><i class="ti ti-history"></i><span id="t-archive">Archive</span></div>
@@ -413,6 +414,7 @@ html,body{height:100%;overflow:auto;font-family:Tajawal,sans-serif;font-size:14p
           <button class="btn btn-o" onclick="document.getElementById('cam-serial').click()" style="padding:8px 10px;flex-shrink:0"><i class="ti ti-camera"></i></button>
         </div>
         <input type="file" id="cam-serial" accept="image/*" capture="environment" style="display:none" onchange="handleCam('serial',this)">
+        <div id="serial-cam-status" style="display:none;font-size:11px;margin-top:5px"></div>
       </div>
       <div class="field"><label id="t-lbl-model">Model</label>
         <div style="display:flex;gap:8px">
@@ -420,6 +422,7 @@ html,body{height:100%;overflow:auto;font-family:Tajawal,sans-serif;font-size:14p
           <button class="btn btn-o" onclick="document.getElementById('cam-model').click()" style="padding:8px 10px;flex-shrink:0"><i class="ti ti-camera"></i></button>
         </div>
         <input type="file" id="cam-model" accept="image/*" capture="environment" style="display:none" onchange="handleCam('model',this)">
+        <div id="model-cam-status" style="display:none;font-size:11px;margin-top:5px"></div>
       </div>
       <div class="field"><label id="t-lbl-fault">Fault Description</label><input type="text" id="inp-fault" placeholder="Fault..."></div>
       <div class="field"><label id="t-lbl-parts">Required Spare Parts</label>
@@ -1580,6 +1583,7 @@ async function refreshAll(){
     try{ await loadClientOrders(); }catch(e){}
     try{ await loadAppSettings(); }catch(e){}
     try{ await loadPartStock(); }catch(e){}
+    try{ await loadContracts(); }catch(e){}
     updatePendingBadge();
     // repaint the page currently on screen
     var current = 'dashboard';
@@ -1612,7 +1616,7 @@ function logout(){
 // ══════════════════════════════════════
 // NAVIGATION
 // ══════════════════════════════════════
-var PAGES=['dashboard','visits','pending','newvisit','signature','technicians','parts','parts-request','parts-orders','maint-requests','clients','client-orders','reports','archive','settings'];
+var PAGES=['dashboard','visits','pending','newvisit','signature','technicians','parts','parts-request','parts-orders','maint-requests','clients','client-orders','contracts','contract-detail','reports','archive','settings'];
 function go(pg){
   try{
   PAGES.forEach(function(p){var el=document.getElementById('pg-'+p);if(el){el.style.cssText='display:none';}});
@@ -1661,6 +1665,8 @@ function go(pg){
   if(pg==='archive') loadArchive();
   if(pg==='signature'){ try{ fillSummaryClient(); fillSummaryOrder(); }catch(e){} }
   if(pg==='client-orders'){ renderClientOrders(); attachCityAutocomplete('co-city','co-city-dd','co-city-zone'); }
+  if(pg==='contracts'){ renderContractFilters(); fillContractClients(); renderContracts(); }
+  if(pg==='contract-detail'){ renderContractDetail(); }
   if(pg==='maint-requests'){ fillMaintClientList(); fillRequestOrders(); refreshRequestItemsMode(); attachCityAutocomplete('mr-city','mr-city-dd','mr-city-zone'); loadMaintRequests().then(renderMaintRequests); }
   if(pg==='settings'){renderTaskEditor();renderUsersList();try{checkDBStatus();}catch(e){}}
 }
@@ -1756,6 +1762,8 @@ function renderVisits(f,q){
 function filterVis(q){renderVisits(visFil,q);}
 
 async function deleteVisit(id){
+  var _dv = (typeof visData !== 'undefined') ? visData.find(function(x){ return String(x.id) === String(id); }) : null;
+  if(_dv && !canActOnRecord(visitZone(_dv), _dv)){ denyRecordZone(visitZone(_dv)); return; }
   if(!confirm('هل تريد حذف هذه الزيارة؟\nAre you sure you want to delete this visit?')) return;
   if(!_sb) return;
   try{
@@ -2545,7 +2553,80 @@ function showPartAC(val){
   });
 }
 function renderTags(){var w=document.getElementById('parts-tags');if(!w)return;w.innerHTML='';selParts.forEach(function(p,i){var t2=document.createElement('div');t2.style.cssText='display:inline-flex;align-items:center;gap:4px;background:#E6F1FB;color:#1D4E89;border-radius:99px;padding:3px 10px;font-size:12px';t2.innerHTML=p+'<button onclick="selParts.splice('+i+',1);renderTags()" style="background:none;border:none;color:#1D4E89;cursor:pointer;font-size:14px;padding:0">×</button>';w.appendChild(t2);});}
-function handleCam(field,inp){if(!inp.files||!inp.files[0])return;var fr=new FileReader();fr.onload=function(e){document.getElementById('inp-'+field).value='SN-'+Math.random().toString(36).substr(2,8).toUpperCase();};fr.readAsDataURL(inp.files[0]);}
+// Photograph the rating plate and read the serial off it. This used to invent
+// a random "SN-XXXX", which looked like it worked and quietly filled the
+// records with fake serials — it now actually reads the picture.
+async function handleCam(field, inp){
+  if(!inp.files || !inp.files[0]) return;
+  var file = inp.files[0];
+  inp.value = '';
+  var ar = (LNG === 'ar');
+  var status = document.getElementById(field === 'serial' ? 'serial-cam-status' : 'model-cam-status');
+  var target = document.getElementById('inp-' + field);
+
+  var say = function(msg, colour){
+    if(!status) return;
+    status.style.display = 'block';
+    status.innerHTML = msg;
+    status.style.color = colour || '#718096';
+  };
+
+  // Shrink before upload: a phone photo is several MB and the plate is legible
+  // at a fraction of that.
+  var data;
+  try{
+    data = await tpCompressImage(file);
+  }catch(e){
+    data = null;
+  }
+  if(!data){ say((ar ? 'تعذّرت قراءة الصورة.' : 'Could not read that image.'), '#C0392B'); return; }
+
+  say('<i class="ti ti-loader" style="animation:spin 1s linear infinite;display:inline-block"></i> '
+    + (ar ? 'جاري قراءة اللوحة…' : 'Reading the plate…'));
+
+  try{
+    var res = await fetchWithTimeout('/api/read-serial', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ image: data })
+    }, 70000);
+    var out = await res.json();
+
+    if(!res.ok || out.error) throw new Error(out.error || ('HTTP ' + res.status));
+
+    // Whichever camera was tapped, take the field it belongs to
+    var wanted = (field === 'model') ? out.model : out.serial;
+
+    if(!wanted){
+      say('<i class="ti ti-alert-triangle"></i> '
+        + (ar ? ('لم أتمكن من قراءة ' + (field === 'model' ? 'الموديل' : 'الرقم التسلسلي') + ' — اكتبه يدوياً.')
+              : ('I could not read the ' + (field === 'model' ? 'model' : 'serial') + ' — please type it in.')), '#C4680A');
+      return;
+    }
+
+    if(target) target.value = wanted;
+
+    // One photo usually shows both, so fill the other field when it's empty
+    var other = document.getElementById(field === 'model' ? 'inp-serial' : 'inp-model');
+    var otherVal = (field === 'model') ? out.serial : out.model;
+    if(otherVal && other && !other.value.trim()) other.value = otherVal;
+
+    var pct = Math.round((out.confidence || 0) * 100);
+    var low = pct < 60;
+    say('<i class="ti ti-' + (low ? 'alert-triangle' : 'circle-check') + '"></i> '
+      + (ar ? ('قُرئ: ' + wanted) : ('Read: ' + wanted))
+      + (out.brand ? ' · ' + out.brand : '')
+      + ' <span style="opacity:.75">(' + pct + '%)</span>'
+      + (low ? ('<br>' + (ar ? 'الثقة منخفضة — تأكّد من الرقم قبل الحفظ.'
+                            : 'Low confidence — please check the number before saving.')) : ''),
+      low ? '#C4680A' : '#2D7D3A');
+  }catch(e){
+    console.log('read-serial failed:', e);
+    say('<i class="ti ti-alert-triangle"></i> '
+      + (ar ? 'تعذّر قراءة اللوحة — اكتب الرقم يدوياً.'
+            : 'Could not read the plate — please type the number in.'), '#C0392B');
+  }
+}
 
 // ══════════════════════════════════════
 // SIGNATURES
@@ -3833,6 +3914,10 @@ var FEATURE_FLAGS = [
     en:'Customer Ticket Portal', ar:'بوابة تذاكر العملاء',
     enDesc:'Customers raise tickets from a private link. Create the links in the Ticket Portal section.',
     arDesc:'العميل يفتح تذكرة من رابط خاص به. أنشئ الروابط من قسم "بوابة التذاكر".' },
+  { key:'maintenance_contracts', def:true, built:true,
+    en:'Maintenance Contracts', ar:'عقود الصيانة',
+    enDesc:'Periodic contracts with a fixed item list and a card per item on every visit.',
+    arDesc:'عقود دورية بقائمة أصناف محددة وبطاقة لكل صنف في كل زيارة.' },
   { key:'ai_diagram_search', def:false, built:true,
     en:'AI Diagram Search', ar:'البحث عن الرسومات بالذكاء الاصطناعي',
     enDesc:'Search the web for exploded-view drawings. Needs the search keys configured.',
@@ -3878,6 +3963,9 @@ async function saveAppSetting(key, value){
 
 // Reflect the flags in the main app.
 function applyFeatureFlags(){
+  var navC = document.getElementById('nav-contracts');
+  if(navC) navC.style.display = featureOn('maintenance_contracts') ? '' : 'none';
+
   var aiCard = document.getElementById('ai-search-card');
   if(aiCard) aiCard.style.display = featureOn('ai_diagram_search') ? '' : 'none';
   // the warehouse button is drawn per request, so just repaint that list
@@ -7531,6 +7619,7 @@ async function grantException(id){
     alert(ar ? 'الاستثناء من صلاحية مدير الصيانة فقط.' : 'Only a maintenance manager can grant an exception.');
     return;
   }
+  if(!canActOnRecord(requestZone(r))){ denyRecordZone(requestZone(r)); return; }
   var why = prompt(ar ? 'سبب الاستثناء (إلزامي):' : 'Reason for the exception (required):', '');
   if(why === null) return;
   why = String(why).trim();
@@ -7562,6 +7651,7 @@ async function revokeException(id){
     alert(ar ? 'الاستثناء من صلاحية مدير الصيانة فقط.' : 'Only a maintenance manager can change an exception.');
     return;
   }
+  if(!canActOnRecord(requestZone(r))){ denyRecordZone(requestZone(r)); return; }
   if(!confirm(ar ? 'إلغاء الاستثناء؟ ستعود الزيارة مدفوعة.' : 'Revoke the exception? The visit goes back to chargeable.')) return;
 
   var before = { is_exception:'true', reason: r.exception_reason || '' };
@@ -7574,9 +7664,52 @@ async function revokeException(id){
 }
 
 // Manager turns an approved request into a real visit, pre-filled.
+// ── Zone scoping for visits and requests ─────────────────────────────────
+// The order (or the city) decides which manager owns a record. Everyone can
+// SEE everything; only acting on it is restricted — the same rule as orders.
+function zoneOfOrder(orderId){
+  if(!orderId || typeof clientOrders === 'undefined') return null;
+  var o = clientOrders.find(function(x){ return String(x.id) === String(orderId); });
+  if(!o) return null;
+  return o.zone || (o.city ? cityZone(o.city) : null);
+}
+
+function requestZone(r){
+  if(!r) return 'other';
+  return zoneOfOrder(r.order_id) || r.zone || (r.city ? cityZone(r.city) : 'other');
+}
+
+function visitZone(v){
+  if(!v) return 'other';
+  return zoneOfOrder(v.order_id) || v.zone || (v.city ? cityZone(v.city) : 'other');
+}
+
+// A technician may always work on a visit assigned to him — technicians move
+// between regions constantly, so tying them to a zone would just block them.
+function isMyVisit(v){
+  if(!v) return false;
+  var me = (curUser || '').toLowerCase();
+  return me && String(v.tech || '').toLowerCase() === me;
+}
+
+// The one gate every guarded action calls.
+function canActOnRecord(zone, v){
+  if(isSysAdmin()) return true;
+  if(curUserRole === 'technician') return isMyVisit(v);
+  if(curUserRole !== 'manager') return false;
+  return canEditZone(zone);
+}
+
+function denyRecordZone(zone){
+  alert((LNG === 'ar')
+    ? ('هذا السجل يتبع منطقة "' + zoneLabel(zone) + '" وهي خارج نطاقك.\nيمكنك الاطلاع دون التعديل.')
+    : ('This record belongs to the "' + zoneLabel(zone) + '" zone, outside your coverage.\nYou can view it but not act on it.'));
+}
+
 async function scheduleMaintRequest(id){
   var r = maintRequests.find(function(x){ return x.id == id; });
   if(!r) return;
+  if(!canActOnRecord(requestZone(r))){ denyRecordZone(requestZone(r)); return; }
   if(!confirm('إنشاء زيارة من هذا الطلب؟\nCreate a visit from this request?')) return;
 
   go('newvisit');
@@ -7640,6 +7773,7 @@ async function scheduleMaintRequest(id){
 async function rejectMaintRequest(id){
   var r = maintRequests.find(function(x){ return x.id == id; });
   if(!r) return;
+  if(!canActOnRecord(requestZone(r))){ denyRecordZone(requestZone(r)); return; }
   var why = prompt('سبب الرفض (اختياري) / Reason for rejecting (optional):', '');
   if(why === null) return;
   logActivity('status', 'maintenance request', r.client, { status: r.status }, { status: 'rejected', reason: why || '' });
@@ -7655,6 +7789,7 @@ async function rejectMaintRequest(id){
 async function completeMaintRequest(id){
   var r = maintRequests.find(function(x){ return x.id == id; });
   if(!r) return;
+  if(!canActOnRecord(requestZone(r))){ denyRecordZone(requestZone(r)); return; }
   if(!confirm('تأكيد إنهاء هذا الطلب؟\nMark this request as completed?')) return;
   logActivity('status', 'maintenance request', r.client, { status: r.status }, { status: 'completed' });
   r.status = 'completed';
@@ -7668,6 +7803,7 @@ async function completeMaintRequest(id){
 async function holdMaintRequest(id){
   var r = maintRequests.find(function(x){ return x.id == id; });
   if(!r) return;
+  if(!canActOnRecord(requestZone(r))){ denyRecordZone(requestZone(r)); return; }
   var why = prompt('سبب التعليق / Reason for putting this on hold:', '');
   if(why === null) return;                       // cancelled
   logActivity('status', 'maintenance request', r.client, { status: r.status }, { status: 'onhold', reason: why || '' });
@@ -7682,6 +7818,7 @@ async function holdMaintRequest(id){
 async function resumeMaintRequest(id){
   var r = maintRequests.find(function(x){ return x.id == id; });
   if(!r) return;
+  if(!canActOnRecord(requestZone(r))){ denyRecordZone(requestZone(r)); return; }
   r.status = 'new';
   r.hold_reason = '';
   await dbSave('maintenance_requests', { id: r.id, status: 'new', hold_reason: '' });
@@ -7692,6 +7829,7 @@ async function resumeMaintRequest(id){
 async function reopenMaintRequest(id){
   var r = maintRequests.find(function(x){ return x.id == id; });
   if(!r) return;
+  if(!canActOnRecord(requestZone(r))){ denyRecordZone(requestZone(r)); return; }
   r.status = 'new';
   r.hold_reason = '';
   await dbSave('maintenance_requests', { id: r.id, status: 'new', hold_reason: '' });
@@ -10748,6 +10886,856 @@ function agreementLabel(k){
   return (LNG === 'ar') ? m.ar : m.en;
 }
 
+// ══════════════════════════════════════
+// MAINTENANCE CONTRACTS
+// A contract is its OWN record (not an order): it belongs to a client, can
+// pull equipment from any number of that client's orders, and can carry
+// equipment they never sold. Every machine is one row with its own serial,
+// and gets a CARD filled in on each visit.
+// ══════════════════════════════════════
+var contractsData = [], contractItems = [], contractCards = [];
+var _cdContractId = null;
+var ctFilter = 'all';
+
+var CONTRACT_FREQ = {
+  monthly:   { months: 1,  en: 'Monthly',          ar: 'شهري' },
+  quarterly: { months: 3,  en: 'Quarterly',        ar: 'ربع سنوي' },
+  semi:      { months: 6,  en: 'Every 6 months',   ar: 'نصف سنوي' },
+  yearly:    { months: 12, en: 'Yearly',           ar: 'سنوي' }
+};
+function freqLabel(f){
+  var x = CONTRACT_FREQ[f] || CONTRACT_FREQ.quarterly;
+  return (LNG === 'ar') ? x.ar : x.en;
+}
+
+var ITEM_CONDITIONS = {
+  ok:     { en: 'Good',            ar: 'سليم',         colour: '#2D7D3A', dot: '🟢' },
+  watch:  { en: 'Needs attention', ar: 'يحتاج متابعة', colour: '#C4680A', dot: '🟡' },
+  faulty: { en: 'Faulty',          ar: 'عطل',          colour: '#C0392B', dot: '🔴' }
+};
+function conditionLabel(c){
+  var x = ITEM_CONDITIONS[c];
+  return x ? ((LNG === 'ar') ? x.ar : x.en) : ((LNG === 'ar') ? 'لم تُفحص' : 'Not inspected');
+}
+function conditionColour(c){
+  var x = ITEM_CONDITIONS[c];
+  return x ? x.colour : '#A0AEC0';
+}
+
+// ── Schedule ─────────────────────────────────────────────────────────────
+// Due dates are COMPUTED, never auto-created as visits — he was explicit that
+// the system only flags what's due and the manager schedules it himself.
+function addMonths(dateStr, n){
+  var d = new Date(dateStr);
+  if(isNaN(d)) return null;
+  var day = d.getDate();
+  d.setMonth(d.getMonth() + n);
+  if(d.getDate() < day) d.setDate(0);   // clamp 31 Jan + 1 month → 28/29 Feb
+  return d;
+}
+
+function contractSchedule(c){
+  var freq = CONTRACT_FREQ[c.frequency] || CONTRACT_FREQ.quarterly;
+  var out = [];
+  if(!c.start_date || !c.end_date) return out;
+  var end = new Date(c.end_date);
+  for(var i = 0; i < 60; i++){
+    var d = addMonths(c.start_date, i * freq.months);
+    if(!d || d > end) break;
+    out.push(d.toISOString().split('T')[0]);
+  }
+  return out;
+}
+
+// Where the contract stands today: the visit that is due, and whether it's late.
+function contractStatus(c){
+  var today = new Date(); today.setHours(0,0,0,0);
+  var start = c.start_date ? new Date(c.start_date) : null;
+  var end   = c.end_date ? new Date(c.end_date) : null;
+  var sched = contractSchedule(c);
+  var done  = contractCards.filter(function(k){ return String(k.contract_id) === String(c.id); });
+
+  var lastVisit = null;
+  done.forEach(function(k){
+    if(!lastVisit || k.visit_date > lastVisit) lastVisit = k.visit_date;
+  });
+
+  if(end && end < today) return { key:'expired', label:(LNG==='ar')?'منتهٍ':'Expired', colour:'#718096', next:null, lastVisit:lastVisit };
+  if(start && start > today) return { key:'upcoming', label:(LNG==='ar')?'لم يبدأ':'Not started', colour:'#1D4E89', next:sched[0]||null, lastVisit:lastVisit };
+
+  // the first scheduled date that has no visit recorded on or after it
+  var next = null;
+  for(var i = 0; i < sched.length; i++){
+    var d = sched[i];
+    var covered = done.some(function(k){ return k.visit_date >= d; });
+    if(!covered){ next = d; break; }
+  }
+  if(!next) return { key:'active', label:(LNG==='ar')?'نشط':'Active', colour:'#2D7D3A', next:null, lastVisit:lastVisit };
+
+  var nd = new Date(next);
+  var days = Math.round((nd - today) / 86400000);
+
+  // A due date isn't a deadline to the day — a visit a few days either side is
+  // normal, so only call it late once the grace window has passed.
+  var GRACE = 7;
+  if(days < -GRACE) return { key:'overdue', label:(LNG==='ar')?('متأخر '+Math.abs(days)+' يوم'):('Overdue '+Math.abs(days)+'d'), colour:'#C0392B', next:next, days:days, lastVisit:lastVisit };
+  if(days <= 0) return { key:'due', label:(LNG==='ar')?'مستحق الآن':'Due now', colour:'#C4680A', next:next, days:days, lastVisit:lastVisit };
+  if(days <= 14) return { key:'due', label:(LNG==='ar')?('مستحق خلال '+days+' يوم'):('Due in '+days+'d'), colour:'#C4680A', next:next, days:days, lastVisit:lastVisit };
+  return { key:'active', label:(LNG==='ar')?'نشط':'Active', colour:'#2D7D3A', next:next, days:days, lastVisit:lastVisit };
+}
+
+function itemsOfContract(id){
+  return contractItems.filter(function(i){ return String(i.contract_id) === String(id); });
+}
+
+// The most recent card for a machine — its current condition.
+function latestCard(itemId){
+  var all = contractCards.filter(function(k){ return String(k.item_id) === String(itemId); });
+  all.sort(function(a,b){ return String(b.visit_date||'').localeCompare(String(a.visit_date||'')); });
+  return all[0] || null;
+}
+
+function cardsOfItem(itemId){
+  return contractCards.filter(function(k){ return String(k.item_id) === String(itemId); })
+    .sort(function(a,b){ return String(b.visit_date||'').localeCompare(String(a.visit_date||'')); });
+}
+
+// How much of the CURRENT cycle has been inspected.
+function cycleProgress(c){
+  var st = contractStatus(c);
+  var items = itemsOfContract(c.id);
+  if(!items.length) return { done:0, total:0, pct:0 };
+  var since = st.next || (st.lastVisit || c.start_date);
+  // count machines inspected on or after the last completed due date
+  var sched = contractSchedule(c);
+  var cycleStart = c.start_date;
+  for(var i = 0; i < sched.length; i++){
+    if(st.next && sched[i] >= st.next) break;
+    cycleStart = sched[i];
+  }
+  var done = items.filter(function(it){
+    var k = latestCard(it.id);
+    return k && k.visit_date >= cycleStart;
+  }).length;
+  return { done: done, total: items.length, pct: Math.round(done * 100 / items.length) };
+}
+
+// ── Loading ──────────────────────────────────────────────────────────────
+async function loadContracts(){
+  if(!_initSb()) return;
+  try{
+    var a = await _sb.from('contracts').select('*').order('id', { ascending:false });
+    if(!a.error) contractsData = a.data || [];
+    var b = await _sb.from('contract_items').select('*');
+    if(!b.error) contractItems = b.data || [];
+    var c = await _sb.from('contract_cards').select('*');
+    if(!c.error) contractCards = c.data || [];
+  }catch(e){ console.log('loadContracts:', e); }
+}
+
+
+// ── Contracts list ───────────────────────────────────────────────────────
+var CT_FILTERS = [
+  { key:'all',     en:'All',      ar:'الكل' },
+  { key:'active',  en:'Active',   ar:'نشط' },
+  { key:'due',     en:'Due now',  ar:'مستحق الآن' },
+  { key:'overdue', en:'Overdue',  ar:'متأخر' },
+  { key:'expired', en:'Expired',  ar:'منتهٍ' }
+];
+
+function renderContractFilters(){
+  var host = document.getElementById('ct-filters');
+  if(!host) return;
+  host.innerHTML = CT_FILTERS.map(function(f){
+    var on = (ctFilter === f.key);
+    return '<button onclick="setContractFilter(\'' + f.key + '\')" style="padding:6px 14px;border-radius:99px;'
+      + 'font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;'
+      + 'border:1px solid ' + (on ? '#1D4E89' : '#D9E2EC') + ';'
+      + 'background:' + (on ? '#1D4E89' : '#fff') + ';color:' + (on ? '#fff' : '#718096') + '">'
+      + ((LNG==='ar') ? f.ar : f.en) + '</button>';
+  }).join('');
+}
+
+function setContractFilter(k){ ctFilter = k; renderContractFilters(); renderContracts(); }
+
+function renderContracts(){
+  var host = document.getElementById('ct-list');
+  if(!host) return;
+  var ar = (LNG === 'ar');
+  var box = document.getElementById('ct-search');
+  var q = box ? box.value.trim().toLowerCase() : '';
+
+  var list = contractsData.filter(function(c){
+    var st = contractStatus(c);
+    if(ctFilter === 'due' && st.key !== 'due') return false;
+    if(ctFilter === 'overdue' && st.key !== 'overdue') return false;
+    if(ctFilter === 'expired' && st.key !== 'expired') return false;
+    if(ctFilter === 'active' && (st.key === 'expired')) return false;
+    if(!q) return true;
+    var cl = clientsData.find(function(x){ return String(x.id) === String(c.client_id); });
+    return String(c.name||'').toLowerCase().indexOf(q) !== -1
+        || (cl && String(cl.name||'').toLowerCase().indexOf(q) !== -1)
+        || (cl && String(cl.nickname||'').toLowerCase().indexOf(q) !== -1);
+  });
+
+  if(!list.length){
+    host.innerHTML = '<div style="grid-column:1/-1;padding:36px;text-align:center;color:#A0AEC0;font-size:13px;'
+      + 'background:#fff;border-radius:12px;border:1px dashed #D9E2EC">'
+      + '<i class="ti ti-file-certificate" style="font-size:28px;display:block;margin-bottom:8px"></i>'
+      + (contractsData.length
+          ? (ar ? 'لا توجد عقود مطابقة' : 'No matching contracts')
+          : (ar ? 'لا توجد عقود بعد — اضغط "عقد جديد"' : 'No contracts yet — press "New Contract"'))
+      + '</div>';
+    return;
+  }
+
+  host.innerHTML = list.map(function(c){
+    var st = contractStatus(c);
+    var pr = cycleProgress(c);
+    var cl = clientsData.find(function(x){ return String(x.id) === String(c.client_id); });
+    var items = itemsOfContract(c.id);
+    var faulty = items.filter(function(it){ var k = latestCard(it.id); return k && k.condition === 'faulty'; }).length;
+
+    return '<div onclick="openContract(' + c.id + ')" style="background:#fff;border:1px solid #E2E8F0;border-radius:12px;'
+      + 'padding:16px;cursor:pointer;transition:box-shadow .15s" '
+      + 'onmouseover="this.style.boxShadow=\'0 4px 14px rgba(15,45,82,.10)\'" onmouseout="this.style.boxShadow=\'\'">'
+
+      + '<div style="display:flex;align-items:flex-start;gap:8px;flex-wrap:wrap">'
+      +   '<div style="flex:1;min-width:0">'
+      +     '<div style="font-size:14px;font-weight:700;color:#1a202c;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'
+      +       (cl ? (cl.nickname || cl.name) : (ar?'—':'—')) + '</div>'
+      +     '<div style="font-size:12px;color:#718096;margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'
+      +       (c.name || '') + '</div>'
+      +   '</div>'
+      +   '<span style="background:' + st.colour + '18;color:' + st.colour + ';font-size:10px;font-weight:700;padding:3px 10px;border-radius:99px;white-space:nowrap">'
+      +     st.label + '</span>'
+      + '</div>'
+
+      + '<div style="display:flex;gap:14px;flex-wrap:wrap;font-size:11px;color:#718096;margin-top:10px">'
+      +   '<span><i class="ti ti-repeat"></i> ' + freqLabel(c.frequency) + '</span>'
+      +   '<span><i class="ti ti-package"></i> ' + items.length + ' ' + (ar ? 'صنف' : 'items') + '</span>'
+      +   (faulty ? '<span style="color:#C0392B;font-weight:700"><i class="ti ti-alert-triangle"></i> ' + faulty + ' ' + (ar?'عطل':'faulty') + '</span>' : '')
+      + '</div>'
+
+      + '<div style="display:flex;gap:14px;flex-wrap:wrap;font-size:11px;color:#4A5568;margin-top:8px">'
+      +   '<span>' + (ar ? 'آخر زيارة: ' : 'Last: ') + '<b>' + (st.lastVisit || '—') + '</b></span>'
+      +   (st.next ? '<span>' + (ar ? 'القادمة: ' : 'Next: ') + '<b style="color:' + st.colour + '">' + st.next + '</b></span>' : '')
+      + '</div>'
+
+      + (items.length
+          ? '<div style="margin-top:12px">'
+            + '<div style="display:flex;justify-content:space-between;font-size:10px;color:#718096;margin-bottom:4px">'
+            +   '<span>' + (ar ? 'تقدّم الدورة' : 'Cycle progress') + '</span>'
+            +   '<span>' + pr.done + '/' + pr.total + '</span></div>'
+            + '<div style="height:6px;background:#F0F4F8;border-radius:99px;overflow:hidden">'
+            +   '<div style="height:100%;width:' + pr.pct + '%;background:#1D4E89"></div></div></div>'
+          : '')
+      + '</div>';
+  }).join('');
+}
+
+// ── New / edit contract ──────────────────────────────────────────────────
+var _editingContract = null;
+
+function showContractForm(){
+  if(!canManageClientRecords()){ denyClientEdit(); return; }
+  _editingContract = null;
+  var card = document.getElementById('ct-form-card');
+  if(card) card.style.display = 'block';
+  var t = document.getElementById('ct-form-title');
+  if(t) t.textContent = (LNG==='ar') ? 'عقد جديد' : 'New Contract';
+  ['ct-name','ct-start','ct-end','ct-notes'].forEach(function(id){
+    var e = document.getElementById(id); if(e) e.value = '';
+  });
+  fillContractClients();
+  updateContractPreview();
+}
+
+function hideContractForm(){
+  var card = document.getElementById('ct-form-card');
+  if(card) card.style.display = 'none';
+  _editingContract = null;
+}
+
+function fillContractClients(){
+  var sel = document.getElementById('ct-client');
+  if(!sel) return;
+  var keep = sel.value;
+  sel.innerHTML = '<option value="">' + ((LNG==='ar') ? '— اختر العميل —' : '— Select a client —') + '</option>'
+    + clientsData.map(function(c){
+        return '<option value="' + c.id + '">' + (c.nickname ? (c.nickname + ' — ' + c.name) : c.name) + '</option>';
+      }).join('');
+  if(keep) sel.value = keep;
+}
+
+function onContractClientChange(){ updateContractPreview(); }
+
+function updateContractPreview(){
+  var el = document.getElementById('ct-preview');
+  if(!el) return;
+  var ar = (LNG === 'ar');
+  var start = (document.getElementById('ct-start')||{}).value;
+  var end = (document.getElementById('ct-end')||{}).value;
+  var freq = (document.getElementById('ct-freq')||{}).value;
+  if(!start || !end){
+    el.innerHTML = ar ? 'حدّد تاريخي البداية والنهاية لعرض جدول الزيارات.'
+                      : 'Set the start and end dates to see the visit schedule.';
+    return;
+  }
+  if(end <= start){
+    el.innerHTML = '<span style="color:#C0392B">' + (ar ? 'تاريخ النهاية يجب أن يكون بعد البداية.' : 'The end date must come after the start date.') + '</span>';
+    return;
+  }
+  var sched = contractSchedule({ start_date:start, end_date:end, frequency:freq });
+  el.innerHTML = '<i class="ti ti-calendar-repeat"></i> '
+    + (ar ? (sched.length + ' زيارة مجدولة: ') : (sched.length + ' scheduled visits: '))
+    + sched.slice(0, 6).join(' · ') + (sched.length > 6 ? ' …' : '');
+}
+
+async function saveContract(){
+  var ar = (LNG === 'ar');
+  if(!canManageClientRecords()){ denyClientEdit(); return; }
+  var v = function(id){ var e = document.getElementById(id); return e ? e.value.trim() : ''; };
+
+  var clientId = v('ct-client'), name = v('ct-name'), start = v('ct-start'), end = v('ct-end');
+  if(!clientId){ alert(ar ? 'اختر العميل.' : 'Please choose a client.'); return; }
+  if(!name){ alert(ar ? 'اكتب اسم العقد.' : 'Please enter the contract name.'); return; }
+  if(!start || !end){ alert(ar ? 'حدّد تاريخي البداية والنهاية.' : 'Please set both dates.'); return; }
+  if(end <= start){ alert(ar ? 'تاريخ النهاية يجب أن يكون بعد البداية.' : 'The end date must come after the start date.'); return; }
+
+  var rec = {
+    client_id: clientId,
+    name: name,
+    start_date: start,
+    end_date: end,
+    frequency: v('ct-freq') || 'quarterly',
+    notes: v('ct-notes')
+  };
+  if(_editingContract) rec.id = _editingContract;
+
+  var saved;
+  try{
+    saved = await dbSave('contracts', rec);
+  }catch(e){
+    alert((ar ? 'تعذّر الحفظ: ' : 'Could not save: ') + e.message); return;
+  }
+  if(saved && saved[0]) rec.id = saved[0].id;
+
+  if(_editingContract){
+    var i = contractsData.findIndex(function(x){ return String(x.id) === String(_editingContract); });
+    if(i !== -1) contractsData[i] = Object.assign(contractsData[i], rec);
+    logActivity('update', 'contract', name, null, { frequency: rec.frequency, until: end });
+  } else {
+    contractsData.unshift(rec);
+    logActivity('create', 'contract', name, null, { client: clientId, frequency: rec.frequency, until: end });
+  }
+
+  hideContractForm();
+  renderContracts();
+  if(!_editingContract) openContract(rec.id);
+}
+
+function openContract(id){
+  _cdContractId = id;
+  go('contract-detail');
+}
+
+
+// ── One contract ─────────────────────────────────────────────────────────
+function renderContractDetail(){
+  var c = contractsData.find(function(x){ return String(x.id) === String(_cdContractId); });
+  if(!c){ go('contracts'); return; }
+  var ar = (LNG === 'ar');
+  var cl = clientsData.find(function(x){ return String(x.id) === String(c.client_id); });
+  var st = contractStatus(c);
+  var pr = cycleProgress(c);
+  var sched = contractSchedule(c);
+
+  var t = document.getElementById('cd-title');
+  if(t) t.textContent = (cl ? (cl.nickname || cl.name) : '') + ' — ' + (c.name || '');
+  var sub = document.getElementById('cd-sub');
+  if(sub) sub.textContent = freqLabel(c.frequency) + ' · ' + (c.start_date||'') + ' → ' + (c.end_date||'');
+
+  // summary tiles
+  var tile = function(label, value, colour, icon){
+    return '<div style="background:#fff;border:1px solid #E2E8F0;border-radius:10px;padding:13px 15px">'
+      + '<div style="font-size:11px;color:#718096;font-weight:600"><i class="ti ' + icon + '"></i> ' + label + '</div>'
+      + '<div style="font-size:16px;font-weight:700;color:' + (colour || '#1a202c') + ';margin-top:4px">' + value + '</div></div>';
+  };
+  var items = itemsOfContract(c.id);
+  var faulty = items.filter(function(it){ var k = latestCard(it.id); return k && k.condition === 'faulty'; }).length;
+  var watch  = items.filter(function(it){ var k = latestCard(it.id); return k && k.condition === 'watch'; }).length;
+
+  var sum = document.getElementById('cd-summary');
+  if(sum){
+    sum.innerHTML =
+        tile(ar?'الحالة':'Status', st.label, st.colour, 'ti-activity')
+      + tile(ar?'الزيارة القادمة':'Next visit', st.next || '—', st.colour, 'ti-calendar-event')
+      + tile(ar?'آخر زيارة':'Last visit', st.lastVisit || '—', '#1a202c', 'ti-history')
+      + tile(ar?'تقدّم الدورة':'Cycle progress', pr.done + ' / ' + pr.total, '#1D4E89', 'ti-progress')
+      + tile(ar?'تحتاج متابعة':'Needs attention', String(watch), watch ? '#C4680A' : '#A0AEC0', 'ti-eye')
+      + tile(ar?'أعطال':'Faulty', String(faulty), faulty ? '#C0392B' : '#A0AEC0', 'ti-alert-triangle');
+  }
+
+  // actions
+  var acts = document.getElementById('cd-item-actions');
+  if(acts){
+    var canEdit = canManageClientRecords();
+    acts.innerHTML = canEdit
+      ? '<button class="ca" onclick="openAddFromOrders()"><i class="ti ti-package-import"></i> ' + (ar?'سحب من أوردر':'From an order') + '</button>'
+        + '<button class="ca" onclick="addContractItemRow()"><i class="ti ti-plus"></i> ' + (ar?'إضافة معدة':'Add equipment') + '</button>'
+        + (st.key === 'expired'
+            ? '<button class="ca" style="color:#2D7D3A" onclick="renewContract()"><i class="ti ti-refresh"></i> ' + (ar?'تجديد العقد':'Renew') + '</button>'
+            : '')
+      : '';
+  }
+
+  var cnt = document.getElementById('cd-item-count');
+  if(cnt) cnt.textContent = '(' + items.length + ')';
+
+  renderContractItems();
+}
+
+function renderContractItems(){
+  var host = document.getElementById('cd-items');
+  if(!host) return;
+  var ar = (LNG === 'ar');
+  var box = document.getElementById('cd-search');
+  var q = box ? box.value.trim().toLowerCase() : '';
+
+  var items = itemsOfContract(_cdContractId).filter(function(it){
+    if(!q) return true;
+    return String(it.name||'').toLowerCase().indexOf(q) !== -1
+        || String(it.serial||'').toLowerCase().indexOf(q) !== -1
+        || String(it.model||'').toLowerCase().indexOf(q) !== -1;
+  });
+
+  if(!items.length){
+    host.innerHTML = '<div style="padding:28px;text-align:center;color:#A0AEC0;font-size:12px">'
+      + (itemsOfContract(_cdContractId).length
+          ? (ar ? 'لا توجد نتائج' : 'No matching equipment')
+          : (ar ? 'لم تُضف معدات بعد — اسحبها من أوردر أو أضفها يدوياً.'
+                : 'No equipment yet — pull it from an order or add it manually.'))
+      + '</div>';
+    return;
+  }
+
+  host.innerHTML = items.map(function(it){
+    var k = latestCard(it.id);
+    var col = conditionColour(k ? k.condition : null);
+    var history = cardsOfItem(it.id).length;
+    return '<div style="display:flex;align-items:center;gap:12px;padding:11px 13px;border:1px solid #E2E8F0;border-radius:10px;background:#fff;flex-wrap:wrap">'
+      + '<span style="width:10px;height:10px;border-radius:50%;background:' + col + ';flex-shrink:0"></span>'
+      + '<div style="flex:1;min-width:150px">'
+      +   '<div style="font-size:13px;font-weight:600;color:#1a202c"><bdi>' + (it.name || '') + '</bdi></div>'
+      +   '<div style="font-size:11px;color:#718096">'
+      +     (it.serial ? '<span dir="ltr">' + it.serial + '</span>' : '<span style="color:#C4680A">' + (ar?'بلا سيريال':'no serial') + '</span>')
+      +     (it.model ? ' · ' + it.model : '')
+      +   '</div>'
+      + '</div>'
+      + '<div style="font-size:11px;color:' + col + ';font-weight:700;min-width:90px">' + conditionLabel(k ? k.condition : null) + '</div>'
+      + '<div style="font-size:11px;color:#A0AEC0;min-width:80px">' + (k ? k.visit_date : '—') + '</div>'
+      + (k && k.parts_needed ? '<span style="background:#FCEBEB;color:#C0392B;font-size:10px;font-weight:700;padding:2px 8px;border-radius:99px"><i class="ti ti-tool"></i> ' + (ar?'قطع':'parts') + '</span>' : '')
+      + '<div style="display:flex;gap:5px">'
+      +   '<button class="rbtn" onclick="openItemCard(' + it.id + ')" title="' + (ar?'بطاقة الفحص':'Inspection card') + '"><i class="ti ti-clipboard-text"></i></button>'
+      +   '<button class="rbtn" onclick="openItemHistory(' + it.id + ')" title="' + (ar?'سجل الجهاز':'Equipment history') + '"><i class="ti ti-history"></i>' + (history ? ' ' + history : '') + '</button>'
+      +   (canManageClientRecords()
+            ? '<button class="rbtn" onclick="deleteContractItem(' + it.id + ')" title="' + (ar?'حذف':'Remove') + '" style="color:#C0392B"><i class="ti ti-trash"></i></button>'
+            : '')
+      + '</div></div>';
+  }).join('');
+}
+
+// ── Adding equipment ─────────────────────────────────────────────────────
+// Pulling from an order expands a line of "4 fridges" into FOUR rows, because
+// he wants one card per machine with its own serial.
+function openAddFromOrders(){
+  var ar = (LNG === 'ar');
+  var c = contractsData.find(function(x){ return String(x.id) === String(_cdContractId); });
+  if(!c) return;
+  var orders = ordersOfClient(c.client_id);
+  if(!orders.length){
+    alert(ar ? 'لا توجد أوردرات لهذا العميل.' : 'This client has no orders.');
+    return;
+  }
+  _addFromOrderPicked = {};
+  var sel = document.getElementById('cao-order');
+  if(sel){
+    sel.innerHTML = '<option value="">' + (ar ? '— اختر الأوردر —' : '— Select an order —') + '</option>'
+      + orders.map(function(o){
+          var n = orderItems(o).length;
+          return '<option value="' + o.id + '">' + (o.name||'') + ' (' + n + ' ' + (ar?'صنف':'items') + ')</option>';
+        }).join('');
+  }
+  var list = document.getElementById('cao-list');
+  if(list) list.innerHTML = '<div style="padding:20px;text-align:center;color:#A0AEC0;font-size:12px">'
+    + (ar ? 'اختر أوردراً لعرض أصنافه' : 'Choose an order to see its items') + '</div>';
+  openMod('contractAddOrderModal');
+}
+
+var _addFromOrderPicked = {};
+
+function renderAddFromOrder(){
+  var ar = (LNG === 'ar');
+  var sel = document.getElementById('cao-order');
+  var list = document.getElementById('cao-list');
+  if(!sel || !list) return;
+  var o = clientOrders.find(function(x){ return String(x.id) === String(sel.value); });
+  if(!o){ list.innerHTML = ''; return; }
+
+  var items = orderItems(o);
+  if(!items.length){
+    list.innerHTML = '<div style="padding:20px;text-align:center;color:#A0AEC0;font-size:12px">'
+      + (ar ? 'هذا الأوردر بلا قائمة أصناف' : 'This order has no item list') + '</div>';
+    return;
+  }
+
+  list.innerHTML = items.map(function(it, i){
+    var qty = Math.max(1, parseInt(it.qty, 10) || 1);
+    var on = !!_addFromOrderPicked[i];
+    return '<label style="display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:7px;cursor:pointer;'
+      + 'border:1px solid ' + (on ? '#1D4E89' : '#F0F4F8') + ';background:' + (on ? '#E6F1FB' : '#fff') + '">'
+      + '<input type="checkbox" ' + (on ? 'checked' : '') + ' onchange="toggleAddFromOrder(' + i + ', this.checked)" style="width:16px;height:16px;margin:0">'
+      + '<div style="flex:1;min-width:0">'
+      +   '<div style="font-size:12px;font-weight:600"><bdi>' + (it.name || '') + '</bdi></div>'
+      +   (it.code ? '<div style="font-size:10px;color:#1D4E89" dir="ltr">' + it.code + '</div>' : '')
+      + '</div>'
+      + (qty > 1 ? '<span style="font-size:10px;background:#FDF0E0;color:#C4680A;padding:2px 8px;border-radius:99px">'
+                   + qty + ' ' + (ar ? 'وحدات → بطاقات منفصلة' : 'units → separate cards') + '</span>' : '')
+      + '</label>';
+  }).join('');
+  updateAddFromOrderSummary();
+}
+
+function toggleAddFromOrder(i, on){
+  if(on) _addFromOrderPicked[i] = true; else delete _addFromOrderPicked[i];
+  updateAddFromOrderSummary();
+}
+
+function updateAddFromOrderSummary(){
+  var el = document.getElementById('cao-summary');
+  if(!el) return;
+  var ar = (LNG === 'ar');
+  var sel = document.getElementById('cao-order');
+  var o = clientOrders.find(function(x){ return String(x.id) === String(sel && sel.value); });
+  if(!o){ el.textContent = ''; return; }
+  var items = orderItems(o);
+  var machines = 0;
+  Object.keys(_addFromOrderPicked).forEach(function(i){
+    machines += Math.max(1, parseInt(items[i] && items[i].qty, 10) || 1);
+  });
+  el.innerHTML = machines
+    ? '<b style="color:#1D4E89">' + machines + '</b> ' + (ar ? 'بطاقة ستُنشأ' : 'cards will be created')
+    : '<span style="color:#A0AEC0">' + (ar ? 'لم تحدد شيئاً' : 'Nothing selected') + '</span>';
+}
+
+async function addPickedOrderEquipment(){
+  var ar = (LNG === 'ar');
+  var sel = document.getElementById('cao-order');
+  var o = clientOrders.find(function(x){ return String(x.id) === String(sel && sel.value); });
+  if(!o){ alert(ar ? 'اختر أوردراً.' : 'Please choose an order.'); return; }
+  var items = orderItems(o);
+  var picked = Object.keys(_addFromOrderPicked);
+  if(!picked.length){ alert(ar ? 'لم تحدد أي صنف.' : 'No items selected.'); return; }
+
+  var made = 0;
+  for(var n = 0; n < picked.length; n++){
+    var it = items[parseInt(picked[n], 10)];
+    if(!it) continue;
+    var qty = Math.max(1, parseInt(it.qty, 10) || 1);
+    for(var u = 0; u < qty; u++){
+      var rec = {
+        contract_id: _cdContractId,
+        order_id: o.id,
+        name: (it.name || '') + (qty > 1 ? ' #' + (u + 1) : ''),
+        model: it.code || '',
+        serial: '',
+        location: o.name || ''
+      };
+      try{
+        var saved = await dbSave('contract_items', rec);
+        if(saved && saved[0]) rec.id = saved[0].id; else rec.id = Date.now() + made;
+      }catch(e){ rec.id = Date.now() + made; }
+      contractItems.push(rec);
+      made++;
+    }
+  }
+
+  logActivity('create', 'contract equipment', (o.name || ''), null, { added: String(made) });
+  closeMod('contractAddOrderModal');
+  renderContractDetail();
+  alert(ar ? ('✅ أُضيفت ' + made + ' بطاقة معدة.') : ('✅ ' + made + ' equipment card(s) added.'));
+}
+
+async function addContractItemRow(){
+  var ar = (LNG === 'ar');
+  var name = prompt(ar ? 'اسم المعدة:' : 'Equipment name:');
+  if(!name || !name.trim()) return;
+  var rec = { contract_id: _cdContractId, name: name.trim(), model: '', serial: '', location: '' };
+  try{
+    var saved = await dbSave('contract_items', rec);
+    if(saved && saved[0]) rec.id = saved[0].id; else rec.id = Date.now();
+  }catch(e){ rec.id = Date.now(); }
+  contractItems.push(rec);
+  logActivity('create', 'contract equipment', rec.name, null, { manual: 'true' });
+  renderContractDetail();
+}
+
+async function deleteContractItem(id){
+  var ar = (LNG === 'ar');
+  var it = contractItems.find(function(x){ return String(x.id) === String(id); });
+  if(!it) return;
+  var cards = cardsOfItem(id).length;
+  if(!confirm(ar ? ('حذف "' + it.name + '"؟' + (cards ? ('\nسيُحذف سجل ' + cards + ' فحص معه.') : ''))
+                 : ('Remove "' + it.name + '"?' + (cards ? ('\n' + cards + ' inspection record(s) go with it.') : '')))) return;
+  if(_initSb()){
+    try{
+      var r = await _sb.from('contract_items').delete().eq('id', id).select();
+      if(r.error){ alert((ar ? 'فشل الحذف: ' : 'Delete failed: ') + r.error.message); return; }
+    }catch(e){ alert((ar ? 'فشل الحذف: ' : 'Delete failed: ') + e.message); return; }
+    // its inspection cards go with it
+    try{ await _sb.from('contract_cards').delete().eq('item_id', id); }catch(e){}
+  }
+  contractItems = contractItems.filter(function(x){ return String(x.id) !== String(id); });
+  contractCards = contractCards.filter(function(k){ return String(k.item_id) !== String(id); });
+  logActivity('delete', 'contract equipment', it.name, { serial: it.serial || '' }, null);
+  renderContractDetail();
+}
+
+// ── Renewal: same record, cards carried forward ──────────────────────────
+async function renewContract(){
+  var ar = (LNG === 'ar');
+  var c = contractsData.find(function(x){ return String(x.id) === String(_cdContractId); });
+  if(!c) return;
+  if(!canManageClientRecords()){ denyClientEdit(); return; }
+
+  var months = { monthly:12, quarterly:12, semi:12, yearly:12 };
+  var oldEnd = c.end_date;
+  var newStart = addMonths(oldEnd, 0);
+  if(newStart) newStart.setDate(newStart.getDate() + 1);
+  var newEnd = addMonths(oldEnd, 12);
+  if(!newStart || !newEnd) return;
+
+  var ns = newStart.toISOString().split('T')[0];
+  var ne = newEnd.toISOString().split('T')[0];
+
+  if(!confirm(ar ? ('تجديد العقد لسنة إضافية؟\n\nمن ' + ns + ' إلى ' + ne
+                    + '\n\nتبقى المعدات وسجلّها كما هي — لا حاجة لإعادة إدخالها.')
+                 : ('Renew this contract for another year?\n\n' + ns + ' → ' + ne
+                    + '\n\nThe equipment and its history stay exactly as they are.'))) return;
+
+  var before = { start: c.start_date, end: c.end_date };
+  c.start_date = ns;
+  c.end_date = ne;
+  try{
+    await dbSave('contracts', { id: c.id, start_date: ns, end_date: ne });
+  }catch(e){
+    alert((ar ? 'تعذّر التجديد: ' : 'Could not renew: ') + e.message);
+    c.start_date = before.start; c.end_date = before.end; return;
+  }
+  logActivity('update', 'contract renewed', c.name, before, { start: ns, end: ne });
+  renderContractDetail();
+  alert(ar ? '✅ تم تجديد العقد.' : '✅ Contract renewed.');
+}
+
+
+// ── Inspection card ──────────────────────────────────────────────────────
+var _icItemId = null, _icCondition = null;
+
+function openItemCard(itemId){
+  var ar = (LNG === 'ar');
+  var it = contractItems.find(function(x){ return String(x.id) === String(itemId); });
+  if(!it) return;
+  _icItemId = itemId;
+
+  var last = latestCard(itemId);
+  _icCondition = null;   // a new visit starts with no verdict, never the old one
+
+  var t = document.getElementById('ic-title');
+  if(t) t.textContent = (ar ? 'بطاقة فحص: ' : 'Inspection — ') + (it.name || '');
+
+  var meta = document.getElementById('ic-meta');
+  if(meta){
+    meta.innerHTML = '<b>' + (it.name || '') + '</b>'
+      + (it.model ? ' · ' + it.model : '')
+      + (it.location ? '<br><span style="color:#718096">' + it.location + '</span>' : '')
+      + (last ? ('<br><span style="color:' + conditionColour(last.condition) + '">'
+                 + (ar ? 'آخر فحص: ' : 'Last inspection: ') + last.visit_date + ' — ' + conditionLabel(last.condition)
+                 + '</span>') : ('<br><span style="color:#A0AEC0">' + (ar ? 'لم يُفحص من قبل' : 'Never inspected') + '</span>'));
+  }
+
+  var ser = document.getElementById('ic-serial');
+  if(ser) ser.value = it.serial || '';
+  var st = document.getElementById('ic-serial-status');
+  if(st){ st.style.display = 'none'; st.innerHTML = ''; }
+  var d = document.getElementById('ic-date');
+  if(d) d.value = new Date().toISOString().split('T')[0];
+  var n = document.getElementById('ic-notes');
+  if(n) n.value = '';
+  var pp = document.getElementById('ic-parts');
+  if(pp) pp.value = '';
+
+  renderConditionButtons();
+  openMod('itemCardModal');
+}
+
+function renderConditionButtons(){
+  var host = document.getElementById('ic-conditions');
+  if(!host) return;
+  host.innerHTML = Object.keys(ITEM_CONDITIONS).map(function(k){
+    var c = ITEM_CONDITIONS[k];
+    var on = (_icCondition === k);
+    return '<button type="button" onclick="setItemCondition(\'' + k + '\')" style="flex:1;min-width:120px;padding:11px;border-radius:9px;'
+      + 'cursor:pointer;font-size:13px;font-weight:700;font-family:inherit;'
+      + 'border:2px solid ' + (on ? c.colour : '#D9E2EC') + ';'
+      + 'background:' + (on ? (c.colour + '18') : '#fff') + ';color:' + (on ? c.colour : '#718096') + '">'
+      + c.dot + ' ' + ((LNG==='ar') ? c.ar : c.en) + '</button>';
+  }).join('');
+}
+
+function setItemCondition(k){ _icCondition = k; renderConditionButtons(); }
+
+// Read the serial off a photo of the rating plate — the same reader the visit
+// form uses, pointed at this card's field.
+async function readItemSerial(inp){
+  if(!inp.files || !inp.files[0]) return;
+  var file = inp.files[0];
+  inp.value = '';
+  var ar = (LNG === 'ar');
+  var st = document.getElementById('ic-serial-status');
+  var say = function(msg, colour){
+    if(!st) return;
+    st.style.display = 'block'; st.innerHTML = msg; st.style.color = colour || '#718096';
+  };
+
+  var data = null;
+  try{ data = await tpCompressImage(file); }catch(e){}
+  if(!data){ say(ar ? 'تعذّرت قراءة الصورة.' : 'Could not read that image.', '#C0392B'); return; }
+
+  say('<i class="ti ti-loader" style="animation:spin 1s linear infinite;display:inline-block"></i> '
+    + (ar ? 'جاري قراءة اللوحة…' : 'Reading the plate…'));
+
+  try{
+    var res = await fetchWithTimeout('/api/read-serial', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ image: data })
+    }, 70000);
+    var out = await res.json();
+    if(!res.ok || out.error) throw new Error(out.error || ('HTTP ' + res.status));
+
+    if(!out.serial){
+      say('<i class="ti ti-alert-triangle"></i> ' + (ar ? 'لم أتمكن من قراءة الرقم — اكتبه يدوياً.'
+                                                        : 'I could not read it — please type it in.'), '#C4680A');
+      return;
+    }
+    var f = document.getElementById('ic-serial');
+    if(f) f.value = out.serial;
+    var pct = Math.round((out.confidence || 0) * 100);
+    var low = pct < 60;
+    say('<i class="ti ti-' + (low ? 'alert-triangle' : 'circle-check') + '"></i> '
+      + (ar ? 'قُرئ: ' : 'Read: ') + out.serial + ' <span style="opacity:.75">(' + pct + '%)</span>'
+      + (low ? ('<br>' + (ar ? 'الثقة منخفضة — تأكّد قبل الحفظ.' : 'Low confidence — check before saving.')) : ''),
+      low ? '#C4680A' : '#2D7D3A');
+  }catch(e){
+    console.log('read-serial failed:', e);
+    say('<i class="ti ti-alert-triangle"></i> ' + (ar ? 'تعذّر قراءة اللوحة — اكتب الرقم يدوياً.'
+                                                      : 'Could not read the plate — please type it in.'), '#C0392B');
+  }
+}
+
+async function saveItemCard(){
+  var ar = (LNG === 'ar');
+  var it = contractItems.find(function(x){ return String(x.id) === String(_icItemId); });
+  if(!it) return;
+
+  if(!_icCondition){
+    alert(ar ? 'اختر حالة الجهاز.' : 'Please choose the condition.');
+    return;
+  }
+  var v = function(id){ var e = document.getElementById(id); return e ? e.value.trim() : ''; };
+  var date = v('ic-date') || new Date().toISOString().split('T')[0];
+
+  // The serial belongs to the MACHINE, not to this visit — so it updates the
+  // equipment record itself and every future card carries it.
+  var serial = v('ic-serial');
+  if(serial && serial !== it.serial){
+    var oldSerial = it.serial || '';
+    it.serial = serial;
+    try{ await dbSave('contract_items', { id: it.id, serial: serial }); }catch(e){}
+    logActivity('update', 'contract equipment', it.name, { serial: oldSerial }, { serial: serial });
+  }
+
+  var card = {
+    contract_id: _cdContractId,
+    item_id: it.id,
+    visit_id: (typeof currentVisitId !== 'undefined' && currentVisitId) ? currentVisitId : null,
+    visit_date: date,
+    condition: _icCondition,
+    notes: v('ic-notes'),
+    parts_needed: v('ic-parts'),
+    inspector: curUser || curUserLogin || ''
+  };
+
+  try{
+    var saved = await dbSave('contract_cards', card);
+    if(saved && saved[0]) card.id = saved[0].id; else card.id = Date.now();
+  }catch(e){
+    alert((ar ? 'تعذّر الحفظ: ' : 'Could not save: ') + e.message);
+    return;
+  }
+
+  contractCards.push(card);
+  logActivity('create', 'inspection card', it.name + ' · ' + conditionLabel(_icCondition),
+              null, { condition: _icCondition, date: date, parts: card.parts_needed || '—' });
+
+  closeMod('itemCardModal');
+  renderContractDetail();
+}
+
+// ── Equipment history — the machine's life across every visit ────────────
+function openItemHistory(itemId){
+  var ar = (LNG === 'ar');
+  var it = contractItems.find(function(x){ return String(x.id) === String(itemId); });
+  if(!it) return;
+  var cards = cardsOfItem(itemId);
+
+  var t = document.getElementById('ih-title');
+  if(t) t.textContent = (it.name || '') + (it.serial ? ' · ' + it.serial : '');
+
+  var body = document.getElementById('ih-body');
+  if(!body) return;
+
+  if(!cards.length){
+    body.innerHTML = '<div style="padding:28px;text-align:center;color:#A0AEC0;font-size:13px">'
+      + '<i class="ti ti-clipboard-off" style="font-size:26px;display:block;margin-bottom:8px"></i>'
+      + (ar ? 'لم يُفحص هذا الجهاز بعد' : 'This machine has not been inspected yet') + '</div>';
+    openMod('itemHistoryModal');
+    return;
+  }
+
+  body.innerHTML = '<div style="display:flex;flex-direction:column;gap:0">'
+    + cards.map(function(k, i){
+        var col = conditionColour(k.condition);
+        var last = (i === cards.length - 1);
+        return '<div style="display:flex;gap:12px">'
+          + '<div style="display:flex;flex-direction:column;align-items:center;flex-shrink:0">'
+          +   '<span style="width:13px;height:13px;border-radius:50%;background:' + col + ';margin-top:4px"></span>'
+          +   (last ? '' : '<span style="flex:1;width:2px;background:#E2E8F0"></span>')
+          + '</div>'
+          + '<div style="flex:1;padding-bottom:' + (last ? '4px' : '18px') + '">'
+          +   '<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">'
+          +     '<b style="font-size:13px;color:' + col + '">' + conditionLabel(k.condition) + '</b>'
+          +     '<span style="font-size:11px;color:#A0AEC0">' + (k.visit_date || '') + '</span>'
+          +     (k.inspector ? '<span style="font-size:11px;color:#718096">· ' + k.inspector + '</span>' : '')
+          +   '</div>'
+          +   (k.notes ? '<div style="font-size:12px;color:#4A5568;margin-top:4px">' + k.notes + '</div>' : '')
+          +   (k.parts_needed ? '<div style="font-size:11px;color:#C0392B;margin-top:4px"><i class="ti ti-tool"></i> ' + k.parts_needed + '</div>' : '')
+          + '</div></div>';
+      }).join('')
+    + '</div>';
+  openMod('itemHistoryModal');
+}
+
 function renderClientGrid(){
   var isManagerRole   = (curUserRole === 'manager');
   var canManageClients = isManagerRole || (curUserRole === 'data_entry');
@@ -11552,6 +12540,13 @@ async function saveVisitDraft() {
 async function saveAndSign() {
   var visit = collectVisitData();
   if(visit.equipment) { try{ rememberEquipmentOption(visit.equipment); }catch(e){} }
+
+  // A manager may only create or close a visit inside his own zones. A
+  // technician is never blocked — he goes wherever he is sent.
+  if(curUserRole === 'manager' && !isSysAdmin()){
+    var _vz = visitZone(visit);
+    if(!canEditZone(_vz)){ denyRecordZone(_vz); return; }
+  }
 
   // Whatever the technician typed (Arabic, nickname, partial), record the
   // client's official name so every visit for them groups together.
@@ -12737,6 +13732,95 @@ async function showPublicReport(token){
 <!-- CLIENT ORDERS / PROJECTS -->
 
 <!-- ═══ CLIENT ORDERS / PROJECTS (full page) ═══ -->
+<!-- ═══ MAINTENANCE CONTRACTS ═══ -->
+<div id="pg-contracts" style="display:none">
+  <div class="ph">
+    <div>
+      <div class="pt" data-en="Maintenance Contracts" data-ar="عقود الصيانة">Maintenance Contracts</div>
+      <div class="ps" data-en="Periodic service agreements and their equipment" data-ar="اتفاقيات الصيانة الدورية ومعداتها">Periodic service agreements and their equipment</div>
+    </div>
+    <button class="btn btn-p" id="ct-new-btn" onclick="showContractForm()"><i class="ti ti-plus"></i> <span data-en="New Contract" data-ar="عقد جديد">New Contract</span></button>
+  </div>
+
+  <div class="card" id="ct-form-card" style="display:none;margin-bottom:16px">
+    <div class="ch">
+      <div class="ct"><i class="ti ti-file-certificate"></i> <span id="ct-form-title" data-en="New Contract" data-ar="عقد جديد">New Contract</span></div>
+      <button class="ca" onclick="hideContractForm()"><i class="ti ti-x"></i></button>
+    </div>
+    <div style="padding:16px">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px">
+        <div class="field" style="margin:0">
+          <label data-en="Client *" data-ar="العميل *">Client *</label>
+          <select id="ct-client" onchange="onContractClientChange()"></select>
+        </div>
+        <div class="field" style="margin:0">
+          <label data-en="Contract name *" data-ar="اسم العقد *">Contract name *</label>
+          <input type="text" id="ct-name" data-ph-en="e.g. Annual service 2026" data-ph-ar="مثال: عقد الصيانة السنوي 2026" placeholder="e.g. Annual service 2026">
+        </div>
+        <div class="field" style="margin:0">
+          <label data-en="Start date *" data-ar="تاريخ البداية *">Start date *</label>
+          <input type="date" id="ct-start" onchange="updateContractPreview()">
+        </div>
+        <div class="field" style="margin:0">
+          <label data-en="End date *" data-ar="تاريخ النهاية *">End date *</label>
+          <input type="date" id="ct-end" onchange="updateContractPreview()">
+        </div>
+        <div class="field" style="margin:0">
+          <label data-en="Visit frequency *" data-ar="دورية الزيارات *">Visit frequency *</label>
+          <select id="ct-freq" onchange="updateContractPreview()">
+            <option value="monthly" data-en="Monthly" data-ar="شهري">Monthly</option>
+            <option value="quarterly" selected data-en="Quarterly" data-ar="ربع سنوي">Quarterly</option>
+            <option value="semi" data-en="Every 6 months" data-ar="نصف سنوي">Every 6 months</option>
+            <option value="yearly" data-en="Yearly" data-ar="سنوي">Yearly</option>
+          </select>
+        </div>
+        <div class="field" style="margin:0">
+          <label data-en="Notes" data-ar="ملاحظات">Notes</label>
+          <input type="text" id="ct-notes">
+        </div>
+      </div>
+      <div id="ct-preview" style="font-size:12px;color:#718096;background:#F8FAFC;border-radius:8px;padding:10px 12px;margin-top:6px"></div>
+      <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:14px">
+        <button class="btn btn-o" onclick="hideContractForm()" data-en="Cancel" data-ar="إلغاء">Cancel</button>
+        <button class="btn btn-p" onclick="saveContract()"><i class="ti ti-device-floppy"></i> <span data-en="Save" data-ar="حفظ">Save</span></button>
+      </div>
+    </div>
+  </div>
+
+  <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-bottom:14px">
+    <div class="sbox" style="max-width:280px"><i class="ti ti-search"></i>
+      <input type="text" id="ct-search" data-ph-en="Search contracts…" data-ph-ar="بحث في العقود…" placeholder="Search contracts…" oninput="renderContracts()"></div>
+    <div id="ct-filters" style="display:flex;gap:6px;flex-wrap:wrap"></div>
+  </div>
+
+  <div id="ct-list" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:14px"></div>
+</div>
+
+<!-- ═══ ONE CONTRACT ═══ -->
+<div id="pg-contract-detail" style="display:none">
+  <div class="ph">
+    <div>
+      <div class="pt" id="cd-title">Contract</div>
+      <div class="ps" id="cd-sub"></div>
+    </div>
+    <button class="btn btn-o" onclick="go('contracts')"><i class="ti ti-arrow-left"></i> <span data-en="Back to contracts" data-ar="رجوع إلى العقود">Back to contracts</span></button>
+  </div>
+
+  <div id="cd-summary" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:12px;margin-bottom:16px"></div>
+
+  <div class="card" style="margin-bottom:16px">
+    <div class="ch">
+      <div class="ct"><i class="ti ti-list-check"></i> <span data-en="Covered equipment" data-ar="المعدات المشمولة">Covered equipment</span> <span id="cd-item-count" style="color:#718096"></span></div>
+      <div style="display:flex;gap:6px" id="cd-item-actions"></div>
+    </div>
+    <div style="padding:12px 16px">
+      <div class="sbox" style="max-width:280px;margin-bottom:10px"><i class="ti ti-search"></i>
+        <input type="text" id="cd-search" data-ph-en="Search equipment…" data-ph-ar="بحث في المعدات…" placeholder="Search equipment…" oninput="renderContractItems()"></div>
+      <div id="cd-items" style="display:flex;flex-direction:column;gap:7px"></div>
+    </div>
+  </div>
+</div>
+
 <div id="pg-client-orders" style="display:none">
   <div class="ph">
     <div>
@@ -12980,6 +14064,74 @@ async function showPublicReport(token){
       <button onclick="closeMod('stocktakeModal')" class="btn btn-o" style="flex:1" data-en="Cancel" data-ar="إلغاء">Cancel</button>
       <button onclick="applyStocktake()" class="btn btn-p" style="flex:2"><i class="ti ti-device-floppy"></i> <span data-en="Apply the count" data-ar="اعتماد الجرد">Apply the count</span></button>
     </div>
+  </div>
+</div>
+
+<!-- PULL EQUIPMENT FROM AN ORDER -->
+<div id="contractAddOrderModal" class="modal" style="display:none">
+  <div class="mbox" style="max-width:640px">
+    <div class="mh">
+      <div class="mhtitle"><i class="ti ti-package-import"></i> <span data-en="Pull equipment from an order" data-ar="سحب معدات من أوردر">Pull equipment from an order</span></div>
+      <button class="mclose" onclick="closeMod('contractAddOrderModal')"><i class="ti ti-x"></i></button>
+    </div>
+    <div class="mb">
+      <select id="cao-order" onchange="renderAddFromOrder()" style="width:100%;padding:10px 12px;border:1.5px solid #D9E2EC;border-radius:8px;font-size:13px;font-family:inherit;outline:none;margin-bottom:12px"></select>
+      <div id="cao-list" style="display:flex;flex-direction:column;gap:5px;max-height:330px;overflow-y:auto;border:1.5px solid #D9E2EC;border-radius:8px;padding:7px"></div>
+      <div id="cao-summary" style="font-size:12px;margin-top:9px"></div>
+      <div style="font-size:11px;color:#A0AEC0;margin-top:6px" data-en="A line with several units becomes one card per machine, so each gets its own serial." data-ar="السطر الذي يحوي عدة وحدات يصبح بطاقة لكل جهاز، ليأخذ كل واحد سيرياله الخاص.">A line with several units becomes one card per machine, so each gets its own serial.</div>
+    </div>
+    <div class="mf">
+      <button onclick="closeMod('contractAddOrderModal')" class="btn btn-o" style="flex:1" data-en="Cancel" data-ar="إلغاء">Cancel</button>
+      <button onclick="addPickedOrderEquipment()" class="btn btn-p" style="flex:2"><i class="ti ti-plus"></i> <span data-en="Add selected" data-ar="إضافة المحدد">Add selected</span></button>
+    </div>
+  </div>
+</div>
+
+<!-- INSPECTION CARD -->
+<div id="itemCardModal" class="modal" style="display:none">
+  <div class="mbox" style="max-width:620px">
+    <div class="mh">
+      <div class="mhtitle"><i class="ti ti-clipboard-text"></i> <span id="ic-title">Inspection card</span></div>
+      <button class="mclose" onclick="closeMod('itemCardModal')"><i class="ti ti-x"></i></button>
+    </div>
+    <div class="mb">
+      <div id="ic-meta" style="background:#F8FAFC;border-radius:8px;padding:11px 13px;margin-bottom:14px;font-size:12px;color:#4A5568"></div>
+
+      <label style="display:block;font-size:12px;font-weight:700;color:#4A5568;margin-bottom:6px" data-en="Serial number" data-ar="الرقم التسلسلي">Serial number</label>
+      <div style="display:flex;gap:8px;margin-bottom:5px">
+        <input type="text" id="ic-serial" dir="ltr" style="flex:1;padding:10px 12px;border:1.5px solid #D9E2EC;border-radius:8px;font-size:13px;font-family:inherit;outline:none">
+        <button class="btn btn-o" onclick="document.getElementById('ic-serial-cam').click()" style="padding:8px 12px;flex-shrink:0" title="Photograph the rating plate"><i class="ti ti-camera"></i></button>
+      </div>
+      <input type="file" id="ic-serial-cam" accept="image/*" capture="environment" style="display:none" onchange="readItemSerial(this)">
+      <div id="ic-serial-status" style="display:none;font-size:11px;margin-bottom:10px"></div>
+
+      <label style="display:block;font-size:12px;font-weight:700;color:#4A5568;margin:12px 0 6px" data-en="Visit date" data-ar="تاريخ الزيارة">Visit date</label>
+      <input type="date" id="ic-date" style="width:100%;padding:10px 12px;border:1.5px solid #D9E2EC;border-radius:8px;font-size:13px;font-family:inherit;outline:none">
+
+      <label style="display:block;font-size:12px;font-weight:700;color:#4A5568;margin:12px 0 6px" data-en="Condition *" data-ar="الحالة *">Condition *</label>
+      <div id="ic-conditions" style="display:flex;gap:8px;flex-wrap:wrap"></div>
+
+      <label style="display:block;font-size:12px;font-weight:700;color:#4A5568;margin:14px 0 6px" data-en="Notes" data-ar="الملاحظات">Notes</label>
+      <textarea id="ic-notes" rows="3" style="width:100%;padding:10px 12px;border:1.5px solid #D9E2EC;border-radius:8px;font-size:13px;font-family:inherit;outline:none;resize:vertical"></textarea>
+
+      <label style="display:block;font-size:12px;font-weight:700;color:#4A5568;margin:14px 0 6px" data-en="Spare parts needed" data-ar="قطع الغيار المطلوبة">Spare parts needed</label>
+      <input type="text" id="ic-parts" data-ph-en="e.g. door gasket, fan motor" data-ph-ar="مثال: جوان الباب، محرك مروحة" placeholder="e.g. door gasket, fan motor" style="width:100%;padding:10px 12px;border:1.5px solid #D9E2EC;border-radius:8px;font-size:13px;font-family:inherit;outline:none">
+    </div>
+    <div class="mf">
+      <button onclick="closeMod('itemCardModal')" class="btn btn-o" style="flex:1" data-en="Cancel" data-ar="إلغاء">Cancel</button>
+      <button onclick="saveItemCard()" class="btn btn-p" style="flex:2"><i class="ti ti-device-floppy"></i> <span data-en="Save card" data-ar="حفظ البطاقة">Save card</span></button>
+    </div>
+  </div>
+</div>
+
+<!-- EQUIPMENT HISTORY -->
+<div id="itemHistoryModal" class="modal" style="display:none">
+  <div class="mbox" style="max-width:600px">
+    <div class="mh">
+      <div class="mhtitle"><i class="ti ti-history"></i> <span id="ih-title">Equipment history</span></div>
+      <button class="mclose" onclick="closeMod('itemHistoryModal')"><i class="ti ti-x"></i></button>
+    </div>
+    <div class="mb"><div id="ih-body"></div></div>
   </div>
 </div>
 
