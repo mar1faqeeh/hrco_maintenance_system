@@ -11155,6 +11155,310 @@ async function loadContracts(){
 }
 
 
+
+// ── Edit / delete a contract ─────────────────────────────────────────────
+function editContract(){
+  if(!canManageClientRecords()){ denyClientEdit(); return; }
+  var c = contractsData.find(function(x){ return String(x.id) === String(_cdContractId); });
+  if(!c) return;
+  go('contracts');
+  setTimeout(function(){
+    _editingContract = c.id;
+    var card = document.getElementById('ct-form-card');
+    if(card) card.style.display = 'block';
+    var t = document.getElementById('ct-form-title');
+    if(t) t.textContent = (LNG==='ar') ? ('تعديل: ' + (c.name||'')) : ('Editing: ' + (c.name||''));
+    fillContractClients();
+    var set = function(id, v){ var e = document.getElementById(id); if(e) e.value = v || ''; };
+    set('ct-client', c.client_id);
+    set('ct-name', c.name);
+    set('ct-start', c.start_date);
+    set('ct-end', c.end_date);
+    set('ct-freq', c.frequency || 'quarterly');
+    set('ct-notes', c.notes);
+    updateContractPreview();
+    if(card) card.scrollIntoView({ block:'start' });
+  }, 200);
+}
+
+async function deleteContract(){
+  var ar = (LNG === 'ar');
+  if(!canManageClientRecords()){ denyClientEdit(); return; }
+  var c = contractsData.find(function(x){ return String(x.id) === String(_cdContractId); });
+  if(!c) return;
+
+  var items = itemsOfContract(c.id).length;
+  var cards = contractCards.filter(function(k){ return String(k.contract_id) === String(c.id); }).length;
+
+  // Deleting takes the equipment history with it, so say exactly what goes.
+  if(!confirm(ar
+      ? ('حذف عقد "' + (c.name||'') + '"؟\n\n' + items + ' معدة و' + cards + ' بطاقة فحص ستُحذف معه.\nلا يمكن التراجع.')
+      : ('Delete the contract "' + (c.name||'') + '"?\n\n' + items + ' machine(s) and ' + cards
+         + ' inspection card(s) go with it.\nThis cannot be undone.'))) return;
+
+  if(cards > 0){
+    if(!confirm(ar ? ('تأكيد أخير: سيُفقد سجل ' + cards + ' فحص نهائياً.')
+                   : ('Last check: ' + cards + ' inspection record(s) will be lost for good.'))) return;
+  }
+
+  if(_initSb()){
+    try{
+      var r = await _sb.from('contracts').delete().eq('id', c.id).select();
+      if(r.error){ alert((ar ? 'فشل الحذف: ' : 'Delete failed: ') + r.error.message); return; }
+      await _sb.from('contract_items').delete().eq('contract_id', c.id);
+      await _sb.from('contract_cards').delete().eq('contract_id', c.id);
+    }catch(e){
+      alert((ar ? 'فشل الحذف: ' : 'Delete failed: ') + e.message); return;
+    }
+  }
+
+  logActivity('delete', 'contract', c.name,
+              { client: String(c.client_id), items: String(items), cards: String(cards) }, null);
+
+  contractsData = contractsData.filter(function(x){ return String(x.id) !== String(c.id); });
+  contractItems = contractItems.filter(function(x){ return String(x.contract_id) !== String(c.id); });
+  contractCards = contractCards.filter(function(x){ return String(x.contract_id) !== String(c.id); });
+  _cdContractId = null;
+  go('contracts');
+}
+
+
+// ── Printing and exporting an inspection round ───────────────────────────
+// A "round" is one visit's worth of cards. The technician fills a card per
+// machine, and the customer wants the whole round on one sheet.
+function contractRounds(contractId){
+  var byDate = {};
+  contractCards.filter(function(k){ return String(k.contract_id) === String(contractId); })
+    .forEach(function(k){
+      var d = k.visit_date || '—';
+      if(!byDate[d]) byDate[d] = [];
+      byDate[d].push(k);
+    });
+  return Object.keys(byDate).sort().reverse().map(function(d){
+    return { date: d, cards: byDate[d] };
+  });
+}
+
+// Ask which round to print/export when there is more than one.
+function pickContractRound(action){
+  var ar = (LNG === 'ar');
+  var rounds = contractRounds(_cdContractId);
+  if(!rounds.length){
+    alert(ar ? 'لا توجد بطاقات فحص بعد.' : 'There are no inspection cards yet.');
+    return null;
+  }
+  if(rounds.length === 1) return rounds[0].date;
+
+  var list = rounds.map(function(r, i){
+    return (i + 1) + ') ' + r.date + ' — ' + r.cards.length + (ar ? ' بطاقة' : ' card(s)');
+  }).join('\n');
+  var pick = prompt((ar ? 'اختر الزيارة رقم (أو 0 لكل الزيارات):\n\n' : 'Which visit? (0 for all)\n\n') + list, '1');
+  if(pick === null) return null;
+  var n = parseInt(pick, 10);
+  if(n === 0) return 'all';
+  if(isNaN(n) || n < 1 || n > rounds.length) return null;
+  return rounds[n - 1].date;
+}
+
+function cardRowsFor(dateOrAll){
+  var items = itemsOfContract(_cdContractId);
+  var out = [];
+  contractRounds(_cdContractId).forEach(function(r){
+    if(dateOrAll !== 'all' && r.date !== dateOrAll) return;
+    r.cards.forEach(function(k){
+      var it = items.find(function(x){ return String(x.id) === String(k.item_id); }) || {};
+      out.push({
+        date: r.date,
+        name: it.name || '',
+        model: it.model || '',
+        serial: it.serial || '',
+        location: it.location || '',
+        condition: conditionLabel(k.condition),
+        conditionKey: k.condition,
+        notes: k.notes || '',
+        parts: k.parts_needed || '',
+        inspector: k.inspector || ''
+      });
+    });
+  });
+  return out;
+}
+
+function printContractRound(){
+  var ar = (LNG === 'ar');
+  var c = contractsData.find(function(x){ return String(x.id) === String(_cdContractId); });
+  if(!c) return;
+  var when = pickContractRound('print');
+  if(when === null) return;
+
+  var rows = cardRowsFor(when);
+  if(!rows.length){ alert(ar ? 'لا توجد بطاقات لهذه الزيارة.' : 'No cards for that visit.'); return; }
+
+  var cl = clientsData.find(function(x){ return String(x.id) === String(c.client_id); });
+  var esc = function(v){ return String(v==null?'':v).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); };
+
+  var head = ar ? ['#','المعدة','الموديل','الرقم التسلسلي','الحالة','الملاحظات','قطع الغيار المطلوبة','الفني']
+                : ['#','Equipment','Model','Serial','Condition','Notes','Parts needed','Inspector'];
+
+  var body = rows.map(function(r, i){
+    return '<tr>'
+      + '<td>' + (i+1) + '</td>'
+      + '<td>' + esc(r.name) + '</td>'
+      + '<td dir="ltr">' + esc(r.model || '—') + '</td>'
+      + '<td dir="ltr">' + esc(r.serial || '—') + '</td>'
+      + '<td style="color:' + conditionColour(r.conditionKey) + ';font-weight:700">' + esc(r.condition) + '</td>'
+      + '<td>' + esc(r.notes || '—') + '</td>'
+      + '<td>' + esc(r.parts || '—') + '</td>'
+      + '<td>' + esc(r.inspector || '—') + '</td>'
+      + '</tr>';
+  }).join('');
+
+  // A short tally so the customer sees the state of his equipment at a glance
+  var tally = { ok:0, watch:0, faulty:0 };
+  rows.forEach(function(r){ if(tally[r.conditionKey] !== undefined) tally[r.conditionKey]++; });
+
+  var html = '<!DOCTYPE html><html dir="' + (ar?'rtl':'ltr') + '"><head><meta charset="UTF-8">'
+    + '<title>' + (ar ? 'تقرير زيارة عقد صيانة' : 'Contract Visit Report') + '</title><style>'
+    + 'body{font-family:Tajawal,Arial,sans-serif;padding:26px;color:#1a202c}'
+    + 'h1{font-size:18px;color:#0F2D52;margin:0 0 3px}'
+    + '.meta{font-size:11px;color:#718096;margin-bottom:6px}'
+    + '.tally{display:flex;gap:16px;font-size:12px;margin:10px 0 14px}'
+    + '.tally b{font-size:15px}'
+    + 'table{width:100%;border-collapse:collapse}'
+    + 'th,td{border:1px solid #D9E2EC;padding:6px 9px;font-size:11px;text-align:start;vertical-align:top}'
+    + 'th{background:#F8FAFC;color:#4A5568;font-weight:700}'
+    + 'tr:nth-child(even) td{background:#FBFDFF}'
+    + '.sign{display:flex;gap:40px;margin-top:26px;font-size:11px;color:#4A5568}'
+    + '.sign div{flex:1;border-top:1px solid #A0AEC0;padding-top:6px}'
+    + printHeadStyle()
+    + '@media print{body{padding:0} thead{display:table-header-group}}'
+    + '</style></head><body>'
+    + printHeaderHtml('contract')
+    + '<h1>' + (ar ? 'تقرير زيارة عقد صيانة' : 'Contract Visit Report') + '</h1>'
+    + '<div class="meta">'
+    +   '<b>' + esc(cl ? (cl.nickname || cl.name) : '') + '</b> · ' + esc(c.name || '')
+    +   ' · ' + freqLabel(c.frequency)
+    +   ' · ' + (when === 'all' ? (ar ? 'كل الزيارات' : 'all visits') : ((ar ? 'زيارة ' : 'visit ') + when))
+    + '</div>'
+    + '<div class="tally">'
+    +   '<span style="color:#2D7D3A"><b>' + tally.ok + '</b> ' + (ar?'سليم':'good') + '</span>'
+    +   '<span style="color:#C4680A"><b>' + tally.watch + '</b> ' + (ar?'يحتاج متابعة':'needs attention') + '</span>'
+    +   '<span style="color:#C0392B"><b>' + tally.faulty + '</b> ' + (ar?'عطل':'faulty') + '</span>'
+    +   '<span style="color:#718096"><b>' + rows.length + '</b> ' + (ar?'إجمالي':'total') + '</span>'
+    + '</div>'
+    + '<table><thead><tr>' + head.map(function(h){ return '<th>' + h + '</th>'; }).join('') + '</tr></thead>'
+    + '<tbody>' + body + '</tbody></table>'
+    + '<div class="sign"><div>' + (ar ? 'الفني المسؤول' : 'Technician') + '</div>'
+    +   '<div>' + (ar ? 'ممثل العميل' : "Customer's representative") + '</div></div>'
+    + printFooterHtml('contract')
+    + '</body></html>';
+
+  var w = window.open('', '_blank');
+  if(!w){ alert(ar ? 'المتصفح منع فتح نافذة الطباعة.' : 'The browser blocked the print window.'); return; }
+  w.document.open(); w.document.write(html); w.document.close();
+  setTimeout(function(){ try{ w.focus(); w.print(); }catch(e){} }, 400);
+}
+
+function exportContractExcel(){
+  var ar = (LNG === 'ar');
+  var c = contractsData.find(function(x){ return String(x.id) === String(_cdContractId); });
+  if(!c) return;
+  var when = pickContractRound('export');
+  if(when === null) return;
+
+  var rows = cardRowsFor(when);
+  if(!rows.length){ alert(ar ? 'لا توجد بطاقات لهذه الزيارة.' : 'No cards for that visit.'); return; }
+
+  var cl = clientsData.find(function(x){ return String(x.id) === String(c.client_id); });
+  var esc = function(v){
+    return String(v==null?'':v).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+      .replace(/"/g,'&quot;').replace(/\r?\n/g,' ');
+  };
+  var cell = function(v, style){
+    return '<Cell' + (style ? (' ss:StyleID="' + style + '"') : '') + '><Data ss:Type="String">' + esc(v) + '</Data></Cell>';
+  };
+
+  var head = ar ? ['تاريخ الزيارة','المعدة','الموديل','الرقم التسلسلي','الموقع','الحالة','الملاحظات','قطع الغيار المطلوبة','الفني']
+                : ['Visit date','Equipment','Model','Serial','Location','Condition','Notes','Parts needed','Inspector'];
+
+  var xml = '<?xml version="1.0" encoding="UTF-8"?>'
+    + '<?mso-application progid="Excel.Sheet"?>'
+    + '<Workbook xmlns="urn:schemas-microsoft-com:office:spreadsheet" '
+    +   'xmlns:o="urn:schemas-microsoft-com:office:office" '
+    +   'xmlns:x="urn:schemas-microsoft-com:office:excel" '
+    +   'xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet">'
+    + '<Styles>'
+    +   '<Style ss:ID="ttl"><Font ss:Bold="1" ss:Size="13" ss:Color="#0F2D52"/></Style>'
+    +   '<Style ss:ID="sub"><Font ss:Size="10" ss:Color="#718096"/></Style>'
+    +   '<Style ss:ID="hdr"><Font ss:Bold="1" ss:Color="#FFFFFF"/>'
+    +     '<Interior ss:Color="#1D4E89" ss:Pattern="Solid"/>'
+    +     '<Alignment ss:Vertical="Center" ss:Horizontal="Center" ss:WrapText="1"/></Style>'
+    +   '<Style ss:ID="ok"><Font ss:Bold="1" ss:Color="#2D7D3A"/></Style>'
+    +   '<Style ss:ID="watch"><Font ss:Bold="1" ss:Color="#C4680A"/></Style>'
+    +   '<Style ss:ID="faulty"><Font ss:Bold="1" ss:Color="#C0392B"/></Style>'
+    +   '<Style ss:ID="wrap"><Alignment ss:Vertical="Top" ss:WrapText="1"/></Style>'
+    + '</Styles>'
+    + '<Worksheet ss:Name="' + (ar ? 'تقرير الزيارة' : 'Visit Report') + '"><Table>';
+
+  [90, 200, 120, 130, 130, 110, 240, 220, 110].forEach(function(w){
+    xml += '<Column ss:AutoFitWidth="0" ss:Width="' + w + '"/>';
+  });
+
+  xml += '<Row><Cell ss:StyleID="ttl"><Data ss:Type="String">'
+       + esc(companyName() + ' — ' + (ar ? 'تقرير زيارة عقد صيانة' : 'Contract Visit Report')) + '</Data></Cell></Row>'
+    + '<Row><Cell ss:StyleID="sub"><Data ss:Type="String">'
+       + esc((cl ? (cl.nickname || cl.name) : '') + ' · ' + (c.name || '') + ' · ' + freqLabel(c.frequency)
+             + ' · ' + (when === 'all' ? (ar ? 'كل الزيارات' : 'all visits') : when))
+       + '</Data></Cell></Row>'
+    + '<Row></Row>'
+    + '<Row>' + head.map(function(h){
+        return '<Cell ss:StyleID="hdr"><Data ss:Type="String">' + esc(h) + '</Data></Cell>';
+      }).join('') + '</Row>';
+
+  rows.forEach(function(r){
+    xml += '<Row>'
+      + cell(r.date)
+      + cell(r.name)
+      + cell(r.model)
+      + cell(r.serial)
+      + cell(r.location)
+      + cell(r.condition, r.conditionKey || 'wrap')
+      + cell(r.notes, 'wrap')
+      + cell(r.parts, 'wrap')
+      + cell(r.inspector)
+      + '</Row>';
+  });
+
+  // A summary block, so the sheet answers "how bad is it?" without filtering
+  var tally = { ok:0, watch:0, faulty:0 };
+  rows.forEach(function(r){ if(tally[r.conditionKey] !== undefined) tally[r.conditionKey]++; });
+  xml += '<Row></Row>'
+    + '<Row>' + cell(ar ? 'سليم' : 'Good', 'ok') + cell(String(tally.ok)) + '</Row>'
+    + '<Row>' + cell(ar ? 'يحتاج متابعة' : 'Needs attention', 'watch') + cell(String(tally.watch)) + '</Row>'
+    + '<Row>' + cell(ar ? 'عطل' : 'Faulty', 'faulty') + cell(String(tally.faulty)) + '</Row>'
+    + '<Row>' + cell(ar ? 'الإجمالي' : 'Total') + cell(String(rows.length)) + '</Row>';
+
+  xml += '</Table></Worksheet></Workbook>';
+
+  try{
+    var blob = new Blob(['\ufeff' + xml], { type:'application/vnd.ms-excel;charset=utf-8' });
+    var url = URL.createObjectURL(blob);
+    var a = document.createElement('a');
+    a.href = url;
+    a.download = (companyShortSlug() + '-Contract-' + (c.name || '').replace(/[^\w\u0600-\u06FF-]/g,'_') + '-'
+                  + (when === 'all' ? 'all' : when) + '.xls');
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    setTimeout(function(){ URL.revokeObjectURL(url); }, 1000);
+  }catch(e){
+    console.error('exportContractExcel:', e);
+    alert((ar ? 'تعذّر إنشاء الملف: ' : 'Could not create the file: ') + e.message);
+  }
+}
+
+function companyShortSlug(){
+  return String(company('short') || 'Company').replace(/[^\w-]/g, '') || 'Company';
+}
+
 // ── Contracts list ───────────────────────────────────────────────────────
 var CT_FILTERS = [
   { key:'all',     en:'All',      ar:'الكل' },
@@ -14203,7 +14507,13 @@ async function showPublicReport(token){
       <div class="pt" id="cd-title">Contract</div>
       <div class="ps" id="cd-sub"></div>
     </div>
-    <button class="btn btn-o" onclick="go('contracts')"><i class="ti ti-arrow-left"></i> <span data-en="Back to contracts" data-ar="رجوع إلى العقود">Back to contracts</span></button>
+    <div style="display:flex;gap:8px;flex-wrap:wrap">
+      <button class="btn btn-o" onclick="printContractRound()"><i class="ti ti-printer"></i> <span data-en="Print" data-ar="طباعة">Print</span></button>
+      <button class="btn btn-o" onclick="exportContractExcel()"><i class="ti ti-file-spreadsheet"></i> <span data-en="Export Excel" data-ar="تصدير إكسل">Export Excel</span></button>
+      <button class="btn btn-o" id="cd-edit-btn" onclick="editContract()"><i class="ti ti-pencil"></i> <span data-en="Edit" data-ar="تعديل">Edit</span></button>
+      <button class="btn btn-o" id="cd-del-btn" onclick="deleteContract()" style="color:#C0392B;border-color:#F5C6C6"><i class="ti ti-trash"></i> <span data-en="Delete" data-ar="حذف">Delete</span></button>
+      <button class="btn btn-o" onclick="go('contracts')"><i class="ti ti-arrow-left"></i> <span data-en="Back" data-ar="رجوع">Back</span></button>
+    </div>
   </div>
 
   <div id="cd-summary" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:12px;margin-bottom:16px"></div>
