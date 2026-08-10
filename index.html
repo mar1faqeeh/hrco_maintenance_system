@@ -11282,7 +11282,8 @@ function renderContractDetail(){
   if(acts){
     var canEdit = canManageClientRecords();
     acts.innerHTML = canEdit
-      ? '<button class="ca" onclick="openAddFromOrders()"><i class="ti ti-package-import"></i> ' + (ar?'سحب من أوردر':'From an order') + '</button>'
+      ? '<button class="ca" onclick="document.getElementById(\'ci-file\').click()"><i class="ti ti-file-spreadsheet"></i> ' + (ar?'رفع إكسل':'Upload Excel') + '</button>'
+        + '<button class="ca" onclick="openAddFromOrders()"><i class="ti ti-package-import"></i> ' + (ar?'سحب من أوردر':'From an order') + '</button>'
         + '<button class="ca" onclick="addContractItemRow()"><i class="ti ti-plus"></i> ' + (ar?'إضافة معدة':'Add equipment') + '</button>'
         + (st.key === 'expired'
             ? '<button class="ca" style="color:#2D7D3A" onclick="renewContract()"><i class="ti ti-refresh"></i> ' + (ar?'تجديد العقد':'Renew') + '</button>'
@@ -11538,6 +11539,147 @@ async function renewContract(){
   alert(ar ? '✅ تم تجديد العقد.' : '✅ Contract renewed.');
 }
 
+
+
+// ── Contract equipment from a spreadsheet ────────────────────────────────
+// Same four columns as the order template, read BY POSITION:
+//   1 row no · 2 code/model · 3 item name · 4 quantity
+// A quantity of 4 becomes FOUR cards, because every machine needs its own
+// serial and its own history.
+var _ciImport = [];
+
+async function onContractItemsFile(input){
+  var ar = (LNG === 'ar');
+  var file = input && input.files && input.files[0];
+  input.value = '';
+  if(!file) return;
+
+  if(typeof XLSX === 'undefined'){
+    alert(ar ? 'تعذّر تحميل قارئ الإكسل — تحقّق من الاتصال بالإنترنت.'
+             : 'The spreadsheet reader failed to load — check your internet connection.');
+    return;
+  }
+  if(!/\.(xlsx|xls|csv)$/i.test(file.name)){
+    alert(ar ? 'الرجاء اختيار ملف Excel أو CSV.' : 'Please choose an Excel or CSV file.');
+    return;
+  }
+
+  try{
+    var buf = await file.arrayBuffer();
+    var wb = XLSX.read(buf, { type:'array' });
+    var sheet = wb.Sheets[wb.SheetNames[0]];
+    var rows = XLSX.utils.sheet_to_json(sheet, { header:1, blankrows:false, defval:'' });
+
+    var items = [];
+    rows.forEach(function(r, idx){
+      if(!r || !r.length) return;
+      var sn   = String(r[0]==null?'':r[0]).trim();
+      var code = String(r[1]==null?'':r[1]).trim();
+      var name = String(r[2]==null?'':r[2]).trim();
+      var qtyR = String(r[3]==null?'':r[3]).trim();
+      var serial = String(r[4]==null?'':r[4]).trim();
+
+      if(!sn && !code && !name && !qtyR && !serial) return;
+      // Skip a header row the same way the order upload does
+      if(idx === 0 && qtyR !== '' && isNaN(parseFloat(qtyR))) return;
+      if(idx === 0 && /qty|quant|serial|عدد|كمية|سيريال|تسلسلي/i.test(qtyR + ' ' + name + ' ' + code + ' ' + serial)) return;
+      if(!code && !name) return;
+
+      var qty = parseFloat(qtyR.replace(/[^\d.\-]/g,''));
+      items.push({ code: code, name: name, serial: serial,
+                   qty: (isNaN(qty) || qty < 1) ? 1 : Math.floor(qty) });
+    });
+
+    if(!items.length){
+      alert(ar ? 'لم يتم العثور على أصناف في الملف.' : 'No items were found in that file.');
+      return;
+    }
+
+    _ciImport = items;
+    renderContractItemsImport(file.name);
+    openMod('contractItemsImportModal');
+  }catch(e){
+    console.log('contract items import failed:', e);
+    alert((ar ? 'تعذّرت قراءة الملف: ' : 'Could not read the file: ') + e.message);
+  }
+}
+
+function renderContractItemsImport(fileName){
+  var ar = (LNG === 'ar');
+  var machines = _ciImport.reduce(function(n, it){ return n + it.qty; }, 0);
+
+  var msg = document.getElementById('cii-msg');
+  if(msg){
+    msg.innerHTML = '<i class="ti ti-circle-check" style="color:#2D7D3A"></i> '
+      + (ar ? ('قُرئ ' + _ciImport.length + ' سطر من "' + fileName + '" → ')
+            : (_ciImport.length + ' line(s) read from "' + fileName + '" → '))
+      + '<b style="color:#1D4E89">' + machines + '</b> '
+      + (ar ? 'بطاقة معدة ستُنشأ' : 'equipment cards will be created');
+    msg.style.color = '#4A5568';
+  }
+
+  var host = document.getElementById('cii-preview');
+  if(!host) return;
+  var grid = 'display:grid;grid-template-columns:1fr 110px 120px 58px;gap:9px;';
+  host.innerHTML =
+      '<div style="' + grid + 'padding:8px 12px;background:#F8FAFC;'
+    + 'border-bottom:1px solid #D9E2EC;font-size:10px;font-weight:700;color:#718096;position:sticky;top:0">'
+    + '<div>' + (ar?'اسم الصنف':'Item name') + '</div>'
+    + '<div>' + (ar?'الكود / الموديل':'Code / model') + '</div>'
+    + '<div>' + (ar?'الرقم التسلسلي':'Serial') + '</div>'
+    + '<div style="text-align:center">' + (ar?'العدد':'Qty') + '</div></div>'
+    + _ciImport.map(function(it){
+        // One serial cannot describe several machines — it goes to unit #1 and
+        // the others stay blank for the technician to capture on site.
+        var spread = (it.qty > 1 && it.serial);
+        return '<div style="' + grid + 'padding:8px 12px;border-bottom:1px solid #F0F4F8;font-size:12px">'
+          + '<div style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap"><bdi>' + (it.name || '—') + '</bdi></div>'
+          + '<div style="color:#1D4E89;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" dir="ltr">' + (it.code || '—') + '</div>'
+          + '<div style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:' + (it.serial ? '#2D7D3A' : '#CBD5E1') + '" dir="ltr">'
+          +   (it.serial || '—') + (spread ? ' <span style="color:#C4680A" title="' + (ar?'للوحدة الأولى فقط':'unit #1 only') + '">#1</span>' : '')
+          + '</div>'
+          + '<div style="text-align:center;font-weight:700;color:' + (it.qty > 1 ? '#C4680A' : '#4A5568') + '">' + it.qty + '</div>'
+          + '</div>';
+      }).join('');
+}
+
+async function confirmContractItemsImport(){
+  var ar = (LNG === 'ar');
+  if(!_ciImport.length) return;
+  if(!_cdContractId) return;
+
+  var c = contractsData.find(function(x){ return String(x.id) === String(_cdContractId); });
+  var made = 0;
+
+  for(var i = 0; i < _ciImport.length; i++){
+    var it = _ciImport[i];
+    for(var u = 0; u < it.qty; u++){
+      var rec = {
+        contract_id: _cdContractId,
+        name: (it.name || it.code || '') + (it.qty > 1 ? ' #' + (u + 1) : ''),
+        model: it.code || '',
+        // A single serial describes a single machine, so only unit #1 takes it;
+        // the rest are captured on site.
+        serial: (u === 0) ? (it.serial || '') : '',
+        location: ''
+      };
+      try{
+        var saved = await dbSave('contract_items', rec);
+        if(saved && saved[0]) rec.id = saved[0].id; else rec.id = Date.now() + made;
+      }catch(e){ rec.id = Date.now() + made; }
+      contractItems.push(rec);
+      made++;
+    }
+  }
+
+  logActivity('create', 'contract equipment', (c ? c.name : ''), null,
+              { from: 'spreadsheet', lines: String(_ciImport.length), cards: String(made) });
+
+  _ciImport = [];
+  closeMod('contractItemsImportModal');
+  renderContractDetail();
+  alert(ar ? ('✅ أُنشئت ' + made + ' بطاقة معدة.') : ('✅ ' + made + ' equipment card(s) created.'));
+}
 
 // ── Inspection card ──────────────────────────────────────────────────────
 var _icItemId = null, _icCondition = null;
@@ -13816,6 +13958,7 @@ async function showPublicReport(token){
     <div style="padding:12px 16px">
       <div class="sbox" style="max-width:280px;margin-bottom:10px"><i class="ti ti-search"></i>
         <input type="text" id="cd-search" data-ph-en="Search equipment…" data-ph-ar="بحث في المعدات…" placeholder="Search equipment…" oninput="renderContractItems()"></div>
+      <input type="file" id="ci-file" accept=".xlsx,.xls,.csv" style="display:none" onchange="onContractItemsFile(this)">
       <div id="cd-items" style="display:flex;flex-direction:column;gap:7px"></div>
     </div>
   </div>
@@ -14132,6 +14275,28 @@ async function showPublicReport(token){
       <button class="mclose" onclick="closeMod('itemHistoryModal')"><i class="ti ti-x"></i></button>
     </div>
     <div class="mb"><div id="ih-body"></div></div>
+  </div>
+</div>
+
+
+<!-- CONTRACT EQUIPMENT FROM A SPREADSHEET -->
+<div id="contractItemsImportModal" class="modal" style="display:none">
+  <div class="mbox" style="max-width:680px">
+    <div class="mh">
+      <div class="mhtitle"><i class="ti ti-file-spreadsheet"></i> <span data-en="Equipment from a spreadsheet" data-ar="معدات من ملف إكسل">Equipment from a spreadsheet</span></div>
+      <button class="mclose" onclick="closeMod('contractItemsImportModal')"><i class="ti ti-x"></i></button>
+    </div>
+    <div class="mb">
+      <div id="cii-msg" style="font-size:12px;margin-bottom:10px"></div>
+      <div id="cii-preview" style="max-height:330px;overflow-y:auto;border:1.5px solid #D9E2EC;border-radius:8px"></div>
+      <div style="font-size:11px;color:#A0AEC0;margin-top:8px"
+           data-en="Columns by position: 1 row no · 2 code or model · 3 item name · 4 quantity · 5 serial (optional). A line with several units becomes one card per machine; a serial written on it goes to unit #1, so give each machine its own line if you have all the serials."
+           data-ar="الأعمدة بالترتيب: 1 رقم السطر · 2 الكود أو الموديل · 3 اسم الصنف · 4 العدد · 5 الرقم التسلسلي (اختياري). السطر الذي يحوي عدة وحدات يصبح بطاقة لكل جهاز، والسيريال المكتوب عليه يُسند للوحدة الأولى — فاكتب كل جهاز بسطر مستقل إن كانت سيرياتها متوفرة.">Columns by position: 1 row no · 2 code or model · 3 item name · 4 quantity.</div>
+    </div>
+    <div class="mf">
+      <button onclick="closeMod('contractItemsImportModal')" class="btn btn-o" style="flex:1" data-en="Cancel" data-ar="إلغاء">Cancel</button>
+      <button onclick="confirmContractItemsImport()" class="btn btn-p" style="flex:2"><i class="ti ti-plus"></i> <span id="cii-add-label" data-en="Create the cards" data-ar="إنشاء البطاقات">Create the cards</span></button>
+    </div>
   </div>
 </div>
 
