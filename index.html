@@ -3131,17 +3131,18 @@ async function onOrderItemsFile(input){
       var code = String(r[1]==null?'':r[1]).trim();
       var name = String(r[2]==null?'':r[2]).trim();
       var qtyR = String(r[3]==null?'':r[3]).trim();
+      var serial = String(r[4]==null?'':r[4]).trim();
 
-      if(!sn && !code && !name && !qtyR) return;
+      if(!sn && !code && !name && !qtyR && !serial) return;
       // Skip a header row: first row whose "quantity" isn't a number
       if(idx === 0 && qtyR !== '' && isNaN(parseFloat(qtyR))) return;
-      if(idx === 0 && /qty|quant|عدد|كمية/i.test(qtyR + ' ' + name + ' ' + code)) return;
+      if(idx === 0 && /qty|quant|serial|عدد|كمية|سيريال|تسلسلي/i.test(qtyR + ' ' + name + ' ' + code + ' ' + serial)) return;
 
       // A usable row needs at least a code or a name — a stray line of prose
       // in a mis-picked file shouldn't become an "item".
       if(!code && !name) return;
       var qty = parseFloat(qtyR.replace(/[^\d.\-]/g,''));
-      items.push({ sn: sn, code: code, name: name, qty: isNaN(qty) ? '' : qty });
+      items.push({ sn: sn, code: code, name: name, serial: serial, qty: isNaN(qty) ? '' : qty });
     });
 
     if(!items.length){
@@ -3170,8 +3171,8 @@ async function onOrderItemsFile(input){
 function itemsTableHtml(items, limit){
   var shown = limit ? items.slice(0, limit) : items;
   var head = (LNG==='ar')
-    ? ['#','الكود / الموديل','اسم الصنف','العدد']
-    : ['Serial','Code / Model','Item Name','Qty'];
+    ? ['#','الكود / الموديل','اسم الصنف','العدد','الرقم التسلسلي']
+    : ['#','Code / Model','Item Name','Qty','Serial No.'];
   var html = '<div style="border:1.5px solid #D9E2EC;border-radius:8px;overflow:auto;max-height:320px">'
     + '<table style="width:100%;border-collapse:collapse;font-size:12px">'
     + '<thead><tr>' + head.map(function(h){
@@ -3184,6 +3185,8 @@ function itemsTableHtml(items, limit){
       + '<td style="padding:6px 10px;border-bottom:1px solid #F0F4F8" dir="ltr">'+esc(it.code)+'</td>'
       + '<td style="padding:6px 10px;border-bottom:1px solid #F0F4F8">'+esc(it.name)+'</td>'
       + '<td style="padding:6px 10px;border-bottom:1px solid #F0F4F8;font-weight:700">'+esc(it.qty)+'</td>'
+      + '<td style="padding:6px 10px;border-bottom:1px solid #F0F4F8;color:' + (it.serial ? '#2D7D3A' : '#CBD5E1') + '" dir="ltr">'
+      +   esc(it.serial || '—') + '</td>'
       + '</tr>';
   });
   html += '</tbody></table></div>';
@@ -6336,7 +6339,7 @@ function renderVisitItems(){
   var box = document.getElementById('nv-items-search');
   var q = box ? box.value.trim().toLowerCase() : '';
   var shown = !q ? items : items.filter(function(it){
-    return (String(it.code||'') + ' ' + String(it.name||'')).toLowerCase().indexOf(q) !== -1;
+    return (String(it.code||'') + ' ' + String(it.name||'') + ' ' + String(it.serial||'')).toLowerCase().indexOf(q) !== -1;
   });
 
   list.innerHTML = '';
@@ -6902,13 +6905,47 @@ function addItemRow(name, model, serial){
     + '<div style="position:relative">'
     +   '<input type="text" class="mr-item-name" list="mr-order-items" value="' + esc(name) + '" style="' + st + '" placeholder="' + (ar ? 'اسم البند' : 'Item name') + '">'
     + '</div>'
-    + '<input type="text" class="mr-item-model" value="' + esc(model) + '" style="' + st + '" placeholder="' + (ar ? 'الماركة والموديل' : 'Brand & model') + '">'
+    + '<input type="text" class="mr-item-model" value="' + esc(model) + '" oninput="updateRowDiagramHint(this)" style="' + st + '" placeholder="' + (ar ? 'الماركة والموديل' : 'Brand & model') + '">'
     + '<input type="text" class="mr-item-serial" dir="ltr" value="' + esc(serial) + '" style="' + st + '" placeholder="' + (ar ? 'الرقم التسلسلي' : 'Serial no.') + '">'
     + '<button type="button" onclick="removeItemRow(this)" title="' + (ar ? 'حذف البند' : 'Remove item') + '" style="border:1px solid #FCEBEB;background:#FCEBEB;color:#C0392B;border-radius:8px;padding:9px 0;cursor:pointer;font-family:inherit"><i class="ti ti-trash"></i></button>';
   wrap.appendChild(row);
+
+  // A drawing for this model, if the archive has one
+  var hint = document.createElement('div');
+  hint.className = 'mr-item-hint';
+  hint.style.cssText = 'grid-column:2/-1;margin-top:-2px';
+  row.insertAdjacentElement('afterend', hint);
+  updateRowDiagramHint(row.querySelector('.mr-item-model'));
+
   renumberItemRows();
   var inp = row.querySelector('.mr-item-name');
   if(inp && !name) inp.focus();
+}
+
+
+// Refresh the "drawing available" line under a request's item row.
+function updateRowDiagramHint(modelInput){
+  if(!modelInput) return;
+  var row = modelInput.closest('.mr-item-row');
+  if(!row) return;
+  var hint = row.nextElementSibling;
+  if(!hint || !hint.classList.contains('mr-item-hint')) return;
+
+  var model = modelInput.value.trim();
+  var nameEl = row.querySelector('.mr-item-name');
+  var name = nameEl ? nameEl.value.trim() : '';
+  if(!model && !name){ hint.innerHTML = ''; return; }
+
+  var eq = equipmentForModel(model, name);
+  if(!eq){ hint.innerHTML = ''; return; }   // stay quiet unless there's something to offer
+
+  var ar = (LNG === 'ar');
+  hint.innerHTML = '<div style="font-size:11px;color:#2D7D3A;padding:2px 0">'
+    + '<i class="ti ti-file-check"></i> '
+    + (ar ? 'يوجد رسم قطع: ' : 'Parts drawing available: ') + '<b>' + (eq.name || '') + '</b>'
+    + ' <button type="button" onclick="openDiagramFor(' + eq.id + ')" style="border:none;background:#E7F6EC;color:#2D7D3A;'
+    + 'border-radius:6px;padding:2px 9px;font-size:11px;font-weight:700;cursor:pointer;font-family:inherit;margin-inline-start:6px">'
+    + (ar ? 'عرض' : 'Open') + '</button></div>';
 }
 
 function removeItemRow(btn){
@@ -6920,6 +6957,8 @@ function removeItemRow(btn){
     row.querySelectorAll('input').forEach(function(i){ i.value = ''; });
     return;
   }
+  var hint = row.nextElementSibling;
+  if(hint && hint.classList.contains('mr-item-hint')) hint.remove();
   row.remove();
   renumberItemRows();
 }
@@ -9199,6 +9238,73 @@ function renderEquipGrid(){
   });
 }
 
+
+// ── Linking a drawing to a machine by MODEL ──────────────────────────────
+// The archive holds exploded views and parts lists. Until now nothing tied
+// them to the equipment named in a request, a contract card or a visit, so a
+// technician had to go and search by hand. Matching on the model does it.
+function normModel(v){
+  return String(v || '').toUpperCase().replace(/[\s\-_/.]/g, '');
+}
+
+// Find the archived drawing for a model. Exact match first; then a contained
+// match, because "SCC 61" and "Rational SCC-61 E" describe the same machine.
+function equipmentForModel(model, name){
+  if(typeof equipmentData === 'undefined' || !equipmentData.length) return null;
+  var m = normModel(model);
+  if(m.length >= 3){
+    var exact = equipmentData.find(function(e){ return normModel(e.model) === m; });
+    if(exact) return exact;
+    var partial = equipmentData.find(function(e){
+      var em = normModel(e.model);
+      return em.length >= 3 && (em.indexOf(m) !== -1 || m.indexOf(em) !== -1);
+    });
+    if(partial) return partial;
+    // Older archive entries have no model — the name often carries it
+    var inName = equipmentData.find(function(e){ return normModel(e.name).indexOf(m) !== -1; });
+    if(inName) return inName;
+
+    // A model was given and matched nothing. Don't fall back to the machine
+    // name — "Combi Oven" would keep pointing at the old drawing after the
+    // model was corrected, which is worse than showing nothing.
+    return null;
+  }
+  // Last resort: the machine's own name
+  var n = normModel(name);
+  if(n.length >= 4){
+    return equipmentData.find(function(e){ return normModel(e.name).indexOf(n) !== -1; }) || null;
+  }
+  return null;
+}
+
+// A small line offering the drawing wherever a model is known.
+function diagramHintHtml(model, name, elId){
+  var eq = equipmentForModel(model, name);
+  var ar = (LNG === 'ar');
+  if(!eq){
+    return '<div id="' + (elId||'') + '" style="font-size:11px;color:#A0AEC0;margin-top:5px">'
+      + '<i class="ti ti-file-off"></i> ' + (ar ? 'لا يوجد رسم قطع لهذا الموديل في الأرشيف'
+                                               : 'No parts drawing archived for this model') + '</div>';
+  }
+  var n = (eq.parts || []).length;
+  return '<div id="' + (elId||'') + '" style="font-size:11px;margin-top:5px;color:#2D7D3A">'
+    + '<i class="ti ti-file-check"></i> '
+    + (ar ? 'يوجد رسم قطع: ' : 'Parts drawing available: ')
+    + '<b>' + (eq.name || '') + '</b>'
+    + (n ? (' · ' + n + ' ' + (ar ? 'قطعة' : 'parts')) : '')
+    + ' <button type="button" onclick="openDiagramFor(' + eq.id + ')" style="border:none;background:#E7F6EC;color:#2D7D3A;'
+    + 'border-radius:6px;padding:3px 10px;font-size:11px;font-weight:700;cursor:pointer;font-family:inherit;margin-inline-start:6px">'
+    + (ar ? 'عرض الرسم' : 'Open') + '</button></div>';
+}
+
+// Jump to the Parts Request page with that drawing already open.
+function openDiagramFor(id){
+  go('parts-request');
+  setTimeout(function(){
+    try{ openDiagram(id); }catch(e){ console.log('openDiagramFor:', e); }
+  }, 220);
+}
+
 function openDiagram(id){
   var eq = equipmentData.find(function(e){ return e.id===id; });
   if(!eq) return;
@@ -10155,6 +10261,7 @@ function ueReadFileAsDataUrl(file){
 var ueEditingId = null;
 
 function resetEquipForm(){
+  ['ue-brand','ue-model'].forEach(function(id){ var e = document.getElementById(id); if(e) e.value = ''; });
   ueEditingId = null;
   ['ue-name','ue-parts','ue-files'].forEach(function(id){
     var e = document.getElementById(id); if(e) e.value = '';
@@ -10193,6 +10300,8 @@ function editEquipment(id){
 
   var nameEl = document.getElementById('ue-name');
   if(nameEl) nameEl.value = eq.name || '';
+  var brEl = document.getElementById('ue-brand'); if(brEl) brEl.value = eq.brand || '';
+  var mdEl = document.getElementById('ue-model'); if(mdEl) mdEl.value = eq.model || '';
 
   // Rebuild the page strip from what was saved
   uePages = [];
@@ -10259,6 +10368,8 @@ async function saveEquipment(){
   var payload = {
     name: name,
     diagram_data: base64,
+    brand: (document.getElementById('ue-brand')||{}).value || '',
+    model: (document.getElementById('ue-model')||{}).value || '',
     parts_list: JSON.stringify(parts),
     extra_files: JSON.stringify(extraFiles)
   };
@@ -10271,7 +10382,9 @@ async function saveEquipment(){
 
   var equip = {
     id: (saved && saved[0] && saved[0].id != null) ? saved[0].id : (ueEditingId != null ? ueEditingId : Date.now()),
-    name: name, diagramBase64: base64, parts: parts, extraFiles: extraFiles
+    name: name, diagramBase64: base64, parts: parts, extraFiles: extraFiles,
+    brand: (document.getElementById('ue-brand')||{}).value || '',
+    model: (document.getElementById('ue-model')||{}).value || ''
   };
 
   var idx = equipmentData.findIndex(function(e){ return String(e.id) === String(equip.id); });
@@ -10294,7 +10407,8 @@ async function loadEquipmentData(){
       equipmentData = r.data.map(function(e){
         var extra = [];
         try{ extra = JSON.parse(e.extra_files||'[]'); }catch(err){}
-        return { id:e.id, name:e.name, diagramBase64:e.diagram_data||'', parts:JSON.parse(e.parts_list||'[]'), extraFiles: extra };
+        return { id:e.id, name:e.name, brand:e.brand||'', model:e.model||'',
+                 diagramBase64:e.diagram_data||'', parts:JSON.parse(e.parts_list||'[]'), extraFiles: extra };
       });
       console.log('Loaded', equipmentData.length, 'equipment diagrams');
     }
@@ -11334,6 +11448,10 @@ function renderContractItems(){
       +     (it.model ? ' · ' + it.model : '')
       +   '</div>'
       + '</div>'
+      + (equipmentForModel(it.model, it.name)
+          ? '<button class="rbtn" onclick="event.stopPropagation();openDiagramFor(' + equipmentForModel(it.model, it.name).id + ')" title="'
+            + (ar?'رسم القطع لهذا الموديل':'Parts drawing for this model') + '" style="color:#2D7D3A"><i class="ti ti-file-check"></i></button>'
+          : '')
       + '<div style="font-size:11px;color:' + col + ';font-weight:700;min-width:90px">' + conditionLabel(k ? k.condition : null) + '</div>'
       + '<div style="font-size:11px;color:#A0AEC0;min-width:80px">' + (k ? k.visit_date : '—') + '</div>'
       + (k && k.parts_needed ? '<span style="background:#FCEBEB;color:#C0392B;font-size:10px;font-weight:700;padding:2px 8px;border-radius:99px"><i class="ti ti-tool"></i> ' + (ar?'قطع':'parts') + '</span>' : '')
@@ -11450,7 +11568,8 @@ async function addPickedOrderEquipment(){
         order_id: o.id,
         name: (it.name || '') + (qty > 1 ? ' #' + (u + 1) : ''),
         model: it.code || '',
-        serial: '',
+        // The order may already carry the serial — take it for unit #1.
+        serial: (u === 0) ? (it.serial || '') : '',
         location: o.name || ''
       };
       try{
@@ -11703,7 +11822,8 @@ function openItemCard(itemId){
       + (it.location ? '<br><span style="color:#718096">' + it.location + '</span>' : '')
       + (last ? ('<br><span style="color:' + conditionColour(last.condition) + '">'
                  + (ar ? 'آخر فحص: ' : 'Last inspection: ') + last.visit_date + ' — ' + conditionLabel(last.condition)
-                 + '</span>') : ('<br><span style="color:#A0AEC0">' + (ar ? 'لم يُفحص من قبل' : 'Never inspected') + '</span>'));
+                 + '</span>') : ('<br><span style="color:#A0AEC0">' + (ar ? 'لم يُفحص من قبل' : 'Never inspected') + '</span>'))
+      + diagramHintHtml(it.model, it.name);
   }
 
   var ser = document.getElementById('ic-serial');
@@ -11714,8 +11834,10 @@ function openItemCard(itemId){
   if(d) d.value = new Date().toISOString().split('T')[0];
   var n = document.getElementById('ic-notes');
   if(n) n.value = '';
-  var pp = document.getElementById('ic-parts');
-  if(pp) pp.value = '';
+  _icParts = [];
+  var pi = document.getElementById('ic-part'); if(pi) pi.value = '';
+  var pd = document.getElementById('ic-part-dd'); if(pd) pd.style.display = 'none';
+  renderCardParts();
 
   renderConditionButtons();
   openMod('itemCardModal');
@@ -11785,6 +11907,109 @@ async function readItemSerial(inp){
   }
 }
 
+
+// ── Spare parts on an inspection card ────────────────────────────────────
+// Same behaviour as the visit form's "Required Spare Parts": search the
+// catalogue in Arabic, English or by code, but keep the ENGLISH name so the
+// same part reads the same everywhere. A part that isn't in the catalogue can
+// still be typed — the technician shouldn't be blocked by a missing record.
+var _icParts = [];
+
+function showCardPartAC(val){
+  var dd = document.getElementById('ic-part-dd');
+  if(!dd) return;
+  var q = String(val||'').trim().toLowerCase();
+  if(!q){ dd.style.display = 'none'; return; }
+
+  var sugg = partsData.filter(function(p){
+    var ar = (p.name_ar && p.name_ar.trim())
+      ? p.name_ar
+      : ((typeof translatePartName === 'function') ? translatePartName(p.name) : '');
+    return String(p.name||'').toLowerCase().indexOf(q) !== -1
+        || String(p.code||'').toLowerCase().indexOf(q) !== -1
+        || String(ar).toLowerCase().indexOf(q) !== -1;
+  }).slice(0, 6);
+
+  if(!sugg.length){ dd.style.display = 'none'; return; }
+
+  dd.style.cssText = 'display:block;position:absolute;background:#fff;border:1px solid #D9E2EC;'
+    + 'border-radius:8px;box-shadow:0 4px 16px rgba(0,0,0,.12);z-index:60;width:100%;max-height:220px;overflow-y:auto';
+  dd.innerHTML = '';
+
+  sugg.forEach(function(p){
+    var ar = (p.name_ar && p.name_ar.trim())
+      ? p.name_ar
+      : ((typeof translatePartName === 'function') ? translatePartName(p.name) : '');
+    var showAr = ar && ar !== p.name;
+    var lead = (LNG === 'ar' && showAr) ? ar : p.name;
+    var sub  = (LNG === 'ar' && showAr) ? p.name : (showAr ? ar : '');
+
+    var item = document.createElement('div');
+    item.style.cssText = 'padding:8px 12px;cursor:pointer;font-size:13px;border-bottom:1px solid #F0F4F8';
+    item.onmouseover = function(){ this.style.background = '#F0F4F8'; };
+    item.onmouseout  = function(){ this.style.background = '#fff'; };
+    item.innerHTML = '<div style="font-weight:600;unicode-bidi:plaintext"><bdi>' + lead + '</bdi></div>'
+      + (sub ? '<div style="font-size:11px;color:#718096;unicode-bidi:plaintext"><bdi>' + sub + '</bdi></div>' : '')
+      + (p.code ? '<div style="font-size:10px;color:#1D4E89;font-weight:600" dir="ltr">' + p.code + '</div>' : '');
+    item.onclick = function(){
+      // Always record the English name, exactly like the visit form
+      addCardPart(p.name, p.code);
+    };
+    dd.appendChild(item);
+  });
+}
+
+function addCardPart(name, code){
+  var inp = document.getElementById('ic-part');
+  var v = name || (inp ? inp.value.trim() : '');
+  if(!v) return;
+
+  // Typed free text may still match the catalogue — resolve it so the record
+  // keeps the catalogue's own spelling and code.
+  if(!name && typeof findExistingPart === 'function'){
+    var hit = partsData.find(function(p){
+      return String(p.name||'').toLowerCase() === v.toLowerCase()
+          || String(p.code||'').toLowerCase() === v.toLowerCase();
+    });
+    if(hit){ v = hit.name; code = hit.code; }
+  }
+
+  if(!_icParts.some(function(x){ return x.name.toLowerCase() === v.toLowerCase(); })){
+    _icParts.push({ name: v, code: code || '' });
+  }
+  if(inp) inp.value = '';
+  var dd = document.getElementById('ic-part-dd');
+  if(dd) dd.style.display = 'none';
+  renderCardParts();
+}
+
+function removeCardPart(i){
+  _icParts.splice(i, 1);
+  renderCardParts();
+}
+
+function renderCardParts(){
+  var host = document.getElementById('ic-parts-tags');
+  if(!host) return;
+  host.innerHTML = _icParts.map(function(p, i){
+    var inCatalogue = !!p.code || partsData.some(function(x){ return String(x.name||'').toLowerCase() === p.name.toLowerCase(); });
+    return '<span style="display:inline-flex;align-items:center;gap:6px;background:' + (inCatalogue ? '#E6F1FB' : '#FDF0E0')
+      + ';color:' + (inCatalogue ? '#1D4E89' : '#C4680A') + ';border-radius:99px;padding:5px 10px;font-size:12px;font-weight:600">'
+      + '<bdi>' + (typeof partName === 'function'
+          ? partName({ name: p.name, name_ar: null })
+          : p.name) + '</bdi>'
+      + (p.code ? '<span style="font-size:10px;opacity:.8" dir="ltr">' + p.code + '</span>' : '')
+      + (inCatalogue ? '' : '<i class="ti ti-alert-circle" title="' + ((LNG==='ar')?'غير موجودة في الكتالوج':'not in the catalogue') + '"></i>')
+      + '<button type="button" onclick="removeCardPart(' + i + ')" style="border:none;background:transparent;color:inherit;cursor:pointer;font-size:14px;line-height:1;padding:0">×</button>'
+      + '</span>';
+  }).join('');
+}
+
+// Text form for storage and for anything that already reads parts_needed.
+function cardPartsText(){
+  return _icParts.map(function(p){ return p.code ? (p.code + ' — ' + p.name) : p.name; }).join(', ');
+}
+
 async function saveItemCard(){
   var ar = (LNG === 'ar');
   var it = contractItems.find(function(x){ return String(x.id) === String(_icItemId); });
@@ -11814,7 +12039,7 @@ async function saveItemCard(){
     visit_date: date,
     condition: _icCondition,
     notes: v('ic-notes'),
-    parts_needed: v('ic-parts'),
+    parts_needed: cardPartsText(),
     inspector: curUser || curUserLogin || ''
   };
 
@@ -13742,6 +13967,17 @@ async function showPublicReport(token){
       </div>
 
       <div class="field">
+        <label data-en="Brand &amp; Model" data-ar="الماركة والموديل">Brand &amp; Model</label>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+          <input type="text" id="ue-brand" data-ph-en="Brand — e.g. Rational" data-ph-ar="الماركة — مثال: Rational" placeholder="Brand — e.g. Rational">
+          <input type="text" id="ue-model" dir="ltr" data-ph-en="Model — e.g. SCC-61" data-ph-ar="الموديل — مثال: SCC-61" placeholder="Model — e.g. SCC-61">
+        </div>
+        <div style="font-size:11px;color:#718096;margin-top:5px"
+             data-en="The model is what links this drawing to equipment in requests, contracts and visits — fill it in and the drawing appears automatically wherever that model shows up."
+             data-ar="الموديل هو ما يربط هذا الرسم بالمعدات في الطلبات والعقود والزيارات — اكتبه ليظهر الرسم تلقائياً أينما ظهر هذا الموديل.">The model links this drawing to equipment elsewhere.</div>
+      </div>
+
+      <div class="field">
         <label><span style="display:inline-flex;align-items:center;justify-content:center;width:18px;height:18px;border-radius:50%;background:#1D4E89;color:#fff;font-size:10px;font-weight:700;margin-left:4px">2</span> Upload Files (2–4 pages)</label>
         <div style="font-size:11px;color:#718096;margin-bottom:6px">Select all pages together — images and/or a PDF. <strong>The first page should be a photo/diagram of the machine</strong>; the rest should be the parts-list pages. A PDF is automatically split into one image per page.</div>
         <input type="file" id="ue-files" accept="image/*,application/pdf" multiple onchange="ueOnFilesChange()" style="width:100%;padding:8px;border:1.5px solid #D9E2EC;border-radius:8px;font-family:inherit;font-size:13px">
@@ -14039,7 +14275,7 @@ async function showPublicReport(token){
 
         <div class="field" style="margin:0;grid-column:1/-1">
           <label data-en="Items List (Excel / CSV) — optional" data-ar="قائمة الأصناف (إكسل / CSV) — اختياري">Items List (Excel / CSV) — optional</label>
-          <div style="font-size:11px;color:#718096;margin-bottom:6px" data-en="Four columns: Serial No. · Code / Model · Item Name · Quantity" data-ar="أربعة أعمدة: الرقم التسلسلي · الكود أو الموديل · اسم الصنف · العدد">Four columns: Serial No. · Code / Model · Item Name · Quantity</div>
+          <div style="font-size:11px;color:#718096;margin-bottom:6px" data-en="Five columns in order: row no · code or model · item name · quantity · serial (optional)" data-ar="خمسة أعمدة بالترتيب: رقم السطر · الكود أو الموديل · اسم الصنف · العدد · الرقم التسلسلي (اختياري)">Five columns in order: row no · code or model · item name · quantity · serial (optional)</div>
           <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
             <input type="file" id="co-items-file" accept=".xlsx,.xls,.csv" onchange="onOrderItemsFile(this)" style="flex:1;min-width:220px;padding:8px;border:1.5px solid #D9E2EC;border-radius:8px;font-family:inherit;font-size:13px">
             <button type="button" class="btn btn-o" onclick="clearOrderItems()"><i class="ti ti-x"></i> <span data-en="Remove" data-ar="إزالة">Remove</span></button>
@@ -14258,7 +14494,19 @@ async function showPublicReport(token){
       <textarea id="ic-notes" rows="3" style="width:100%;padding:10px 12px;border:1.5px solid #D9E2EC;border-radius:8px;font-size:13px;font-family:inherit;outline:none;resize:vertical"></textarea>
 
       <label style="display:block;font-size:12px;font-weight:700;color:#4A5568;margin:14px 0 6px" data-en="Spare parts needed" data-ar="قطع الغيار المطلوبة">Spare parts needed</label>
-      <input type="text" id="ic-parts" data-ph-en="e.g. door gasket, fan motor" data-ph-ar="مثال: جوان الباب، محرك مروحة" placeholder="e.g. door gasket, fan motor" style="width:100%;padding:10px 12px;border:1.5px solid #D9E2EC;border-radius:8px;font-size:13px;font-family:inherit;outline:none">
+      <div style="position:relative">
+        <div style="display:flex;gap:8px">
+          <input type="text" id="ic-part" autocomplete="off" oninput="showCardPartAC(this.value)" onkeydown="if(event.key==='Enter'){event.preventDefault();addCardPart();}"
+                 data-ph-en="Search the parts catalogue…" data-ph-ar="ابحث في كتالوج القطع…" placeholder="Search the parts catalogue…"
+                 style="flex:1;padding:10px 12px;border:1.5px solid #D9E2EC;border-radius:8px;font-size:13px;font-family:inherit;outline:none">
+          <button type="button" class="btn btn-o" onclick="addCardPart()" style="padding:8px 13px;flex-shrink:0"><i class="ti ti-plus"></i></button>
+        </div>
+        <div id="ic-part-dd" style="display:none"></div>
+      </div>
+      <div id="ic-parts-tags" style="display:flex;gap:6px;flex-wrap:wrap;margin-top:8px"></div>
+      <div style="font-size:11px;color:#A0AEC0;margin-top:5px"
+           data-en="Pick from the catalogue, or type a part that isn't listed and press +"
+           data-ar="اختر من الكتالوج، أو اكتب قطعة غير مدرجة واضغط +">Pick from the catalogue, or type a part that isn't listed and press +</div>
     </div>
     <div class="mf">
       <button onclick="closeMod('itemCardModal')" class="btn btn-o" style="flex:1" data-en="Cancel" data-ar="إلغاء">Cancel</button>
