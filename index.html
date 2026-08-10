@@ -1277,7 +1277,8 @@ async function loadSystemUsers(){
           init: (u.full_name||u.username)[0].toUpperCase(),
           email: u.email || '',
           zones: u.zones || [],
-          active: (u.active === false) ? false : true
+          active: (u.active === false) ? false : true,
+          must_change_password: (u.must_change_password === true || u.must_change_password === 'true')
         };
       });
       console.log('Loaded', r.data.length, 'users from DB:', Object.keys(USERS));
@@ -1353,6 +1354,142 @@ function lgUpdateUserLabel(sel){
   // nothing needed - value is already set
 }
 
+
+// ══════════════════════════════════════
+// PASSWORD RESET BY EMAIL
+// Uses the same Supabase send-email function the warehouse mail goes through.
+// ══════════════════════════════════════
+function openForgotPassword(){
+  var f = document.getElementById('fp-login'); if(f) f.value = '';
+  var m = document.getElementById('fp-msg'); if(m){ m.style.display = 'none'; m.innerHTML = ''; }
+  var b = document.getElementById('fp-send'); if(b) b.disabled = false;
+  openMod('forgotModal');
+  setTimeout(function(){ if(f) f.focus(); }, 150);
+}
+
+// A readable temporary password — no ambiguous 0/O/1/l, because someone has to
+// copy it off a screen and type it on a phone.
+function makeTempPassword(){
+  var letters = 'ABCDEFGHJKMNPQRSTUVWXYZ';
+  var digits = '23456789';
+  var out = '';
+  for(var i = 0; i < 4; i++) out += letters[Math.floor(Math.random() * letters.length)];
+  for(var j = 0; j < 4; j++) out += digits[Math.floor(Math.random() * digits.length)];
+  return out;
+}
+
+function fpMsg(html, kind){
+  var m = document.getElementById('fp-msg');
+  if(!m) return;
+  m.style.display = 'block';
+  m.innerHTML = html;
+  m.style.background = kind === 'ok' ? '#E7F6EC' : (kind === 'warn' ? '#FDF0E0' : '#FCEBEB');
+  m.style.color = kind === 'ok' ? '#2D7D3A' : (kind === 'warn' ? '#C4680A' : '#C0392B');
+}
+
+async function requestPasswordReset(){
+  var ar = (LNG === 'ar');
+  var login = (document.getElementById('fp-login') || {}).value || '';
+  login = login.trim().toLowerCase();
+  if(!login){ fpMsg(ar ? 'اكتب اسم المستخدم.' : 'Please enter your username.', 'err'); return; }
+
+  var btn = document.getElementById('fp-send');
+  if(btn){ btn.disabled = true; }
+  fpMsg('<i class="ti ti-loader" style="animation:spin 1s linear infinite;display:inline-block"></i> '
+    + (ar ? 'جاري المعالجة…' : 'Working…'), 'warn');
+
+  if(!_initSb()){
+    fpMsg(ar ? 'لا يوجد اتصال بقاعدة البيانات.' : 'No database connection.', 'err');
+    if(btn) btn.disabled = false;
+    return;
+  }
+
+  try{
+    var r = await _sb.from('system_users').select('*').eq('login', login).limit(1);
+    var u = (r.data && r.data.length) ? r.data[0] : null;
+
+    // Don't reveal whether an account exists, or whether it has an email —
+    // a login form is a place strangers can type. Same answer either way.
+    var vague = ar
+      ? 'إن كان اسم المستخدم صحيحاً ومسجَّلاً به بريد، فقد أُرسلت كلمة مرور جديدة إليه.<br>راجع بريدك، وإن لم يصل تواصل مع مدير النظام.'
+      : "If that username exists and has an email on file, a new password has been sent to it.<br>Check your inbox, and contact your system administrator if nothing arrives.";
+
+    if(!u || u.active === false || !u.email){
+      fpMsg(vague, 'warn');
+      if(btn) btn.disabled = false;
+      return;
+    }
+
+    var temp = makeTempPassword();
+
+    var upd = await _sb.from('system_users')
+      .update({ password: temp, must_change_password: true })
+      .eq('login', login).select();
+    if(upd.error){
+      // must_change_password may not exist yet — reset the password anyway
+      if(/column|schema cache/i.test(upd.error.message || '')){
+        upd = await _sb.from('system_users').update({ password: temp }).eq('login', login).select();
+      }
+      if(upd.error) throw new Error(upd.error.message);
+    }
+    if(!upd.data || !upd.data.length) throw new Error('No row was updated — check the UPDATE policy on system_users.');
+
+    var subject = (company('short') || '') + ' — ' + (ar ? 'كلمة مرور جديدة' : 'Your new password');
+    var html =
+        '<div style="font-family:Tajawal,Arial,sans-serif;max-width:520px;margin:0 auto;border:1px solid #E2E8F0;border-radius:12px;overflow:hidden">'
+      + '<div style="background:#0F2D52;color:#fff;padding:18px 22px;display:flex;align-items:center;gap:12px">'
+      +   (companyLogo() ? '<img src="' + companyLogo() + '" style="width:40px;height:40px;object-fit:contain;background:#fff;border-radius:8px;padding:3px">' : '')
+      +   '<div><div style="font-size:16px;font-weight:700">' + companyName() + '</div>'
+      +   '<div style="font-size:12px;opacity:.85">' + (ar ? 'استعادة كلمة المرور' : 'Password reset') + '</div></div></div>'
+      + '<div style="padding:22px">'
+      +   '<p style="font-size:14px;color:#1a202c;margin:0 0 14px">' + (ar ? 'مرحباً ' : 'Hello ') + (u.name || login) + ',</p>'
+      +   '<p style="font-size:13px;color:#4A5568;margin:0 0 16px">'
+      +     (ar ? 'تم إنشاء كلمة مرور جديدة لحسابك:' : 'A new password has been generated for your account:') + '</p>'
+      +   '<div style="background:#F8FAFC;border:1.5px dashed #1D4E89;border-radius:10px;padding:16px;text-align:center;margin-bottom:16px">'
+      +     '<div style="font-size:11px;color:#718096">' + (ar ? 'اسم المستخدم' : 'Username') + '</div>'
+      +     '<div style="font-size:15px;font-weight:700;color:#1a202c;margin-bottom:10px" dir="ltr">' + login + '</div>'
+      +     '<div style="font-size:11px;color:#718096">' + (ar ? 'كلمة المرور الجديدة' : 'New password') + '</div>'
+      +     '<div style="font-size:24px;font-weight:800;color:#1D4E89;letter-spacing:3px" dir="ltr">' + temp + '</div>'
+      +   '</div>'
+      +   '<p style="font-size:12px;color:#C4680A;margin:0 0 6px">'
+      +     (ar ? '⚠ غيّر كلمة المرور فور دخولك.' : '⚠ Please change this password as soon as you sign in.') + '</p>'
+      +   '<p style="font-size:12px;color:#718096;margin:0">'
+      +     (ar ? 'إن لم تطلب هذا، تواصل مع مدير النظام فوراً — فكلمة مرورك السابقة لم تعد صالحة.'
+                : "If you didn't request this, contact your system administrator now — your previous password no longer works.")
+      +   '</p>'
+      + '</div>'
+      + '<div style="background:#F8FAFC;padding:12px;text-align:center;font-size:11px;color:#718096">' + companyPrintFooter() + '</div>'
+      + '</div>';
+
+    var res = await fetchWithTimeout('https://luuvvbevhdtpzywlrtux.supabase.co/functions/v1/send-email', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + SKEY },
+      body: JSON.stringify({ to: u.email, subject: subject, html: html })
+    }, 60000);
+    var data = await res.json().catch(function(){ return {}; });
+
+    if(!res.ok || !(data.id || data.success)){
+      // The password HAS already changed, so never claim the mail went out.
+      throw new Error(data.message || data.error || ('Send failed (HTTP ' + res.status + ')'));
+    }
+
+    logActivity('update', 'password reset', login, null, { emailed: 'yes' });
+
+    var masked = String(u.email).replace(/^(.).*(@.*)$/, function(m, a, b){ return a + '••••' + b; });
+    fpMsg('<i class="ti ti-mail-check"></i> '
+      + (ar ? ('أُرسلت كلمة مرور جديدة إلى ' + masked) : ('A new password was sent to ' + masked)), 'ok');
+    var f = document.getElementById('fp-login'); if(f) f.value = '';
+
+  }catch(e){
+    console.log('password reset failed:', e);
+    fpMsg('<i class="ti ti-alert-triangle"></i> '
+      + (ar ? 'تعذّر إرسال البريد. تواصل مع مدير النظام — قد تكون كلمة المرور قد تغيّرت بالفعل.'
+            : 'The email could not be sent. Contact your administrator — the password may already have changed.')
+      + '<div style="font-size:10px;opacity:.8;margin-top:6px" dir="ltr">' + (e.message || '') + '</div>', 'err');
+  }
+  if(btn) btn.disabled = false;
+}
+
 async function lgLogin(){
   var email=document.getElementById('lg-email').value.trim();
   var pass=document.getElementById('lg-pass').value;
@@ -1380,7 +1517,61 @@ async function lgLogin(){
   
   err.textContent=t('err'); err.style.display='block';
 }
+
+// Force a new password after an emailed reset.
+async function promptPasswordChange(u){
+  var ar = (LNG === 'ar');
+  var login = curUserLogin;
+  var pass = null;
+
+  for(var tries = 0; tries < 3; tries++){
+    pass = prompt(ar
+      ? 'كلمة المرور الحالية مؤقتة.\nاكتب كلمة مرور جديدة (6 أحرف على الأقل):'
+      : 'Your current password is temporary.\nChoose a new one (at least 6 characters):');
+    if(pass === null){
+      alert(ar ? 'ستُطلب منك مرة أخرى في الدخول القادم.' : "You'll be asked again next time you sign in.");
+      return;
+    }
+    pass = pass.trim();
+    if(pass.length < 6){
+      alert(ar ? 'كلمة المرور قصيرة جداً.' : 'That password is too short.');
+      continue;
+    }
+    var again = prompt(ar ? 'أعد كتابة كلمة المرور للتأكيد:' : 'Type it again to confirm:');
+    if(again === null) return;
+    if(again.trim() !== pass){
+      alert(ar ? 'كلمتا المرور غير متطابقتين.' : "Those don't match.");
+      continue;
+    }
+    break;
+  }
+  if(!pass || pass.length < 6) return;
+
+  if(!_initSb()){ alert(ar ? 'لا يوجد اتصال بقاعدة البيانات.' : 'No database connection.'); return; }
+  try{
+    var r = await _sb.from('system_users')
+      .update({ password: pass, must_change_password: false })
+      .eq('login', login).select();
+    if(r.error) throw new Error(r.error.message);
+    if(!r.data || !r.data.length) throw new Error('No row updated');
+    // The login check compares u.pass — writing u.password would leave the old
+    // one working until the next reload.
+    if(USERS[login]){ USERS[login].pass = pass; USERS[login].must_change_password = false; }
+    if(u){ u.pass = pass; u.must_change_password = false; }
+    logActivity('update', 'password changed', login, null, { by: 'user' });
+    alert(ar ? '✅ تم تغيير كلمة المرور.' : '✅ Your password has been changed.');
+  }catch(e){
+    alert((ar ? 'تعذّر التغيير: ' : 'Could not change it: ') + e.message);
+  }
+}
+
 function lgSuccess(u, restoring){
+  // A password that arrived by email is temporary — make them replace it now,
+  // otherwise a mailbox stays a way into the system indefinitely.
+  if(!restoring && (u.must_change_password === true || u.must_change_password === 'true')){
+    setTimeout(function(){ promptPasswordChange(u); }, 600);
+  }
+
   // Remember who's signed in, so a browser refresh doesn't kick them out.
   if(!restoring){
     try{
@@ -15247,6 +15438,32 @@ async function showPublicReport(token){
   </div>
 </div>
 
+
+<!-- PASSWORD RESET -->
+<div id="forgotModal" class="modal" style="display:none;z-index:10001">
+  <div class="mbox" style="max-width:430px">
+    <div class="mh">
+      <div class="mhtitle"><i class="ti ti-key"></i> <span data-en="Reset your password" data-ar="استعادة كلمة المرور">Reset your password</span></div>
+      <button class="mclose" onclick="closeMod('forgotModal')"><i class="ti ti-x"></i></button>
+    </div>
+    <div class="mb">
+      <div id="fp-step1">
+        <div style="font-size:12px;color:#718096;margin-bottom:12px"
+             data-en="Enter your username. We'll email a new password to the address registered on your account."
+             data-ar="اكتب اسم المستخدم، وسنرسل كلمة مرور جديدة إلى البريد المسجّل في حسابك.">Enter your username.</div>
+        <input type="text" id="fp-login" dir="ltr" data-ph-en="Username" data-ph-ar="اسم المستخدم" placeholder="Username"
+               onkeydown="if(event.key==='Enter')requestPasswordReset()"
+               style="width:100%;padding:11px 13px;border:1.5px solid #D9E2EC;border-radius:9px;font-size:14px;font-family:inherit;outline:none;box-sizing:border-box">
+        <div id="fp-msg" style="display:none;font-size:12px;margin-top:10px;border-radius:8px;padding:9px 11px"></div>
+      </div>
+    </div>
+    <div class="mf">
+      <button onclick="closeMod('forgotModal')" class="btn btn-o" style="flex:1" data-en="Cancel" data-ar="إلغاء">Cancel</button>
+      <button id="fp-send" onclick="requestPasswordReset()" class="btn btn-p" style="flex:2"><i class="ti ti-mail"></i> <span data-en="Send new password" data-ar="إرسال كلمة مرور جديدة">Send new password</span></button>
+    </div>
+  </div>
+</div>
+
 <div id="loginScreen" style="position:fixed;inset:0;background:#0F2D52;z-index:9999;display:flex;align-items:center;justify-content:center;padding:16px;font-family:Tajawal,sans-serif">
   <div style="background:#fff;border-radius:16px;width:100%;max-width:400px;overflow:hidden;box-shadow:0 20px 60px rgba(0,0,0,.3)">
     <div style="background:#0F2D52;padding:24px 20px;text-align:center">
@@ -15281,7 +15498,11 @@ async function showPublicReport(token){
       <button onclick="lgLogin()" style="width:100%;padding:12px;background:#1D4E89;color:#fff;border:none;border-radius:8px;font-size:15px;font-weight:700;cursor:pointer;font-family:Tajawal,sans-serif;display:flex;align-items:center;justify-content:center;gap:8px;box-sizing:border-box">
         <i class="ti ti-login"></i><span id="lg-btn-lbl">Sign In</span>
       </button>
-      <div id="lg-hint" style="text-align:center;margin-top:12px;font-size:11px;color:#718096">Demo: manager / hrco2026</div>
+      <div style="text-align:center;margin-top:12px">
+        <button onclick="openForgotPassword()" style="background:none;border:none;color:#1D4E89;font-size:12px;font-weight:600;cursor:pointer;font-family:Tajawal,sans-serif;text-decoration:underline"
+                data-en="Forgot your password?" data-ar="نسيت كلمة المرور؟">Forgot your password?</button>
+      </div>
+      <div id="lg-hint" style="text-align:center;margin-top:10px;font-size:11px;color:#718096">Demo: manager / hrco2026</div>
     </div>
   </div>
 
