@@ -8224,8 +8224,17 @@ function exportPartsExcel(){
     return '<Cell><Data ss:Type="'+(type||'String')+'">'+esc(v)+'</Data></Cell>';
   };
 
+  // Quantities belong to a store, so name the store in the column heading —
+  // otherwise a re-import would silently top up the wrong manager's shelves.
+  var _expStore = (typeof stockOwner !== 'undefined' && stockOwner) ? stockOwner : 'all';
+  var _storeLabel = (_expStore === 'all')
+    ? ((LNG==='ar') ? 'كل المخازن' : 'All stores')
+    : ownerName(_expStore);
+
   var head = ['اسم القطعة / Part Name','كود القطعة / Part Code','الفئة / Category',
-              'الوحدة / Unit','الكمية / Qty','الحد الأدنى / Min','المورّد / Supplier',
+              'الوحدة / Unit',
+              'الكمية / Qty — ' + _storeLabel,
+              'الحد الأدنى / Min','المورّد / Supplier',
               'الاسم بالعربية (اختياري) / Arabic Name (optional)'];
 
   var xml = '<?xml version="1.0" encoding="UTF-8"?>'
@@ -8255,8 +8264,8 @@ function exportPartsExcel(){
       + cell(p.code || '')
       + cell(p.cat || '')
       + cell(p.unit || '')
-      + cell(p.qty == null ? 0 : p.qty, 'Number')
-      + cell(p.min == null ? 0 : p.min, 'Number')
+      + cell(partQty(p, _expStore), 'Number')
+      + cell(partMin(p, _expStore), 'Number')
       + cell(p.supplier && p.supplier !== '—' ? p.supplier : '')
       + cell(p.name_ar || '')
       + '</Row>';
@@ -8378,8 +8387,26 @@ function renderPartsImportPreview(){
 }
 
 async function confirmPartsImport(){
+  var ar = (LNG === 'ar');
   if(!canManageParts()){ denyParts(); return; }
   if(!_partsImport.length) return;
+
+  // Imported quantities have to land in ONE store — "all stores" is a view,
+  // not a shelf, and another manager's store isn't yours to fill.
+  var store = activeStore();
+  if(stockOwner === 'all'){
+    alert(ar ? 'اختر مخزناً أولاً — لا يمكن الاستيراد إلى "كل المخازن".'
+             : 'Pick a store first — you cannot import into "All stores".');
+    return;
+  }
+  if(!canEditStore(store)){
+    alert(ar ? ('هذا مخزن ' + ownerName(store) + ' — لا يمكنك الاستيراد إليه.')
+             : ("This is " + ownerName(store) + "'s store — you cannot import into it."));
+    return;
+  }
+  if(!confirm(ar ? ('سيُضاف الاستيراد إلى مخزن: ' + ownerName(store) + '\n\nمتابعة؟')
+                 : ('The import will be added to the store of: ' + ownerName(store) + '\n\nContinue?'))) return;
+
   var btn = document.getElementById('pi-confirm');
   if(btn) btn.disabled = true;
 
@@ -8388,30 +8415,41 @@ async function confirmPartsImport(){
     var it = _partsImport[i];
     var ex = findExistingPart(it);
     try{
+      var pid;
       if(ex){
-        ex.qty = (parseInt(ex.qty,10)||0) + it.qty;
-        var upd = { id: ex.id, qty: ex.qty };
-        if(!ex.code && it.code){ ex.code = it.code; upd.code = it.code; }
-        await dbSave('parts', upd);
+        // The catalogue entry is shared; only the code may need filling in
+        if(!ex.code && it.code){ ex.code = it.code; await dbSave('parts', { id: ex.id, code: it.code }); }
+        pid = ex.id;
         topped++;
       } else {
-        var np = { name: it.name, code: it.code||'', name_ar: it.name_ar||'', cat: it.cat, unit: it.unit, qty: it.qty, min: it.min, supplier: it.supplier };
+        var np = { name: it.name, code: it.code||'', name_ar: it.name_ar||'', cat: it.cat, unit: it.unit, min: it.min, supplier: it.supplier };
         var saved = await dbSave('parts', np);
         np.id = (saved && saved[0] && saved[0].id != null) ? saved[0].id : Date.now() + i;
         partsData.push(np);
+        pid = np.id;
         added++;
+      }
+
+      // The quantity goes to the store, not to the shared catalogue row
+      if(it.qty > 0 || !ex){
+        var before = partQty({ id: pid }, store);
+        await saveStock(pid, store, before + (parseInt(it.qty,10) || 0), it.min);
       }
     }catch(e){ console.error('import row failed:', it.name, e); failed++; }
   }
+
+  logActivity('update', 'stock import', ownerName(store), null,
+              { added: String(added), topped: String(topped), failed: String(failed) });
 
   if(btn) btn.disabled = false;
   _partsImport = [];
   closeMod('partsImportModal');
   renderInvList();
   renderHistList();
-  alert((LNG==='ar'
-    ? ('✅ تم الاستيراد\n' + added + ' قطعة جديدة · ' + topped + ' تم تحديث كميتها')
-    : ('✅ Import complete\n' + added + ' new part(s) · ' + topped + ' stock updated'))
+  updateStockZoneNotice();
+  alert((ar
+    ? ('✅ تم الاستيراد إلى مخزن ' + ownerName(store) + '\n' + added + ' قطعة جديدة · ' + topped + ' تم تحديث كميتها')
+    : ('✅ Imported into ' + ownerName(store) + "'s store\n" + added + ' new part(s) · ' + topped + ' stock updated'))
     + (failed ? ('\n' + failed + (LNG==='ar' ? ' فشلت' : ' failed')) : ''));
 }
 
@@ -9459,6 +9497,9 @@ async function confirmPartsRequest(){
     tech: tech,
     client: client,
     notes: notes,
+    // Which store this is drawn from — without it nobody knows whose shelves
+    // the parts leave when the request is fulfilled.
+    store_owner: (typeof activeStore === 'function') ? activeStore() : curUserLogin,
     parts: JSON.stringify(parts),
     date: today,
     status: 'pending'
@@ -9545,12 +9586,14 @@ function setPOFilter(f, btn){
 }
 
 function poBadgeStyle(status){
+  if(status==='issued') return 'background:#E6F1FB;color:#1D4E89';
   if(status==='approved') return 'background:#EAF3DE;color:#2D7D3A';
   if(status==='sent')     return 'background:#E6F1FB;color:#1D4E89';
   if(status==='rejected') return 'background:#FCEBEB;color:#C0392B';
   return 'background:#FDF0E0;color:#C4680A'; // pending
 }
 function poBadgeLabel(status){
+  if(status==='issued') return (LNG==='ar') ? 'صُرفت' : 'Issued';
   return status==='approved' ? 'Approved'
        : status==='sent'     ? 'Sent to Warehouse'
        : status==='rejected' ? 'Rejected' : 'Pending';
@@ -9611,6 +9654,8 @@ function renderPartsRequests(){
       + '<div style="padding:10px 14px">'
       +   '<div style="font-size:11px;color:#718096;margin-bottom:4px">Requested parts ('+reqParts(req).length+')</div>'
       +   '<div>'+(partsHtml||'<span style="color:#A0AEC0;font-size:12px">—</span>')+'</div>'
+      +   (req.store_owner ? '<div style="margin-top:6px;font-size:11px;color:#718096"><i class="ti ti-building-warehouse"></i> '
+            + ((LNG==='ar')?'من مخزن: ':'From the store of: ') + ownerName(req.store_owner) + '</div>' : '')
       +   (req.notes ? '<div style="margin-top:8px;font-size:12px;color:#4A5568"><b>Notes:</b> '+req.notes+'</div>' : '')
       +   (req.warehouse_email ? '<div style="margin-top:8px;font-size:11px;color:#2D7D3A"><i class="ti ti-mail-check"></i> Sent to '+req.warehouse_email+'</div>' : '')
       + '</div>'
@@ -9622,6 +9667,14 @@ function renderPartsRequests(){
       +   ((status==='approved'||status==='sent')
           ? ((typeof featureOn === 'function' && !featureOn('warehouse_email')) ? ''
              : '<button onclick="openWarehouseSend('+req.id+')" class="btn btn-p" style="flex:2;background:'+(status==='sent'?'#2D7D3A':'#1D4E89')+'"><i class="ti ti-truck-delivery"></i> '+(status==='sent'?'Send Again to Warehouse':'Send to Warehouse')+'</button>')
+            + '<button onclick="setRequestStatus('+req.id+',\'issued\')" class="btn btn-o" style="flex:1" title="'
+            + ((LNG==='ar')?'خصم القطع من المخزن':'Take the parts off the shelf')
+            + '"><i class="ti ti-package-export"></i> ' + ((LNG==='ar')?'تم الصرف':'Issued') + '</button>'
+          : '')
+      +   (status==='issued'
+          ? '<div style="flex:1;font-size:12px;color:#2D7D3A;font-weight:700;display:flex;align-items:center;gap:6px">'
+            + '<i class="ti ti-package-export"></i> ' + ((LNG==='ar')?'صُرفت من المخزن':'Issued from the store')
+            + (req.store_owner ? (' · ' + ownerName(req.store_owner)) : '') + '</div>'
           : '')
       +   (status==='rejected'
           ? '<button onclick="setRequestStatus('+req.id+',\'pending\')" class="btn btn-o" style="flex:1"><i class="ti ti-rotate"></i> Reopen</button>'
@@ -9631,11 +9684,83 @@ function renderPartsRequests(){
   });
 }
 
+
+// The parts on a request, as {name, code, qty} — the stored shape varies by
+// where the request came from, so read it tolerantly.
+function requestPartsList(req){
+  var raw = req && req.parts;
+  var arr = [];
+  try{ arr = Array.isArray(raw) ? raw : JSON.parse(raw || '[]'); }catch(e){ arr = []; }
+  return arr.map(function(x){
+    if(typeof x === 'string') return { name: x, code: '', qty: 1 };
+    return { name: x.name || x.desc || '', code: x.code || x.num || '', qty: parseInt(x.qty, 10) || 1 };
+  }).filter(function(x){ return x.name || x.code; });
+}
+
+// Match a requested line to the catalogue — by code first, then by name.
+function matchCataloguePart(line){
+  if(!line) return null;
+  if(line.code){
+    var byCode = partsData.find(function(p){
+      return String(p.code||'').toLowerCase() === String(line.code).toLowerCase();
+    });
+    if(byCode) return byCode;
+  }
+  return partsData.find(function(p){
+    return String(p.name||'').toLowerCase() === String(line.name||'').toLowerCase();
+  }) || null;
+}
+
 async function setRequestStatus(id, status){
+  var ar = (LNG === 'ar');
   try{
     var _pr = partsRequests.find(function(x){ return x.id == id; });
     if(_pr) logActivity('status', 'parts request', _pr.equipment || ('#'+id), { status: _pr.status }, { status: status });
   }catch(e){}
+
+  // Marking a request ISSUED takes the parts off a real shelf. Ask first, name
+  // the store, and record each movement so the stocktake still adds up.
+  if(status === 'issued'){
+    var req = partsRequests.find(function(x){ return x.id == id; });
+    if(req){
+      var store = req.store_owner || activeStore();
+      if(!canEditStore(store)){
+        alert(ar ? ('هذه القطع تُصرف من مخزن ' + ownerName(store) + ' — لا يمكنك صرفها.')
+                 : ("These parts come out of " + ownerName(store) + "'s store — you cannot issue them."));
+        return;
+      }
+      var lines = requestPartsList(req);
+      if(lines.length){
+        var preview = lines.slice(0, 8).map(function(l){
+          var p = matchCataloguePart(l);
+          var have = p ? partQty(p, store) : null;
+          return '• ' + (l.code ? l.code + ' — ' : '') + l.name + '  ×' + l.qty
+            + (have === null ? (ar ? '  (غير موجودة بالكتالوج)' : '  (not in the catalogue)')
+                             : (have < l.qty ? (ar ? ('  ⚠ المتوفر ' + have) : ('  ⚠ only ' + have)) : ''));
+        }).join('\n') + (lines.length > 8 ? ('\n… +' + (lines.length - 8)) : '');
+
+        if(!confirm((ar ? ('صرف القطع من مخزن ' + ownerName(store) + '؟\n\n')
+                        : ('Issue these parts from ' + ownerName(store) + "'s store?\n\n")) + preview)) return;
+
+        var today = new Date().toISOString().split('T')[0];
+        for(var i = 0; i < lines.length; i++){
+          var l = lines[i];
+          var p = matchCataloguePart(l);
+          if(!p) continue;                       // nothing to deduct from
+          var before = partQty(p, store);
+          await saveStock(p.id, store, Math.max(0, before - l.qty), null);
+          var mv = { part_id: p.id, type: 'out', qty: l.qty, owner: store, dest: (req.client || req.equipment || ''),
+                     tech: (req.tech || curUser || ''), note: (ar ? 'صرف لطلب قطع' : 'Issued for a parts request'),
+                     date: today };
+          try{ await dbSave('parts_history', mv); }catch(e){}
+          histData.unshift(Object.assign({ id: Date.now() + i, partId: p.id }, mv));
+          logActivity('update', 'stock', (p.code ? p.code + ' — ' : '') + p.name + ' · ' + ownerName(store),
+                      { qty: String(before) }, { qty: String(Math.max(0, before - l.qty)) });
+        }
+        try{ renderInvList(); renderHistList(); }catch(e){}
+      }
+    }
+  }
   if(!_initSb()){ alert('لا يوجد اتصال بقاعدة البيانات / No database connection'); return; }
   try{
     var r = await _sb.from('parts_requests').update({ status: status }).eq('id', id).select();
