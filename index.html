@@ -1142,6 +1142,32 @@ function _hideDbBanner(){
   if(b) b.remove();
 }
 async function dbGet(t){if(!_initSb())return[];try{var r=await _sb.from(t).select('*');return r.data||[];}catch(e){return[];}}
+
+// Tell the user — once per table per session — which fields the database is
+// silently refusing, and exactly how to fix it. A quiet console warning meant
+// he only found out when the data vanished on the next sign-in.
+var _missingColWarned = {};
+function _warnMissingColumns(table, cols){
+  var key = table + ':' + cols.join(',');
+  console.warn('Database is missing column(s) on "' + table + '": ' + cols.join(', '));
+  if(_missingColWarned[key]) return;
+  _missingColWarned[key] = true;
+
+  var ar = (typeof LNG !== 'undefined' && LNG === 'ar');
+  var sql = cols.map(function(c){
+    return 'alter table ' + table + ' add column if not exists ' + c + ' text;';
+  }).join('\n');
+
+  alert((ar
+      ? ('⚠️ حُفظ السجل، لكن هذه الحقول لم تُحفظ لأن أعمدتها غير موجودة في قاعدة البيانات:\n\n  ' 
+         + cols.join('\n  ')
+         + '\n\nستختفي هذه التفاصيل بعد تحديث الصفحة حتى تضيف الأعمدة.\nشغّل في Supabase → SQL Editor:\n\n')
+      : ('⚠️ The record was saved, but these fields were NOT — their columns do not exist in the database:\n\n  '
+         + cols.join('\n  ')
+         + '\n\nThese details will disappear after a refresh until the columns are added.\nRun this in Supabase → SQL Editor:\n\n'))
+    + sql);
+}
+
 async function dbSave(t,o){
   if(!_initSb()){ _showDbBanner(); alert('⚠️ لا يوجد اتصال بقاعدة البيانات، لن يتم حفظ هذه البيانات. تحقق من الإنترنت وأعد تحميل الصفحة.\n⚠️ Database not connected — this will not be saved. Check your internet and reload the page.'); return null; }
   _hideDbBanner();
@@ -1150,20 +1176,29 @@ async function dbSave(t,o){
     if(o.id){ r=await _sb.from(t).update(o).eq('id',o.id).select(); }
     else{ r=await _sb.from(t).insert(o).select(); }
     if(r.error){
-      // If the DB schema is missing a column we're trying to write (e.g. not migrated yet),
-      // drop that one field and retry once instead of failing the whole save.
-      var missing = r.error.message && r.error.message.match(/Could not find the '([^']+)' column/);
-      if(missing){
-        var col = missing[1];
-        console.warn('DB schema missing column "'+col+'" on table "'+t+'" — retrying save without it. Add this column in Supabase to stop losing this field.');
-        var o2 = Object.assign({}, o);
+      // The database may be missing a column we're writing (a migration not run
+      // yet). Drop exactly that field and retry — but keep going for EVERY
+      // missing column, and then SAY which fields were lost. Dropping data
+      // with only a console warning is how a record ends up looking saved and
+      // coming back empty after a refresh.
+      var dropped = [];
+      var o2 = Object.assign({}, o);
+      var rr = r;
+      for(var attempt = 0; attempt < 8 && rr.error; attempt++){
+        var m = rr.error.message && rr.error.message.match(/Could not find the '([^']+)' column/);
+        if(!m) break;
+        var col = m[1];
+        if(!(col in o2)) break;
         delete o2[col];
-        var r2;
-        if(o2.id){ r2=await _sb.from(t).update(o2).eq('id',o2.id).select(); }
-        else{ r2=await _sb.from(t).insert(o2).select(); }
-        if(!r2.error) return r2.data;
-        console.error('DB Error (retry):', r2.error);
+        dropped.push(col);
+        if(o2.id){ rr = await _sb.from(t).update(o2).eq('id', o2.id).select(); }
+        else{ rr = await _sb.from(t).insert(o2).select(); }
       }
+      if(dropped.length && !rr.error){
+        _warnMissingColumns(t, dropped);
+        return rr.data;
+      }
+      if(dropped.length) console.error('DB Error (retry):', rr.error);
       console.error('DB Error:',r.error);
       var chk = r.error.message && r.error.message.match(/violates check constraint "([^"]+)"/);
       if(chk){
