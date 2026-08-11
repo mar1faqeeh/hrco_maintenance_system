@@ -301,6 +301,7 @@ html,body{height:100%;overflow:auto;font-family:Tajawal,sans-serif;font-size:14p
       <button class="ftab" onclick="setVF('all',this)" id="vf-all" style="background:#1D4E89;color:#fff">All</button>
       <button class="ftab" onclick="setVF('Completed',this)" id="vf-done">Done</button>
       <button class="ftab" onclick="setVF('Pending',this)" id="vf-pend">Pending</button>
+      <button class="ftab" onclick="setVF('contract',this)" id="vf-contract" data-en="Contract rounds" data-ar="جولات العقود">Contract rounds</button>
     </div>
   </div>
   <div class="tbl">
@@ -1935,12 +1936,39 @@ function clientOrderLine(clientName, orderId){
   return on ? (cl + ' — ' + on) : cl;
 }
 
+// True when this visit carries contract inspection cards.
+function isContractRound(v){
+  if(!v || typeof contractCards === 'undefined') return false;
+  return contractCards.some(function(k){ return String(k.visit_id) === String(v.id); });
+}
+
+// The contract a round belongs to, so the row can link straight to it.
+function contractOfVisit(v){
+  if(!v || typeof contractCards === 'undefined') return null;
+  var k = contractCards.find(function(x){ return String(x.visit_id) === String(v.id); });
+  if(!k) return null;
+  return contractsData.find(function(c){ return String(c.id) === String(k.contract_id); }) || null;
+}
+
+
+function openContractOfVisit(visitId){
+  var v = visData.find(function(x){ return String(x.id) === String(visitId); });
+  var c = contractOfVisit(v);
+  if(!c){ return; }
+  _cdContractId = c.id;
+  go('contract-detail');
+}
+
 function renderVisits(f,q){
   visFil=f||visFil;q=q||document.getElementById('visSearch').value||'';
   var body=document.getElementById('visBody');if(!body)return;body.innerHTML='';
   var fl=visData.filter(function(r){
     var mq=!q||r.client.toLowerCase().includes(q.toLowerCase())||r.tech.toLowerCase().includes(q.toLowerCase());
-    var mf=visFil==='all'||r.status===visFil;
+    // A contract round is a visit that produced inspection cards — that's what
+    // separates it from an ordinary call-out, whatever its visit type says.
+    var mf = (visFil==='all') ? true
+           : (visFil==='contract') ? isContractRound(r)
+           : (r.status===visFil);
     return mq&&mf;
   });
   if(!fl.length){body.innerHTML='<div style="padding:20px;text-align:center;color:#A0AEC0">No results</div>';return;}
@@ -1952,9 +1980,23 @@ function renderVisits(f,q){
     var stb = stBadge[r.status]||'b-g';
     var tlbl = typeLabel[r.visit_type]||typeLabel[r.type]||r.visit_type||r.type||'—';
     var _on = orderNameOf(r.order_id);
+    // How many contract inspection cards were recorded on this visit
+    var _cc = (typeof contractCards !== 'undefined')
+      ? contractCards.filter(function(k){ return String(k.visit_id) === String(r.id); }).length : 0;
+    if(_cc){
+      // Contract rounds sit in the same list as ordinary visits, so give them
+      // a standing marker rather than leaving them to blend in.
+      row.style.borderInlineStart = '3px solid #6D28D9';
+      row.style.background = '#FBFAFF';
+    }
     row.innerHTML='<div class="tc"><div style="font-weight:500">'+(r.client||'—')
       + (_on ? ' <span style="color:#1D4E89">— '+_on+'</span>' : '')
-      + '</div><div class="tc2">'+(r.equipment||r.equip||'—')+'</div></div>'
+      + '</div><div class="tc2">'+(r.equipment||r.equip||'—')
+      + (_cc ? ' <span onclick="event.stopPropagation();openContractOfVisit(' + r.id + ')" title="'
+               + ((LNG==='ar')?'فتح العقد':'Open the contract')
+               + '" style="background:#F3EDFF;color:#6D28D9;font-size:10px;font-weight:700;padding:1px 8px;border-radius:99px;cursor:pointer">'
+               + '<i class="ti ti-file-certificate"></i> ' + ((LNG==='ar')?'جولة عقد · ':'Contract round · ') + _cc + '</span>' : '')
+      + '</div></div>'
       +'<div class="tc">'+(r.tech||'—')+'</div>'
       +'<div class="tc"><span class="bdg b-i" style="font-size:10px">'+tlbl+'</span></div>'
       +'<div class="tc tc2"><div>'+(r.date||'—')+'</div><div style="font-size:10px;color:#A0AEC0">'+(r.time||'')+'</div></div>'
@@ -11820,6 +11862,130 @@ function exportPartsSummaryExcel(){
   }
 }
 
+
+// ── Recording a round into a real visit ──────────────────────────────────
+// Cards used to float free of any visit. Tying a round to a visit record means
+// the contract's history and the visit history are the same history: the visit
+// shows what was inspected, and each card knows which visit produced it.
+var _cdVisitId = null;
+
+function activeRoundBanner(){
+  var host = document.getElementById('cd-round');
+  if(!host) return;
+  var ar = (LNG === 'ar');
+
+  if(!_cdVisitId){
+    host.style.display = 'none';
+    host.innerHTML = '';
+    return;
+  }
+
+  var v = (typeof visData !== 'undefined')
+    ? visData.find(function(x){ return String(x.id) === String(_cdVisitId); })
+    : null;
+  var done = contractCards.filter(function(k){ return String(k.visit_id) === String(_cdVisitId); }).length;
+  var total = itemsOfContract(_cdContractId).length;
+
+  host.style.display = 'block';
+  host.innerHTML = '<div style="background:#E6F1FB;border:1px solid #1D4E89;border-radius:10px;padding:12px 15px;'
+    + 'display:flex;align-items:center;gap:12px;flex-wrap:wrap">'
+    + '<i class="ti ti-clipboard-check" style="color:#1D4E89;font-size:20px"></i>'
+    + '<div style="flex:1;min-width:180px">'
+    +   '<div style="font-size:13px;font-weight:700;color:#0F2D52">'
+    +     (ar ? 'جولة فحص جارية — زيارة رقم ' : 'Inspection round in progress — visit #') + _cdVisitId + '</div>'
+    +   '<div style="font-size:11px;color:#4A5568;margin-top:2px">'
+    +     (ar ? ('كل بطاقة تحفظها تُربط بهذه الزيارة · ' + done + ' من ' + total)
+          : ('Every card you save is linked to it · ' + done + ' of ' + total))
+    +     (v && v.tech ? (' · ' + v.tech) : '') + '</div>'
+    + '</div>'
+    + '<button onclick="finishContractRound()" style="padding:7px 14px;border-radius:8px;border:1px solid #1D4E89;'
+    +   'background:#1D4E89;color:#fff;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit">'
+    +   '<i class="ti ti-check"></i> ' + (ar ? 'إنهاء الجولة' : 'Finish the round') + '</button>'
+    + '</div>';
+}
+
+// Start a round: reuse an open visit for this client if there is one, rather
+// than creating a second record for the same trip.
+async function startContractRound(){
+  var ar = (LNG === 'ar');
+  var c = contractsData.find(function(x){ return String(x.id) === String(_cdContractId); });
+  if(!c) return;
+  var cl = clientsData.find(function(x){ return String(x.id) === String(c.client_id); });
+  var clientName = cl ? (cl.name || cl.nickname) : '';
+
+  if(!itemsOfContract(c.id).length){
+    alert(ar ? 'أضف معدات العقد أولاً.' : 'Add the contract equipment first.');
+    return;
+  }
+
+  // An existing open visit for this client today is almost certainly this trip
+  var today = new Date().toISOString().split('T')[0];
+  var open = (typeof visData !== 'undefined') ? visData.filter(function(v){
+    return String(v.client||'').toLowerCase() === String(clientName).toLowerCase()
+        && v.date === today;
+  }) : [];
+
+  if(open.length){
+    var pick = confirm(ar
+      ? ('توجد زيارة لهذا العميل اليوم (رقم ' + open[0].id + ').\n\nموافق = تسجيل الجولة عليها\nإلغاء = إنشاء زيارة جديدة')
+      : ('There is already a visit for this client today (#' + open[0].id + ').\n\nOK = record the round into it\nCancel = create a new visit'));
+    if(pick){
+      _cdVisitId = open[0].id;
+      activeRoundBanner();
+      renderContractDetail();
+      return;
+    }
+  }
+
+  if(!confirm(ar ? ('إنشاء زيارة جديدة لعقد "' + (c.name||'') + '"؟') : ('Create a visit for "' + (c.name||'') + '"?'))) return;
+
+  var visit = {
+    client:     clientName,
+    tech:       curUser || curUserLogin || '',
+    visit_type: 'عقد',
+    status:     'معلقة',
+    date:       today,
+    notes:      (ar ? 'جولة فحص عقد صيانة: ' : 'Contract inspection round: ') + (c.name || '')
+  };
+
+  var saved;
+  try{ saved = await dbSave('visits', visit); }
+  catch(e){ alert((ar ? 'تعذّر إنشاء الزيارة: ' : 'Could not create the visit: ') + e.message); return; }
+
+  if(!saved || !saved.length){
+    alert(ar ? 'لم تُحفظ الزيارة في قاعدة البيانات.' : 'The visit was not saved to the database.');
+    return;
+  }
+  visit.id = saved[0].id;
+  if(typeof visData !== 'undefined') visData.unshift(visit);
+
+  _cdVisitId = visit.id;
+  logActivity('create', 'contract round', (c.name || ''), null, { visit: String(visit.id) });
+  activeRoundBanner();
+  renderContractDetail();
+}
+
+function finishContractRound(){
+  var ar = (LNG === 'ar');
+  var done = contractCards.filter(function(k){ return String(k.visit_id) === String(_cdVisitId); }).length;
+  var total = itemsOfContract(_cdContractId).length;
+
+  if(done < total){
+    if(!confirm(ar ? ('لم تُفحص كل المعدات (' + done + ' من ' + total + ').\n\nإنهاء الجولة على أي حال؟')
+                   : ('Not everything was inspected (' + done + ' of ' + total + ').\n\nFinish anyway?'))) return;
+  }
+  var id = _cdVisitId;
+  _cdVisitId = null;
+  activeRoundBanner();
+  renderContractDetail();
+  if(done){
+    if(confirm(ar ? ('انتهت الجولة — ' + done + ' بطاقة على الزيارة رقم ' + id + '.\n\nطباعة تقرير الزيارة؟')
+                  : ('Round finished — ' + done + ' card(s) on visit #' + id + '.\n\nPrint the visit report?'))){
+      printContractRound();
+    }
+  }
+}
+
 // ── Edit / delete a contract ─────────────────────────────────────────────
 function editContract(){
   if(!canManageClientRecords()){ denyClientEdit(); return; }
@@ -12378,18 +12544,23 @@ function renderContractDetail(){
   var acts = document.getElementById('cd-item-actions');
   if(acts){
     var canEdit = canManageClientRecords();
-    acts.innerHTML = canEdit
+    acts.innerHTML = (!_cdVisitId
+        ? '<button class="ca" style="color:#2D7D3A;font-weight:700" onclick="startContractRound()"><i class="ti ti-clipboard-plus"></i> ' + (ar?'بدء جولة فحص':'Start inspection round') + '</button>'
+        : '')
+      + (canEdit
       ? '<button class="ca" onclick="document.getElementById(\'ci-file\').click()"><i class="ti ti-file-spreadsheet"></i> ' + (ar?'رفع إكسل':'Upload Excel') + '</button>'
         + '<button class="ca" onclick="openAddFromOrders()"><i class="ti ti-package-import"></i> ' + (ar?'سحب من أوردر':'From an order') + '</button>'
         + '<button class="ca" onclick="addContractItemRow()"><i class="ti ti-plus"></i> ' + (ar?'إضافة معدة':'Add equipment') + '</button>'
         + (st.key === 'expired'
             ? '<button class="ca" style="color:#2D7D3A" onclick="renewContract()"><i class="ti ti-refresh"></i> ' + (ar?'تجديد العقد':'Renew') + '</button>'
             : '')
-      : '';
+      : '');
   }
 
   var cnt = document.getElementById('cd-item-count');
   if(cnt) cnt.textContent = '(' + items.length + ')';
+
+  activeRoundBanner();
 
   renderContractItems();
 }
@@ -13025,7 +13196,8 @@ async function saveItemCard(){
   var card = {
     contract_id: _cdContractId,
     item_id: it.id,
-    visit_id: (typeof currentVisitId !== 'undefined' && currentVisitId) ? currentVisitId : null,
+    // The round's visit, so the contract history and the visit history agree
+    visit_id: _cdVisitId || null,
     visit_date: date,
     condition: _icCondition,
     notes: v('ic-notes'),
@@ -15181,6 +15353,7 @@ async function showPublicReport(token){
     </div>
   </div>
 
+  <div id="cd-round" style="display:none;margin-bottom:14px"></div>
   <div id="cd-summary" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:12px;margin-bottom:16px"></div>
 
   <div class="card" style="margin-bottom:16px">
