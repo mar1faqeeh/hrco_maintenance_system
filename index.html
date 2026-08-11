@@ -9654,51 +9654,83 @@ function normModel(v){
 
 // Find the archived drawing for a model. Exact match first; then a contained
 // match, because "SCC 61" and "Rational SCC-61 E" describe the same machine.
-function equipmentForModel(model, name){
+// Returns { eq, sure } — `sure` is false when the drawing was matched on the
+// machine's NAME rather than its model, so the reader can be told it's a
+// suggestion rather than a certainty.
+function equipmentMatch(model, name){
   if(typeof equipmentData === 'undefined' || !equipmentData.length) return null;
+
   var m = normModel(model);
   if(m.length >= 3){
     var exact = equipmentData.find(function(e){ return normModel(e.model) === m; });
-    if(exact) return exact;
+    if(exact) return { eq: exact, sure: true };
+
     var partial = equipmentData.find(function(e){
       var em = normModel(e.model);
       return em.length >= 3 && (em.indexOf(m) !== -1 || m.indexOf(em) !== -1);
     });
-    if(partial) return partial;
+    if(partial) return { eq: partial, sure: true };
+
     // Older archive entries have no model — the name often carries it
     var inName = equipmentData.find(function(e){ return normModel(e.name).indexOf(m) !== -1; });
-    if(inName) return inName;
-
-    // A model was given and matched nothing. Don't fall back to the machine
-    // name — "Combi Oven" would keep pointing at the old drawing after the
-    // model was corrected, which is worse than showing nothing.
-    return null;
+    if(inName) return { eq: inName, sure: true };
   }
-  // Last resort: the machine's own name
-  var n = normModel(name);
-  if(n.length >= 4){
-    return equipmentData.find(function(e){ return normModel(e.name).indexOf(n) !== -1; }) || null;
+
+  // Nothing matched the model. Fall back to the machine's NAME, but flag it:
+  // most archived drawings still have no model filled in, and an "Electric
+  // Fryer" drawing is genuinely useful even when the match isn't certain.
+  var words = String(name || '').toLowerCase().split(/[\s\-_/]+/)
+    .filter(function(w){ return w.length >= 4; });
+  if(words.length){
+    var byName = equipmentData.find(function(e){
+      var en = String(e.name || '').toLowerCase();
+      return words.filter(function(w){ return en.indexOf(w) !== -1; }).length >= Math.min(2, words.length);
+    });
+    if(byName) return { eq: byName, sure: false };
   }
   return null;
 }
 
+// Kept for the callers that only need the drawing itself.
+function equipmentForModel(model, name){
+  var hit = equipmentMatch(model, name);
+  return hit ? hit.eq : null;
+}
+
 // A small line offering the drawing wherever a model is known.
 function diagramHintHtml(model, name, elId){
-  var eq = equipmentForModel(model, name);
+  var hit = equipmentMatch(model, name);
   var ar = (LNG === 'ar');
-  if(!eq){
+
+  if(!hit){
+    var total = (typeof equipmentData !== 'undefined') ? equipmentData.length : 0;
+    // Say WHY, and what would fix it — "no drawing" alone leaves him guessing
+    // whether the feature is broken.
     return '<div id="' + (elId||'') + '" style="font-size:11px;color:#A0AEC0;margin-top:5px">'
-      + '<i class="ti ti-file-off"></i> ' + (ar ? 'لا يوجد رسم قطع لهذا الموديل في الأرشيف'
-                                               : 'No parts drawing archived for this model') + '</div>';
+      + '<i class="ti ti-file-off"></i> '
+      + (ar ? ('لا يوجد رسم مطابق' + (model ? (' للموديل "' + model + '"') : ''))
+            : ('No drawing matches' + (model ? (' the model "' + model + '"') : '')))
+      + (total
+          ? ('<br><span style="color:#C4680A">'
+             + (ar ? ('الأرشيف فيه ' + total + ' رسم — افتح "طلب قطع" وأضف الموديل للرسم المناسب ليظهر هنا تلقائياً.')
+                   : ('The archive holds ' + total + ' drawing(s) — open Parts Request and set the model on the right one so it appears here automatically.'))
+             + '</span>')
+          : ('<br>' + (ar ? 'لا توجد رسومات في الأرشيف بعد.' : 'The archive is empty.')))
+      + '</div>';
   }
+
+  var eq = hit.eq;
   var n = (eq.parts || []).length;
-  return '<div id="' + (elId||'') + '" style="font-size:11px;margin-top:5px;color:#2D7D3A">'
-    + '<i class="ti ti-file-check"></i> '
-    + (ar ? 'يوجد رسم قطع: ' : 'Parts drawing available: ')
+  var colour = hit.sure ? '#2D7D3A' : '#C4680A';
+  return '<div id="' + (elId||'') + '" style="font-size:11px;margin-top:5px;color:' + colour + '">'
+    + '<i class="ti ti-' + (hit.sure ? 'file-check' : 'file-search') + '"></i> '
+    + (hit.sure ? (ar ? 'يوجد رسم قطع: ' : 'Parts drawing available: ')
+                : (ar ? 'رسم محتمل (مطابقة بالاسم): ' : 'Possible drawing (matched by name): '))
     + '<b>' + (eq.name || '') + '</b>'
     + (n ? (' · ' + n + ' ' + (ar ? 'قطعة' : 'parts')) : '')
-    + ' <button type="button" onclick="openDiagramFor(' + eq.id + ')" style="border:none;background:#E7F6EC;color:#2D7D3A;'
-    + 'border-radius:6px;padding:3px 10px;font-size:11px;font-weight:700;cursor:pointer;font-family:inherit;margin-inline-start:6px">'
+    + ' <button type="button" onclick="openDiagramFor(' + eq.id + ')" style="border:none;background:'
+    + (hit.sure ? '#E7F6EC;color:#2D7D3A' : '#FDF0E0;color:#C4680A')
+    + ';border-radius:6px;padding:3px 10px;font-size:11px;font-weight:700;cursor:pointer;font-family:inherit;margin-inline-start:6px">'
     + (ar ? 'عرض الرسم' : 'Open') + '</button></div>';
 }
 
