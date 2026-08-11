@@ -2792,6 +2792,18 @@ var selParts=[];
 function addPart(name, code){
   var v = name || document.getElementById('inp-part').value.trim();
   if(!v) return;
+
+  // Store "CODE — Name" so the report shows both. Typed text is matched to the
+  // catalogue first, so a hand-typed part still gets its code.
+  if(!code && typeof partsData !== 'undefined'){
+    var hit = partsData.find(function(p){
+      return String(p.name||'').toLowerCase() === v.toLowerCase()
+          || String(p.code||'').toLowerCase() === v.toLowerCase();
+    });
+    if(hit){ v = hit.name; code = hit.code; }
+  }
+  if(code && String(v).indexOf(code) === -1) v = code + ' — ' + v;
+
   if(!selParts.includes(v)) selParts.push(v);
   if(!name) document.getElementById('inp-part').value='';
   var dd=document.getElementById('dd-partAC');
@@ -2847,6 +2859,30 @@ function showPartAC(val){
     dd.appendChild(item);
   });
 }
+
+// The parts block on a report: the machine on its own line, then each part as
+// "CODE — Name" underneath. A bare list of codes told the warehouse nothing
+// about WHICH machine they were for.
+function visitPartsBlock(v, asHtml){
+  var list = Array.isArray(v.parts) ? v.parts : [];
+  if(!list.length) return '\u2014';
+
+  var machine = [ (v.equipment || v.equip || ''), (v.model || '') ]
+    .filter(Boolean).join(' \u00b7 ');
+  var serial = v.serial_no || v.serial || '';
+  if(serial) machine += (machine ? '  \u00b7  ' : '') + serial;
+
+  if(!asHtml){
+    return (machine ? (machine + '\n') : '') + list.map(function(p){ return '\u2022 ' + p; }).join('\n');
+  }
+  return (machine
+      ? '<div style="font-weight:700;margin-bottom:4px">' + machine + '</div>'
+      : '')
+    + '<div>' + list.map(function(p){
+        return '<div style="padding-inline-start:10px">\u2022 ' + p + '</div>';
+      }).join('') + '</div>';
+}
+
 function renderTags(){var w=document.getElementById('parts-tags');if(!w)return;w.innerHTML='';selParts.forEach(function(p,i){var t2=document.createElement('div');t2.style.cssText='display:inline-flex;align-items:center;gap:4px;background:#E6F1FB;color:#1D4E89;border-radius:99px;padding:3px 10px;font-size:12px';t2.innerHTML=p+'<button onclick="selParts.splice('+i+',1);renderTags()" style="background:none;border:none;color:#1D4E89;cursor:pointer;font-size:14px;padding:0">×</button>';w.appendChild(t2);});}
 // Photograph the rating plate and read the serial off it. This used to invent
 // a random "SN-XXXX", which looked like it worked and quietly filled the
@@ -11573,7 +11609,7 @@ async function doSendEmail(){
   if(btn){ btn.disabled=true; btn.innerHTML='<i class="ti ti-loader"></i> جاري الإرسال...'; }
   if(statusEl){ statusEl.style.display='none'; }
 
-  var partsStr = Array.isArray(v.parts)&&v.parts.length ? v.parts.join(' / ') : '—';
+  var partsStr = visitPartsBlock(v, true);
   var isDone = v.status==='Completed'||v.status==='مكتملة';
   var statusAr = isDone?'مكتملة ✓':'معلقة ⏳';
   var statusEn = isDone?'Completed ✓':'Pending ⏳';
@@ -14533,6 +14569,19 @@ async function saveAndSign() {
   var _spl=document.getElementById('sum-parts-list');
   if(_spl){
     _spl.innerHTML='';
+    if(_finalParts.length){
+      // Name the machine above the parts, so the summary reads the same way
+      // the printed report does.
+      var _eqName = [ (document.getElementById('inp-equipment')||{}).value || '',
+                      (document.getElementById('inp-model')||{}).value || '' ]
+                    .filter(Boolean).join(' · ');
+      if(_eqName){
+        var head = document.createElement('div');
+        head.textContent = _eqName;
+        head.style.cssText = 'width:100%;font-size:11px;font-weight:700;color:#4A5568;margin-bottom:3px';
+        _spl.appendChild(head);
+      }
+    }
     _finalParts.forEach(function(p){
       var tag=document.createElement('span');
       tag.textContent=p;
@@ -14697,7 +14746,7 @@ async function printVisit(id, withPhotos, notesOverride, notesLang) {
   var typeAr = {'ضمان':'ضمان','مدفوعة':'مدفوعة','عقد':'عقد صيانة','warranty':'ضمان','paid':'مدفوعة','contract':'عقد صيانة'};
   var typeEn = {'ضمان':'Warranty','مدفوعة':'Paid','عقد':'Contract','warranty':'Warranty','paid':'Paid','contract':'Contract'};
   var vtype = v.visit_type || v.type || '';
-  var partsStr = Array.isArray(v.parts) && v.parts.length ? v.parts.join(' / ') : '\u2014';
+  var partsStr = visitPartsBlock(v, true);
   var statusAr = v.status==='\u0645\u0643\u062a\u0645\u0644\u0629'||v.status==='Completed'?'\u0645\u0643\u062a\u0645\u0644\u0629 \u2713':'\u0645\u0639\u0644\u0642\u0629 / Pending';
   var statusEn = v.status==='\u0645\u0643\u062a\u0645\u0644\u0629'||v.status==='Completed'?'Completed \u2713':'Pending';
   var isDone = v.status==="\u0645\u0643\u062a\u0645\u0644\u0629"||v.status==="Completed";
@@ -15219,7 +15268,7 @@ async function showPublicReport(token){
   var typeAr = {'ضمان':'ضمان','مدفوعة':'مدفوعة','عقد':'عقد صيانة','warranty':'ضمان','paid':'مدفوعة','contract':'عقد صيانة'};
   var typeEn = {'ضمان':'Warranty','مدفوعة':'Paid','عقد':'Contract','warranty':'Warranty','paid':'Paid','contract':'Contract'};
   var vtype = v.visit_type || v.type || '';
-  var partsStr = Array.isArray(v.parts)&&v.parts.length ? v.parts.join(' / ') : '—';
+  var partsStr = visitPartsBlock(v, true);
   var isDone = v.status==='مكتملة'||v.status==='Completed';
   var statusAr = isDone?'مكتملة ✓':'معلقة';
   var statusEn = isDone?'Completed ✓':'Pending';
