@@ -9749,6 +9749,23 @@ function renderEquipGrid(){
 // is working on, and the parts he taps land straight in the right field.
 var _dpEquip = null, _dpPicked = {}, _dpTarget = null;
 
+
+// A drawing's parts table is read by column position: num · name · desc. In
+// real supplier tables the "name" column is usually the PART CODE and the
+// description sits beside it — so work out which is which instead of taking
+// the first column and calling it a name.
+function splitDiagramPart(p){
+  var a = String((p && p.name) || '').trim();
+  var b = String((p && p.desc) || '').trim();
+  var looksLikeCode = function(v){
+    return v && v.length <= 24 && !/\s/.test(v) && /\d/.test(v) && /^[A-Za-z0-9][A-Za-z0-9\-_./]*$/.test(v);
+  };
+
+  if(looksLikeCode(a) && b) return { code: a, name: b };   // code · description
+  if(looksLikeCode(b) && a) return { code: b, name: a };   // description · code
+  return { code: '', name: a || b || ('Part ' + (p.num || '')) };
+}
+
 // target: 'card' → the contract inspection card · 'visit' → the visit form
 function openDiagramPicker(equipId, target){
   var ar = (LNG === 'ar');
@@ -9835,10 +9852,13 @@ function renderDiagramPickList(){
       + 'background:' + (on ? '#E6F1FB' : '#fff') + '">'
       + '<span style="width:26px;height:26px;border-radius:50%;flex-shrink:0;display:flex;align-items:center;justify-content:center;'
       +   'font-size:11px;font-weight:700;color:#fff;background:' + (on ? '#1D4E89' : '#A0AEC0') + '">' + p.num + '</span>'
-      + '<div style="flex:1;min-width:0">'
-      +   '<div style="font-size:12px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"><bdi>' + (p.name || '—') + '</bdi></div>'
-      +   (p.desc ? '<div style="font-size:10px;color:#718096;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + p.desc + '</div>' : '')
-      + '</div>'
+      + (function(){
+          var sp = splitDiagramPart(p);
+          return '<div style="flex:1;min-width:0">'
+            + '<div style="font-size:12px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"><bdi>' + (sp.name || '—') + '</bdi></div>'
+            + (sp.code ? '<div style="font-size:10px;color:#1D4E89;font-weight:600" dir="ltr">' + sp.code + '</div>' : '')
+            + '</div>';
+        })()
       + (p.pos ? '<i class="ti ti-map-pin" style="color:#CBD5E1;font-size:12px" title="' + (ar?'له علامة على الرسم':'has a marker') + '"></i>' : '')
       + (on ? '<i class="ti ti-check" style="color:#1D4E89"></i>' : '')
       + '</div>';
@@ -9877,15 +9897,18 @@ function addPickedDiagramParts(){
 
   var added = 0;
   picked.forEach(function(p){
-    var name = p.name || ('Part ' + p.num);
+    var sp = splitDiagramPart(p);
+    // The catalogue wins when it knows this part, so the record keeps the
+    // company's own name and code.
     var hit = (typeof matchCataloguePart === 'function')
-      ? matchCataloguePart({ name: name, code: '' }) : null;
+      ? matchCataloguePart({ name: sp.name, code: sp.code }) : null;
+    var name = hit ? hit.name : sp.name;
+    var code = hit ? hit.code : sp.code;
 
     if(_dpTarget === 'visit'){
-      // The visit form keeps its own list of required parts
-      if(typeof addPart === 'function'){ addPart(hit ? hit.name : name, hit ? hit.code : ''); added++; }
+      if(typeof addPart === 'function'){ addPart(name, code); added++; }
     } else {
-      if(typeof addCardPart === 'function'){ addCardPart(hit ? hit.name : name, hit ? hit.code : ''); added++; }
+      if(typeof addCardPart === 'function'){ addCardPart(name, code); added++; }
     }
   });
 
@@ -14585,7 +14608,7 @@ async function saveAndSign() {
     _finalParts.forEach(function(p){
       var tag=document.createElement('span');
       tag.textContent=p;
-      tag.style.cssText='background:#FCEBEB;color:#C0392B;border-radius:99px;padding:2px 8px;font-size:11px;font-weight:500;display:inline-block;margin:1px';
+      tag.style.cssText='background:#FCEBEB;color:#C0392B;border-radius:99px;padding:3px 10px;font-size:11px;font-weight:600;display:inline-block;margin:2px 3px';
       _spl.appendChild(tag);
     });
   }
