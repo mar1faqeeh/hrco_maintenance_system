@@ -539,7 +539,13 @@ html,body{height:100%;overflow:auto;font-family:Tajawal,sans-serif;font-size:14p
         <div style="background:#F8FAFC;border:1px solid #D9E2EC;border-radius:8px;padding:10px 14px"><div style="font-size:11px;color:#718096;margin-bottom:3px" data-en="Order / Project" data-ar="الأوردر / المشروع">Order / Project</div><div style="font-size:14px;font-weight:600" id="sum-order">—</div><div style="font-size:11px;color:#718096;margin-top:3px" id="sum-order-items"></div></div>
         <div style="background:#F8FAFC;border:1px solid #D9E2EC;border-radius:8px;padding:10px 14px"><div style="font-size:11px;color:#718096;margin-bottom:3px" id="t-sum-tasks">Tasks Done</div><div style="font-size:15px;font-weight:700" id="sum-tasks">0 / 0</div></div>
         <div style="background:#F8FAFC;border:1px solid #D9E2EC;border-radius:8px;padding:10px 14px"><div style="font-size:11px;color:#718096;margin-bottom:3px" id="t-sum-dur">Duration</div><div style="font-size:15px;font-weight:700" id="sum-dur">—</div><div style="font-size:11px;color:#718096;margin-top:3px" id="sum-time">—</div></div>
+        <div style="background:#F8FAFC;border:1px solid #D9E2EC;border-radius:8px;padding:10px 14px"><div style="font-size:11px;color:#718096;margin-bottom:3px" data-en="Spare Parts Used" data-ar="قطع الغيار المستخدمة">Spare Parts Used</div><div style="font-size:15px;font-weight:700;color:#2D7D3A" id="sum-used">0</div><div id="sum-used-list" style="margin-top:6px;display:flex;flex-wrap:wrap;gap:4px"></div></div>
         <div style="background:#F8FAFC;border:1px solid #D9E2EC;border-radius:8px;padding:10px 14px"><div style="font-size:11px;color:#718096;margin-bottom:3px" id="t-sum-parts">Missing Parts</div><div style="font-size:15px;font-weight:700;color:#C0392B" id="sum-parts">0</div><div id="sum-parts-list" style="margin-top:6px;display:flex;flex-wrap:wrap;gap:4px"></div></div>
+        <div id="sum-notes-tile" style="grid-column:1/-1;background:#F8FAFC;border:1px solid #D9E2EC;border-radius:8px;padding:10px 14px;display:none">
+          <div style="font-size:11px;color:#718096;margin-bottom:3px" data-en="Technician Notes" data-ar="ملاحظات الفني">Technician Notes</div>
+          <div style="font-size:13px;line-height:1.6;color:#1a202c" id="sum-notes">—</div>
+          <button type="button" id="sum-notes-more" onclick="toggleNotesSummary()" style="display:none;margin-top:5px;border:none;background:transparent;color:#1D4E89;font-size:11px;font-weight:700;cursor:pointer;font-family:inherit;padding:0"></button>
+        </div>
       </div>
       <div style="margin:0 14px 10px;background:#FDF0E0;border:1px solid #FAC775;border-radius:8px;padding:10px 12px;display:flex;gap:8px">
         <i class="ti ti-alert-triangle" style="color:#C4680A;flex-shrink:0;margin-top:1px;font-size:16px"></i>
@@ -3110,6 +3116,56 @@ function addUsedPart(name, code){
 function removeUsedPart(i){
   selUsedParts.splice(i, 1);
   renderUsedTags();
+}
+
+
+// ── Notes summary on the visit summary ───────────────────────────────────
+// Technicians write long notes. The summary is a glance before signing, so
+// show the opening of it and let him expand — truncating with no way back
+// would hide what he is about to put his name to.
+var _notesExpanded = false;
+var NOTES_PREVIEW = 220;
+
+function toggleNotesSummary(){
+  _notesExpanded = !_notesExpanded;
+  renderNotesSummary();
+}
+
+function renderNotesSummary(){
+  var tile = document.getElementById('sum-notes-tile');
+  var body = document.getElementById('sum-notes');
+  var more = document.getElementById('sum-notes-more');
+  if(!tile || !body) return;
+  var ar = (LNG === 'ar');
+
+  var raw = (document.getElementById('notesArea') || {}).value || '';
+  var text = String(raw).trim();
+
+  if(!text){ tile.style.display = 'none'; return; }
+  tile.style.display = 'block';
+
+  // Collapse runs of blank lines so the preview isn't mostly whitespace
+  var flat = text.replace(/\s*\n\s*/g, ' \u00b7 ').replace(/\s{2,}/g, ' ');
+
+  if(flat.length <= NOTES_PREVIEW){
+    body.textContent = flat;
+    if(more) more.style.display = 'none';
+    return;
+  }
+
+  if(_notesExpanded){
+    body.style.whiteSpace = 'pre-wrap';
+    body.textContent = text;
+  } else {
+    body.style.whiteSpace = 'normal';
+    body.textContent = flat.slice(0, NOTES_PREVIEW).replace(/\s+\S*$/, '') + '\u2026';
+  }
+  if(more){
+    more.style.display = 'block';
+    more.textContent = _notesExpanded
+      ? (ar ? 'إخفاء' : 'Show less')
+      : (ar ? ('عرض الكل (' + text.length + ' حرف)') : ('Show all (' + text.length + ' chars)'));
+  }
 }
 
 function renderUsedTags(){
@@ -14961,6 +15017,23 @@ async function saveAndSign() {
   var _partsNFinal = _finalParts.length;
   var _sp=document.getElementById('sum-parts');
   if(_sp){_sp.textContent=_partsNFinal; _sp.style.color=_partsNFinal>0?'#C0392B':'#2D7D3A';}
+  // Parts actually fitted, beside the missing ones
+  var _su = document.getElementById('sum-used');
+  if(_su) _su.textContent = selUsedParts.length;
+  var _sul = document.getElementById('sum-used-list');
+  if(_sul){
+    _sul.innerHTML = '';
+    selUsedParts.forEach(function(p){
+      var tag = document.createElement('span');
+      tag.textContent = p;
+      tag.style.cssText = 'background:#E7F6EC;color:#2D7D3A;border-radius:99px;padding:3px 10px;font-size:11px;font-weight:600;display:inline-block;margin:2px 3px';
+      _sul.appendChild(tag);
+    });
+  }
+
+  // A short read of the technician's notes before he signs
+  try{ _notesExpanded = false; renderNotesSummary(); }catch(e){}
+
   var _spl=document.getElementById('sum-parts-list');
   if(_spl){
     _spl.innerHTML='';
