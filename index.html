@@ -3308,14 +3308,14 @@ function partsRowsHtml(v){
   var out = '';
   if(used.length){
     out += '<tr>'
-      + '<th class="lbl"><span class="lbl-ar">قطع الغيار المستخدمة</span><span class="lbl-en">Spare Parts Used</span></th>'
+      + '<th class="lbl"><span class="lbl-en">Spare Parts Used</span><span class="lbl-ar">قطع الغيار المستخدمة</span></th>'
       + '<td class="val" colspan="3" style="background:#F1FAF3">'
       +   head + block(used, '#1E6B2E')
       + '</td></tr>';
   }
   if(req.length){
     out += '<tr>'
-      + '<th class="lbl"><span class="lbl-ar">قطع الغيار المطلوبة</span><span class="lbl-en">Required Spare Parts</span></th>'
+      + '<th class="lbl"><span class="lbl-en">Required Spare Parts</span><span class="lbl-ar">قطع الغيار المطلوبة</span></th>'
       + '<td class="val" colspan="3" style="background:#FDF3F2">'
       +   (used.length ? '' : head) + block(req, '#C0392B')
       + '</td></tr>';
@@ -15434,27 +15434,45 @@ function _doPrintVisit(id, v, techSigImg, clientSigImg, visitDateTime, vtype, pa
   var typeAr = {'ضمان':'ضمان','مدفوعة':'مدفوعة','عقد':'عقد صيانة','warranty':'ضمان','paid':'مدفوعة','contract':'عقد صيانة'};
   var typeEn = {'ضمان':'Warranty','مدفوعة':'Paid','عقد':'Contract','warranty':'Warranty','paid':'Paid','contract':'Contract'};
 
-  var html = '<!DOCTYPE html><html dir="rtl"><head><meta charset="UTF-8">'
-    + '<title>كشف زيارة صيانة ' + (company('short')||'') + ' #' + id + '</title>'
+  // The browser's "Save as PDF" uses the document TITLE as the file name, so
+  // build it in Latin script: HRCO-MR_CLIENT-ORDER#ID
+  var _slug = function(t){
+    var v = String(t == null ? '' : t);
+    var latin = v.replace(/[^A-Za-z0-9]+/g, '');
+    // An Arabic-only name would slug to nothing, so transliterate it rather
+    // than falling back to a meaningless "Client".
+    if(!latin && /[\u0600-\u06FF]/.test(v) && typeof translit === 'function'){
+      try{ latin = translit(v).replace(/[^A-Za-z0-9]+/g, ''); }catch(e){}
+    }
+    return latin.slice(0, 24);
+  };
+  var _orderName = (typeof orderNameOf === 'function') ? orderNameOf(v.order_id) : '';
+  var _fileName = (company('short') || 'HRCO') + '-MR_'
+    + (_slug(v.client) || 'Client')
+    + (_slug(_orderName) ? ('-' + _slug(_orderName)) : '')
+    + '#' + id;
+
+  var html = '<!DOCTYPE html><html dir="ltr"><head><meta charset="UTF-8">'
+    + '<title>' + _fileName + '</title>'
     + '<style>'
     + '* { margin:0; padding:0; box-sizing:border-box; }'
-    + 'body { font-family: "Tajawal", "Arial", sans-serif; color:#1a202c; background:#fff; direction:rtl; font-size:13px; }'
+    + 'body { font-family: "Tajawal", "Arial", sans-serif; color:#1a202c; background:#fff; direction:ltr; font-size:13px; }'
     + '@import url("https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700&display=swap");'
     + '.page { width:210mm; min-height:297mm; margin:0 auto; padding:0; position:relative; display:flex; flex-direction:column; }'
     + '.header-img { width:100%; display:block; }'
     + '.footer-img { width:100%; display:block; margin-top:auto; }'
     + '.content { padding:14px 28px; flex:1; }'
     + '.report-title { display:flex; justify-content:space-between; align-items:center; margin-bottom:14px; padding-bottom:10px; border-bottom:2px solid #0F2D52; }'
-    + '.title-ar { font-size:18px; font-weight:700; color:#0F2D52; }'
-    + '.title-en { font-size:13px; color:#718096; margin-top:3px; }'
+    + '.title-en { font-size:18px; font-weight:700; color:#0F2D52; }'
+    + '.title-ar { font-size:13px; color:#718096; margin-top:3px; }'
     + '.report-num { text-align:left; background:#F0F4F8; border-radius:8px; padding:8px 14px; }'
     + '.report-num .num { font-size:20px; font-weight:700; color:#0F2D52; }'
     + '.report-num .dt { font-size:11px; color:#718096; margin-top:2px; }'
     + 'table { width:100%; border-collapse:collapse; margin-bottom:16px; }'
     + 'th, td { border:1px solid #D9E2EC; padding:8px 12px; vertical-align:top; }'
     + '.lbl { background:#F8FAFC; width:18%; text-align:center; }'
-    + '.lbl-ar { font-size:12px; font-weight:700; color:#0F2D52; display:block; }'
-    + '.lbl-en { font-size:10px; color:#718096; display:block; margin-top:1px; }'
+    + '.lbl-en { font-size:12px; font-weight:700; color:#0F2D52; display:block; }'
+    + '.lbl-ar { font-size:10px; color:#718096; display:block; margin-top:1px; }'
     + '.val { width:32%; font-size:13px; }'
     + '.val.highlight { color:#C0392B; font-weight:600; }'
     + '.val.done { color:#2D7D3A; font-weight:600; }'
@@ -15473,45 +15491,45 @@ function _doPrintVisit(id, v, techSigImg, clientSigImg, visitDateTime, vtype, pa
     + visitHeaderBlock
     + '<div class="content">'
     + '<div class="report-title">'
-    + '<div><div class="title-ar">كشف زيارة صيانة</div><div class="title-en">Maintenance Visit Report</div></div>'
+    + '<div><div class="title-en">Maintenance Visit Report</div><div class="title-ar">كشف زيارة صيانة</div></div>'
     + '<div class="report-num"><div class="num">#' + id + '</div><div class="dt">' + visitDateTime + '</div></div>'
     + '</div>'
     + '<table>'
     + '<tr>'
-    + '<th class="lbl"><span class="lbl-ar">اسم العميل</span><span class="lbl-en">Client</span></th>'
+    + '<th class="lbl"><span class="lbl-en">Client</span><span class="lbl-ar">اسم العميل</span></th>'
     + '<td class="val"><strong>' + (v.client||'—') + '</strong></td>'
-    + '<th class="lbl"><span class="lbl-ar">الموقع / الفرع</span><span class="lbl-en">Location</span></th>'
+    + '<th class="lbl"><span class="lbl-en">Location</span><span class="lbl-ar">الموقع / الفرع</span></th>'
     + '<td class="val">' + (v.location||'—') + '</td>'
     + '</tr>'
     + '<tr>'
-    + '<th class="lbl"><span class="lbl-ar">المعدة / الجهاز</span><span class="lbl-en">Equipment</span></th>'
+    + '<th class="lbl"><span class="lbl-en">Equipment</span><span class="lbl-ar">المعدة / الجهاز</span></th>'
     + '<td class="val">' + (v.equipment||v.equip||'—') + '</td>'
-    + '<th class="lbl"><span class="lbl-ar">الرقم التسلسلي</span><span class="lbl-en">Serial No.</span></th>'
+    + '<th class="lbl"><span class="lbl-en">Serial No.</span><span class="lbl-ar">الرقم التسلسلي</span></th>'
     + '<td class="val">' + (v.serial_number||'—') + '</td>'
     + '</tr>'
     + '<tr>'
-    + '<th class="lbl"><span class="lbl-ar">الموديل</span><span class="lbl-en">Model</span></th>'
+    + '<th class="lbl"><span class="lbl-en">Model</span><span class="lbl-ar">الموديل</span></th>'
     + '<td class="val">' + (v.model||'—') + '</td>'
-    + '<th class="lbl"><span class="lbl-ar">الفني المسؤول</span><span class="lbl-en">Technician</span></th>'
+    + '<th class="lbl"><span class="lbl-en">Technician</span><span class="lbl-ar">الفني المسؤول</span></th>'
     + '<td class="val">' + (v.tech||'—')
     +   (v.helpers ? '<div style="font-size:11px;color:#718096;font-weight:400;margin-top:2px">'
-                     + 'ومعه / with: ' + String(v.helpers).replace(/</g,'&lt;') + '</div>' : '')
+                     + 'with / ومعه: ' + String(v.helpers).replace(/</g,'&lt;') + '</div>' : '')
     + '</td>'
     + '</tr>'
     + '<tr>'
-    + '<th class="lbl"><span class="lbl-ar">نوع الزيارة</span><span class="lbl-en">Visit Type</span></th>'
-    + '<td class="val">' + (typeAr[vtype]||vtype||'—') + ' / ' + (typeEn[vtype]||'—') + '</td>'
-    + '<th class="lbl"><span class="lbl-ar">نوع العطل</span><span class="lbl-en">Fault Type</span></th>'
+    + '<th class="lbl"><span class="lbl-en">Visit Type</span><span class="lbl-ar">نوع الزيارة</span></th>'
+    + '<td class="val">' + (typeEn[vtype]||'—') + ' / ' + (typeAr[vtype]||vtype||'—') + '</td>'
+    + '<th class="lbl"><span class="lbl-en">Fault Type</span><span class="lbl-ar">نوع العطل</span></th>'
     + '<td class="val">' + (v.fault||'—') + '</td>'
     + '</tr>'
     + partsRowsHtml(v)
     + '<tr>'
-    + '<th class="lbl"><span class="lbl-ar">ملاحظات الفني</span><span class="lbl-en">Tech Notes</span></th>'
+    + '<th class="lbl"><span class="lbl-en">Tech Notes</span><span class="lbl-ar">ملاحظات الفني</span></th>'
     + '<td class="val" colspan="3" dir="' + (notesDir||'rtl') + '" style="white-space:pre-wrap;line-height:1.7">' + ((notesForPrint!==undefined && notesForPrint!==null && notesForPrint!=='') ? notesForPrint : (v.notes||'—')) + '</td>'
     + '</tr>'
     + '<tr>'
-    + '<th class="lbl"><span class="lbl-ar">الحالة</span><span class="lbl-en">Status</span></th>'
-    + '<td class="val" colspan="3"><span class="' + (isDone?"status-done":"status-pend") + '">' + statusAr + ' / ' + statusEn + '</span></td>'
+    + '<th class="lbl"><span class="lbl-en">Status</span><span class="lbl-ar">الحالة</span></th>'
+    + '<td class="val" colspan="3"><span class="' + (isDone?"status-done":"status-pend") + '">' + statusEn + ' / ' + statusAr + '</span></td>'
     + '</tr>'
     + '</table>'
     + (visitPhotosArr.length ? (
@@ -15522,14 +15540,14 @@ function _doPrintVisit(id, v, techSigImg, clientSigImg, visitDateTime, vtype, pa
         }).join('')
       + '</div>'
       ) : '')
-    + '<div class="sec-title">✍ التوقيعات / Signatures</div>'
+    + '<div class="sec-title">✍ Signatures / التوقيعات</div>'
     + '<div class="sig-grid">'
     + '<div class="sig-box">'
-    + '<div class="sig-lbl">توقيع الفني <span>/ Technician Signature</span></div>'
+    + '<div class="sig-lbl">Technician Signature <span>/ توقيع الفني</span></div>'
     + (hasTechSig ? '<img src="' + techSigImg + '" class="sig-img">' : '<div class="no-sig">لم يتم التوقيع / Not Signed</div>')
     + '</div>'
     + '<div class="sig-box">'
-    + '<div class="sig-lbl">توقيع العميل / المشرف <span>/ Client Signature</span></div>'
+    + '<div class="sig-lbl">Client Signature <span>/ توقيع العميل — المشرف</span></div>'
     + (hasClientSig ? '<img src="' + clientSigImg + '" class="sig-img">' : '<div class="no-sig">لم يتم التوقيع / Not Signed</div>')
     + '</div>'
     + '</div>'
