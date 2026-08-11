@@ -428,7 +428,26 @@ html,body{height:100%;overflow:auto;font-family:Tajawal,sans-serif;font-size:14p
         <div id="nv-diagram-hint"></div>
       </div>
       <div class="field"><label id="t-lbl-fault">Fault Description</label><input type="text" id="inp-fault" placeholder="Fault..."></div>
+      <div class="field"><label data-en="Spare Parts Used" data-ar="قطع الغيار المستخدمة">Spare Parts Used</label>
+        <div style="font-size:11px;color:#718096;margin-bottom:5px" data-en="Fitted on this visit, taken from the store" data-ar="ما رُكّب في هذه الزيارة وسُحب من المخزن">Fitted on this visit, taken from the store</div>
+        <div style="position:relative">
+          <div style="display:flex;gap:6px">
+            <input type="text" id="inp-used-part" placeholder="Add part..."
+              data-ph-en="Add a fitted part..." data-ph-ar="أضف قطعة مركّبة..."
+              onkeydown="if(event.key==='Enter'){addUsedPart();event.preventDefault()}"
+              oninput="showUsedPartAC(this.value)"
+              style="flex:1">
+            <button onclick="addUsedPart()" style="padding:8px 14px;background:#2D7D3A;color:#fff;border:none;border-radius:8px;cursor:pointer;font-size:16px;font-family:inherit;flex-shrink:0">
+              <i class="ti ti-plus"></i>
+            </button>
+          </div>
+          <div id="dd-usedPartAC" style="display:none;position:absolute;background:#fff;border:1px solid #D9E2EC;border-radius:8px;box-shadow:0 4px 16px rgba(0,0,0,.1);z-index:50;width:100%;max-height:180px;overflow-y:auto"></div>
+        </div>
+        <div id="used-parts-tags" style="display:flex;flex-wrap:wrap;gap:5px;margin-top:6px"></div>
+      </div>
+
       <div class="field"><label id="t-lbl-parts">Required Spare Parts</label>
+        <div style="font-size:11px;color:#718096;margin-bottom:5px" data-en="Still needed — not available in the store" data-ar="ما زالت مطلوبة — غير متوفرة في المخزن">Still needed — not available in the store</div>
         <div style="position:relative">
           <div style="display:flex;gap:6px">
             <input type="text" id="inp-part" placeholder="Add part..."
@@ -2148,6 +2167,118 @@ function viewVisit(id){
   _showVisitModal(v);
 }
 
+
+// ── Taking the used parts off the shelf ──────────────────────────────────
+// A part fitted on site has physically left the store, but the system can't
+// deduct it automatically: the same part may already have been deducted when
+// a parts request was marked Issued. So this is a deliberate action, taken
+// once, and the visit is stamped so it can never run twice.
+function visitUsedParts(v){
+  var raw = v && v.parts_used;
+  if(Array.isArray(raw)) return raw;
+  if(!raw) return [];
+  try{ var a = JSON.parse(raw); return Array.isArray(a) ? a : []; }catch(e){ return []; }
+}
+
+// "CODE — Name" back into something the catalogue can be searched with.
+function splitStoredPart(text){
+  var t = String(text || '').trim();
+  var i = t.indexOf('—');
+  if(i === -1) i = t.indexOf(' - ');
+  if(i > 0) return { code: t.slice(0, i).trim(), name: t.slice(i + 1).replace(/^-/, '').trim() };
+  return { code: '', name: t };
+}
+
+function visitDeducted(v){
+  return !!(v && (v.stock_deducted === true || v.stock_deducted === 'true'));
+}
+
+async function deductVisitParts(visitId){
+  var ar = (LNG === 'ar');
+  var v = visData.find(function(x){ return String(x.id) === String(visitId); });
+  if(!v) return;
+
+  if(visitDeducted(v)){
+    alert(ar ? 'سبق خصم قطع هذه الزيارة من المخزن.' : "This visit's parts have already been deducted.");
+    return;
+  }
+
+  var lines = visitUsedParts(v);
+  if(!lines.length){
+    alert(ar ? 'لا توجد قطع مستخدمة في هذه الزيارة.' : 'This visit has no used parts.');
+    return;
+  }
+
+  // Which store? The technician draws from the manager who owns him; with no
+  // way to know that, use the store on screen and say which one it is.
+  var store = (typeof activeStore === 'function') ? activeStore() : curUserLogin;
+  if(typeof stockOwner !== 'undefined' && stockOwner === 'all'){
+    alert(ar ? 'اختر مخزناً من صفحة قطع الغيار أولاً — لا يمكن الخصم من "كل المخازن".'
+             : 'Pick a store on the Spare Parts page first — you cannot deduct from "All stores".');
+    return;
+  }
+  if(typeof canEditStore === 'function' && !canEditStore(store)){
+    alert(ar ? ('هذا مخزن ' + ownerName(store) + ' — لا يمكنك الخصم منه.')
+             : ("This is " + ownerName(store) + "'s store — you cannot deduct from it."));
+    return;
+  }
+
+  // Show exactly what will happen before it happens
+  var rows = lines.map(function(txt){
+    var sp = splitStoredPart(txt);
+    var p = (typeof matchCataloguePart === 'function') ? matchCataloguePart(sp) : null;
+    return { text: txt, part: p, have: p ? partQty(p, store) : null };
+  });
+
+  var preview = rows.map(function(r){
+    if(!r.part) return '• ' + r.text + (ar ? '   (غير موجودة بالكتالوج — تُتجاهل)' : '   (not in the catalogue — skipped)');
+    return '• ' + r.text + '  ×1' + (ar ? ('   (المتوفر ' + r.have + ')') : ('   (' + r.have + ' in stock)'));
+  }).join('\n');
+
+  var willDeduct = rows.filter(function(r){ return !!r.part; }).length;
+  if(!willDeduct){
+    alert(ar ? 'لا توجد أي من هذه القطع في الكتالوج — لا شيء لخصمه.\n\nأضفها إلى قطع الغيار أولاً.'
+             : 'None of these parts are in the catalogue — there is nothing to deduct.\n\nAdd them to Spare Parts first.');
+    return;
+  }
+
+  if(!confirm((ar ? ('خصم من مخزن ' + ownerName(store) + '؟\n\n') : ('Deduct from ' + ownerName(store) + "'s store?\n\n"))
+      + preview
+      + (ar ? '\n\nلا تفعل هذا إن كانت القطع قد صُرفت سابقاً عبر طلب قطع.'
+            : '\n\nDon\'t do this if these parts were already issued through a parts request.'))) return;
+
+  var today = new Date().toISOString().split('T')[0];
+  var done = 0;
+  for(var i = 0; i < rows.length; i++){
+    var r = rows[i];
+    if(!r.part) continue;
+    var before = partQty(r.part, store);
+    await saveStock(r.part.id, store, Math.max(0, before - 1), null);
+    var mv = { part_id: r.part.id, type: 'out', qty: 1, owner: store,
+               dest: (v.client || ''), tech: (v.tech || curUser || ''),
+               note: (ar ? ('صرف في الزيارة رقم ' + v.id) : ('Fitted on visit #' + v.id)),
+               date: v.date || today };
+    try{ await dbSave('parts_history', mv); }catch(e){}
+    histData.unshift(Object.assign({ id: Date.now() + i, partId: r.part.id }, mv));
+    logActivity('update', 'stock', (r.part.code ? r.part.code + ' — ' : '') + r.part.name + ' · ' + ownerName(store),
+                { qty: String(before) }, { qty: String(Math.max(0, before - 1)) });
+    done++;
+  }
+
+  // Stamp the visit so this can never run a second time
+  v.stock_deducted = true;
+  try{
+    await dbSave('visits', { id: v.id, stock_deducted: true });
+  }catch(e){
+    console.log('could not stamp the visit:', e);
+  }
+
+  try{ renderInvList(); renderHistList(); }catch(e){}
+  try{ _showVisitModal(v); }catch(e){}
+  alert(ar ? ('✅ خُصمت ' + done + ' قطعة من مخزن ' + ownerName(store) + '.')
+           : ('✅ ' + done + ' part(s) deducted from ' + ownerName(store) + "'s store."));
+}
+
 function _showVisitModal(v){
   currentViewId = v.id;
   document.getElementById('vm-title').textContent = 'Visit #' + v.id + ' — ' + (v.client||'');
@@ -2191,15 +2322,50 @@ function _showVisitModal(v){
   var typeMap = {'ضمان':'Warranty','مدفوعة':'Paid','عقد':'Contract','warranty':'Warranty','paid':'Paid','contract':'Contract'};
   document.getElementById('vm-type').textContent = typeMap[v.visit_type||v.type] || v.visit_type || v.type || '—';
   
-  // Parts
+  // Parts — the machine first, then each list under its own heading, matching
+  // the printed report exactly.
   var partsWrap = document.getElementById('vm-parts-wrap');
   var partsEl = document.getElementById('vm-parts');
-  var parts = v.parts || [];
-  if(parts.length > 0){
+  var _ar = (LNG === 'ar');
+  var readList = function(x){
+    if(Array.isArray(x)) return x;
+    if(!x) return [];
+    try{ var a = JSON.parse(x); return Array.isArray(a) ? a : []; }catch(e){ return []; }
+  };
+  var used = readList(v.parts_used);
+  var req  = readList(v.parts);
+
+  if(used.length || req.length){
     partsWrap.style.display = 'block';
-    partsEl.innerHTML = parts.map(function(p){
-      return '<span style="background:#E6F1FB;color:#1D4E89;border-radius:99px;padding:3px 10px;font-size:12px">'+p+'</span>';
-    }).join('');
+    var machine = (typeof visitMachineLine === 'function') ? visitMachineLine(v) : '';
+    var chips = function(list, bg, colour){
+      return '<div style="display:flex;flex-wrap:wrap;gap:6px">' + list.map(function(p){
+        return '<span style="background:' + bg + ';color:' + colour + ';border-radius:99px;padding:4px 11px;font-size:12px;font-weight:600"><bdi>' + p + '</bdi></span>';
+      }).join('') + '</div>';
+    };
+    partsEl.style.display = 'block';
+    partsEl.innerHTML =
+        (machine ? '<div style="font-size:12px;font-weight:700;color:#1a202c;margin-bottom:8px">' + machine + '</div>' : '')
+      + (used.length
+          ? '<div style="margin-bottom:' + (req.length ? '10px' : '0') + '">'
+            + '<div style="font-size:11px;font-weight:700;color:#2D7D3A;margin-bottom:4px">'
+            + (_ar ? 'المستخدمة' : 'Used') + ' (' + used.length + ')</div>'
+            + chips(used, '#E7F6EC', '#2D7D3A')
+            + (canManageParts()
+                ? (visitDeducted(v)
+                    ? '<div style="margin-top:7px;font-size:11px;color:#2D7D3A;font-weight:700">'
+                      + '<i class="ti ti-circle-check"></i> ' + (_ar ? 'خُصمت من المخزن' : 'Deducted from the store') + '</div>'
+                    : '<button onclick="deductVisitParts(' + v.id + ')" style="margin-top:7px;padding:6px 13px;border-radius:8px;'
+                      + 'border:1px solid #2D7D3A;background:#fff;color:#2D7D3A;font-size:11px;font-weight:700;cursor:pointer;font-family:inherit">'
+                      + '<i class="ti ti-package-export"></i> ' + (_ar ? 'خصم من المخزن' : 'Deduct from the store') + '</button>')
+                : '')
+            + '</div>'
+          : '')
+      + (req.length
+          ? '<div><div style="font-size:11px;font-weight:700;color:#C0392B;margin-bottom:4px">'
+            + (_ar ? 'المطلوبة' : 'Still required') + ' (' + req.length + ')</div>'
+            + chips(req, '#FCEBEB', '#C0392B') + '</div>'
+          : '');
   } else {
     partsWrap.style.display = 'none';
   }
@@ -2286,6 +2452,11 @@ function editVisit(id){
     var eq=document.getElementById('inp-equipment'); if(eq) eq.value=v.equipment||v.equip||'';
     var sr=document.getElementById('inp-serial'); if(sr) sr.value=v.serial_number||'';
     var md=document.getElementById('inp-model'); if(md) md.value=v.model||'';
+    try{
+      selUsedParts = Array.isArray(v.parts_used) ? v.parts_used.slice()
+                   : (v.parts_used ? JSON.parse(v.parts_used) : []);
+    }catch(e){ selUsedParts = []; }
+    renderUsedTags();
     var ft=document.getElementById('inp-fault'); if(ft) ft.value=v.fault||'';
     var nt=document.getElementById('notesArea'); if(nt) nt.value=v.notes||'';
     var tc=document.getElementById('sel-tech'); if(tc) tc.value=v.tech||'';
@@ -2864,6 +3035,9 @@ function showPartAC(val){
 // "CODE — Name" underneath. A bare list of codes told the warehouse nothing
 // about WHICH machine they were for.
 function visitPartsBlock(v, asHtml){
+  // Kept as the entry point every report already calls; it now renders both
+  // lists rather than one ambiguous one.
+  if(typeof visitPartsSections === 'function') return visitPartsSections(v, asHtml);
   var list = Array.isArray(v.parts) ? v.parts : [];
   if(!list.length) return '\u2014';
 
@@ -2902,6 +3076,156 @@ function visitPartsBlock(v, asHtml){
     + '<div>' + list.map(function(p){
         return '<div style="padding-inline-start:10px">\u2022 ' + p + '</div>';
       }).join('') + '</div>';
+}
+
+
+// ── Two separate parts lists on a visit ──────────────────────────────────
+// USED = fitted on this visit out of the store. REQUIRED = still needed and
+// not available. They answer different questions: one is stock that has left
+// the shelf, the other is a purchase list — merging them meant neither could
+// be trusted.
+var selUsedParts = [];
+
+function addUsedPart(name, code){
+  var v = name || (document.getElementById('inp-used-part') || {}).value || '';
+  v = String(v).trim();
+  if(!v) return;
+
+  if(!code && typeof partsData !== 'undefined'){
+    var hit = partsData.find(function(p){
+      return String(p.name||'').toLowerCase() === v.toLowerCase()
+          || String(p.code||'').toLowerCase() === v.toLowerCase();
+    });
+    if(hit){ v = hit.name; code = hit.code; }
+  }
+  if(code && String(v).indexOf(code) === -1) v = code + ' — ' + v;
+
+  if(!selUsedParts.includes(v)) selUsedParts.push(v);
+  if(!name){ var inp = document.getElementById('inp-used-part'); if(inp) inp.value = ''; }
+  var dd = document.getElementById('dd-usedPartAC');
+  if(dd) dd.style.display = 'none';
+  renderUsedTags();
+}
+
+function removeUsedPart(i){
+  selUsedParts.splice(i, 1);
+  renderUsedTags();
+}
+
+function renderUsedTags(){
+  var host = document.getElementById('used-parts-tags');
+  if(!host) return;
+  host.innerHTML = selUsedParts.map(function(p, i){
+    return '<span style="display:inline-flex;align-items:center;gap:6px;background:#E7F6EC;color:#2D7D3A;'
+      + 'border-radius:99px;padding:4px 10px;font-size:12px;font-weight:600">'
+      + '<bdi>' + p + '</bdi>'
+      + '<button type="button" onclick="removeUsedPart(' + i + ')" style="border:none;background:transparent;'
+      + 'color:inherit;cursor:pointer;font-size:14px;line-height:1;padding:0">×</button></span>';
+  }).join('');
+}
+
+// Same catalogue search as the required-parts box, pointed at this field.
+function showUsedPartAC(val){
+  var dd = document.getElementById('dd-usedPartAC');
+  if(!dd) return;
+  var q = String(val||'').trim().toLowerCase();
+  if(!q){ dd.style.display = 'none'; return; }
+
+  var sugg = partsData.filter(function(p){
+    var ar = (p.name_ar && p.name_ar.trim())
+      ? p.name_ar
+      : ((typeof translatePartName === 'function') ? translatePartName(p.name) : '');
+    return String(p.name||'').toLowerCase().indexOf(q) !== -1
+        || String(p.code||'').toLowerCase().indexOf(q) !== -1
+        || String(ar).toLowerCase().indexOf(q) !== -1;
+  }).slice(0, 6);
+
+  if(!sugg.length){ dd.style.display = 'none'; return; }
+  dd.style.display = 'block';
+  dd.innerHTML = '';
+
+  sugg.forEach(function(p){
+    var ar = (p.name_ar && p.name_ar.trim())
+      ? p.name_ar
+      : ((typeof translatePartName === 'function') ? translatePartName(p.name) : '');
+    var showAr = ar && ar !== p.name;
+    var lead = (LNG === 'ar' && showAr) ? ar : p.name;
+    var sub  = (LNG === 'ar' && showAr) ? p.name : (showAr ? ar : '');
+
+    // What's actually on the shelf, since this list is stock leaving it
+    var have = (typeof partQty === 'function') ? partQty(p) : null;
+
+    var item = document.createElement('div');
+    item.style.cssText = 'padding:8px 12px;cursor:pointer;font-size:13px;border-bottom:1px solid #F0F4F8';
+    item.onmouseover = function(){ this.style.background = '#F0F4F8'; };
+    item.onmouseout  = function(){ this.style.background = '#fff'; };
+    item.innerHTML = '<div style="display:flex;align-items:center;gap:8px">'
+      + '<div style="flex:1;min-width:0">'
+      +   '<div style="font-weight:600;unicode-bidi:plaintext"><bdi>' + lead + '</bdi></div>'
+      +   (sub ? '<div style="font-size:11px;color:#718096;unicode-bidi:plaintext"><bdi>' + sub + '</bdi></div>' : '')
+      +   (p.code ? '<div style="font-size:10px;color:#1D4E89;font-weight:600" dir="ltr">' + p.code + '</div>' : '')
+      + '</div>'
+      + (have === null ? '' : '<span style="font-size:10px;font-weight:700;color:'
+          + (have > 0 ? '#2D7D3A' : '#C0392B') + '">' + have + '</span>')
+      + '</div>';
+    item.onclick = function(){ addUsedPart(p.name, p.code); };
+    dd.appendChild(item);
+  });
+}
+
+// The parts block on a report — the machine, then each list under its own
+// heading. Only lists that have something appear.
+function visitPartsSections(v, asHtml){
+  var used = Array.isArray(v.parts_used) ? v.parts_used : [];
+  var req  = Array.isArray(v.parts) ? v.parts : [];
+  if(!used.length && !req.length) return '\u2014';
+
+  var ar = (LNG === 'ar');
+  var head = visitMachineLine(v);
+
+  var section = function(title, list, colour){
+    if(!list.length) return '';
+    if(!asHtml){
+      return '\n' + title + '\n' + list.map(function(p){ return '  \u2022 ' + p; }).join('\n');
+    }
+    return '<div style="margin-top:8px">'
+      + '<div style="font-size:11px;font-weight:700;color:' + colour + ';margin-bottom:3px">' + title + '</div>'
+      + list.map(function(p){
+          return '<div style="padding-inline-start:10px;font-size:12px">\u2022 ' + p + '</div>';
+        }).join('')
+      + '</div>';
+  };
+
+  var body = section(ar ? 'المستخدمة' : 'Used', used, '#2D7D3A')
+           + section(ar ? 'المطلوبة' : 'Still required', req, '#C0392B');
+
+  if(!asHtml) return (head ? head : '') + body;
+  return (head ? ('<div style="font-weight:700">' + head + '</div>') : '') + body;
+}
+
+// The machine line on its own, so the summary and the report never disagree.
+function visitMachineLine(v){
+  var equip = v.equipment || v.equip || '';
+  var model = v.model || '';
+  var serial = v.serial_no || v.serial_number || v.serial || '';
+
+  var real = '';
+  try{
+    var hit = (typeof equipmentMatch === 'function') ? equipmentMatch(model, equip) : null;
+    if(hit && hit.eq){
+      var nm = String(hit.eq.name || '').trim();
+      var brand = String(hit.eq.brand || '').trim();
+      if(brand && nm.toLowerCase().indexOf(brand.toLowerCase()) === -1) nm = brand + ' ' + nm;
+      if(nm && nm.toLowerCase() !== equip.toLowerCase()) real = nm;
+    }
+  }catch(e){}
+
+  var bits = [];
+  if(equip) bits.push(equip);
+  if(real)  bits.push(real);
+  if(model) bits.push('Model: ' + model);
+  if(serial) bits.push('S/N: ' + serial);
+  return bits.join('  \u00b7  ');
 }
 
 function renderTags(){var w=document.getElementById('parts-tags');if(!w)return;w.innerHTML='';selParts.forEach(function(p,i){var t2=document.createElement('div');t2.style.cssText='display:inline-flex;align-items:center;gap:4px;background:#E6F1FB;color:#1D4E89;border-radius:99px;padding:3px 10px;font-size:12px';t2.innerHTML=p+'<button onclick="selParts.splice('+i+',1);renderTags()" style="background:none;border:none;color:#1D4E89;cursor:pointer;font-size:14px;padding:0">×</button>';w.appendChild(t2);});}
@@ -9768,7 +10092,7 @@ function renderEquipGrid(){
 // Sending someone to Parts Request meant closing the card he was filling in
 // and typing part names from memory. Here the drawing opens over whatever he
 // is working on, and the parts he taps land straight in the right field.
-var _dpEquip = null, _dpPicked = {}, _dpTarget = null;
+var _dpEquip = null, _dpPicked = {}, _dpTarget = null, _dpVisitList = 'used';
 
 
 // A drawing's parts table is read by column position: num · name · desc. In
@@ -9901,9 +10225,29 @@ function updateDiagramPickCount(){
   if(!el) return;
   var ar = (LNG === 'ar');
   var n = Object.keys(_dpPicked).length;
-  el.innerHTML = n
-    ? ('<b style="color:#1D4E89">' + n + '</b>&nbsp;' + (ar ? 'قطعة محددة' : 'part(s) selected'))
-    : ('<span style="color:#A0AEC0">' + (ar ? 'اضغط على الأرقام في الرسم أو على القائمة' : 'Tap the numbers on the drawing, or the list') + '</span>');
+
+  var chooser = '';
+  if(_dpTarget === 'visit'){
+    // Which list the picked parts go into — fitted, or still to order.
+    chooser = '<span style="display:inline-flex;gap:5px">'
+      + [['used', ar?'مستخدمة':'Used', '#2D7D3A'], ['req', ar?'مطلوبة':'Required', '#C0392B']]
+        .map(function(o){
+          var on = (_dpVisitList === o[0]);
+          return '<button onclick="setDiagramVisitList(\'' + o[0] + '\')" style="padding:4px 12px;border-radius:99px;'
+            + 'font-size:11px;font-weight:700;cursor:pointer;font-family:inherit;'
+            + 'border:1px solid ' + (on ? o[2] : '#D9E2EC') + ';'
+            + 'background:' + (on ? o[2] : '#fff') + ';color:' + (on ? '#fff' : '#718096') + '">' + o[1] + '</button>';
+        }).join('') + '</span>';
+  }
+
+  el.innerHTML = chooser + (n
+    ? ('<span><b style="color:#1D4E89">' + n + '</b>&nbsp;' + (ar ? 'قطعة محددة' : 'part(s) selected') + '</span>')
+    : ('<span style="color:#A0AEC0">' + (ar ? 'اضغط على الأرقام في الرسم أو على القائمة' : 'Tap the numbers on the drawing, or the list') + '</span>'));
+}
+
+function setDiagramVisitList(which){
+  _dpVisitList = which;
+  updateDiagramPickCount();
 }
 
 // Send the picked parts to whichever field the user came from, matching them to
@@ -9927,7 +10271,12 @@ function addPickedDiagramParts(){
     var code = hit ? hit.code : sp.code;
 
     if(_dpTarget === 'visit'){
-      if(typeof addPart === 'function'){ addPart(name, code); added++; }
+      // A visit has two lists now, so route by what the user chose below.
+      if(_dpVisitList === 'used'){
+        if(typeof addUsedPart === 'function'){ addUsedPart(name, code); added++; }
+      } else {
+        if(typeof addPart === 'function'){ addPart(name, code); added++; }
+      }
     } else {
       if(typeof addCardPart === 'function'){ addCardPart(name, code); added++; }
     }
@@ -14464,7 +14813,9 @@ function updateSignatureSummary(){
 
 function resetNewVisitForm(){
   // Clear all inputs
-  ['inp-client','inp-location','inp-serial','inp-model','inp-fault','inp-part'].forEach(function(id){
+  selUsedParts = [];
+  try{ renderUsedTags(); }catch(e){}
+  ['inp-client','inp-location','inp-serial','inp-model','inp-fault','inp-part','inp-used-part'].forEach(function(id){
     var el=document.getElementById(id);if(el)el.value='';
   });
   var eq=document.getElementById('inp-equipment');if(eq)eq.value='';
@@ -14673,6 +15024,7 @@ function collectVisitData() {
     equipment:     (typeof currentEquipmentValue === 'function') ? currentEquipmentValue() : document.getElementById('inp-equipment').value,
     serial_number: document.getElementById('inp-serial').value,
     model:         document.getElementById('inp-model').value,
+    parts_used:    selUsedParts.slice(),
     tech:          document.getElementById('sel-tech').value,
     visit_type:    vtMap[vt] || vt,
     status:        'معلقة',
@@ -15396,7 +15748,7 @@ async function showPublicReport(token){
         <div style="font-size:13px;line-height:1.6;white-space:pre-wrap" id="vm-notes">—</div>
       </div>
       <div id="vm-parts-wrap" style="background:#F8FAFC;border:1px solid #D9E2EC;border-radius:8px;padding:10px;margin-bottom:14px;display:none">
-        <div style="font-size:11px;color:#718096;margin-bottom:5px">Spare Parts Used</div>
+        <div style="font-size:11px;color:#718096;margin-bottom:5px" data-en="Spare Parts" data-ar="قطع الغيار">Spare Parts</div>
         <div id="vm-parts" style="display:flex;flex-wrap:wrap;gap:5px"></div>
       </div>
       <div id="vm-photos-wrap" style="background:#F8FAFC;border:1px solid #D9E2EC;border-radius:8px;padding:10px;margin-bottom:14px;display:none">
@@ -16314,7 +16666,7 @@ async function showPublicReport(token){
       </div>
     </div>
     <div class="mf">
-      <div id="dp-count" style="flex:1;font-size:12px;color:#718096;display:flex;align-items:center"></div>
+      <div id="dp-count" style="flex:1;font-size:12px;color:#718096;display:flex;align-items:center;gap:10px;flex-wrap:wrap"></div>
       <button onclick="closeMod('diagramPickModal')" class="btn btn-o" data-en="Cancel" data-ar="إلغاء">Cancel</button>
       <button onclick="addPickedDiagramParts()" class="btn btn-p"><i class="ti ti-plus"></i> <span data-en="Add selected parts" data-ar="إضافة القطع المحددة">Add selected parts</span></button>
     </div>
