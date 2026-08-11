@@ -1658,6 +1658,14 @@ function lgSuccess(u, restoring){
     try{ loadAppSettings(); }catch(e){}
     try{ loadPartStock().then(function(){ if(typeof renderInvList==='function' && document.getElementById('invList')) renderInvList(); }); }catch(e){}
     try{ setTimeout(updateVisitsBadge, 1200); }catch(e){}
+    // The archive has to be in memory before anything can offer a drawing —
+    // it used to load only when Parts Request was opened, so an inspection
+    // card always reported an empty archive.
+    try{ loadEquipmentData().then(function(){
+      if(typeof renderContractItems === 'function' && document.getElementById('cd-items')
+         && document.getElementById('pg-contract-detail')
+         && document.getElementById('pg-contract-detail').style.display !== 'none') renderContractDetail();
+    }); }catch(e){}
     try{ loadContracts().then(function(){
       // repaint whichever contract view is on screen
       if(typeof renderContracts === 'function' && document.getElementById('ct-list')) renderContracts();
@@ -13192,6 +13200,23 @@ function openItemCard(itemId){
 
   renderConditionButtons();
   openMod('itemCardModal');
+
+  // Belt and braces: if the archive hasn't loaded yet, fetch it and redraw the
+  // drawing line rather than telling him there's nothing archived.
+  if(typeof equipmentData !== 'undefined' && !equipmentData.length && typeof loadEquipmentData === 'function'){
+    loadEquipmentData().then(function(){
+      var meta = document.getElementById('ic-meta');
+      if(meta && String(_icItemId) === String(itemId)){
+        var again = contractItems.find(function(x){ return String(x.id) === String(itemId); });
+        if(again){
+          var hint = diagramHintHtml(again.model, again.name);
+          var old = meta.querySelector('div[style*="margin-top:5px"]');
+          if(old) old.outerHTML = hint; else meta.insertAdjacentHTML('beforeend', hint);
+        }
+      }
+      if(typeof renderContractItems === 'function') renderContractItems();
+    });
+  }
 }
 
 function renderConditionButtons(){
