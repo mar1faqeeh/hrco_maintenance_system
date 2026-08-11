@@ -3231,6 +3231,81 @@ function showUsedPartAC(val){
 
 // The parts block on a report — the machine, then each list under its own
 // heading. Only lists that have something appear.
+
+// Two rows on the printed sheet, not one. The old single row was labelled
+// "Required Parts" while holding both lists — a warehouse clerk reading it
+// would order what was already fitted.
+
+// The email mirrors the printed sheet: used in green, required in red.
+function _emailPartsRows(v){
+  var readList = function(x){
+    if(Array.isArray(x)) return x;
+    if(!x) return [];
+    try{ var a = JSON.parse(x); return Array.isArray(a) ? a : []; }catch(e){ return []; }
+  };
+  var used = readList(v.parts_used);
+  var req  = readList(v.parts);
+  if(!used.length && !req.length) return _emailRow('قطع الغيار','Spare Parts','—');
+
+  var machine = (typeof visitMachineLine === 'function') ? visitMachineLine(v) : '';
+  var esc = function(t){ return String(t==null?'':t).replace(/</g,'&lt;'); };
+  var list = function(arr, colour){
+    return arr.map(function(p){
+      return '<div style="color:' + colour + ';font-weight:600">\u2022 ' + esc(p) + '</div>';
+    }).join('');
+  };
+  var head = machine ? '<div style="font-weight:700;margin-bottom:4px">' + esc(machine) + '</div>' : '';
+
+  var out = '';
+  if(used.length) out += _emailRow('قطع الغيار المستخدمة','Spare Parts Used', head + list(used, '#1E6B2E'));
+  if(req.length)  out += _emailRow('قطع الغيار المطلوبة','Required Spare Parts', (used.length ? '' : head) + list(req, '#C0392B'));
+  return out;
+}
+
+function partsRowsHtml(v){
+  var readList = function(x){
+    if(Array.isArray(x)) return x;
+    if(!x) return [];
+    try{ var a = JSON.parse(x); return Array.isArray(a) ? a : []; }catch(e){ return []; }
+  };
+  var used = readList(v.parts_used);
+  var req  = readList(v.parts);
+  if(!used.length && !req.length) return '';
+
+  var machine = (typeof visitMachineLine === 'function') ? visitMachineLine(v) : '';
+  var esc = function(t){ return String(t==null?'':t).replace(/</g,'&lt;'); };
+
+  var block = function(list, colour){
+    return '<div style="line-height:1.75">'
+      + list.map(function(p){
+          return '<div style="color:' + colour + ';font-weight:700">\u2022 ' + esc(p) + '</div>';
+        }).join('')
+      + '</div>';
+  };
+
+  // The machine is named once, above whichever list comes first
+  var head = machine
+    ? '<div style="font-weight:700;color:#1a202c;margin-bottom:4px">' + esc(machine) + '</div>'
+    : '';
+
+  var out = '';
+  if(used.length){
+    out += '<tr>'
+      + '<th class="lbl"><span class="lbl-ar">قطع الغيار المستخدمة</span><span class="lbl-en">Spare Parts Used</span></th>'
+      + '<td class="val" colspan="3" style="background:#F1FAF3">'
+      +   head + block(used, '#1E6B2E')
+      + '</td></tr>';
+  }
+  if(req.length){
+    out += '<tr>'
+      + '<th class="lbl"><span class="lbl-ar">قطع الغيار المطلوبة</span><span class="lbl-en">Required Spare Parts</span></th>'
+      + '<td class="val" colspan="3" style="background:#FDF3F2">'
+      +   (used.length ? '' : head) + block(req, '#C0392B')
+      + '</td></tr>';
+  }
+  return out;
+}
+
 function visitPartsSections(v, asHtml){
   var used = Array.isArray(v.parts_used) ? v.parts_used : [];
   var req  = Array.isArray(v.parts) ? v.parts : [];
@@ -12084,7 +12159,7 @@ async function doSendEmail(){
     _emailRow('التاريخ','Date',(v.date||'—')),
     _emailRow('المعدة','Equipment',(v.equipment||v.equip||'—')),
     _emailRow('نوع الزيارة','Visit Type',(v.visit_type||v.type||'—')),
-    _emailRow('قطع الغيار','Required Parts',partsStr),
+    _emailPartsRows(v),
     _emailRow('الحالة','Status','<span style="background:'+(isDone?'#EAF3DE':'#FDF0E0')+';color:'+(isDone?'#2D7D3A':'#C4680A')+';padding:2px 10px;border-radius:99px;font-weight:700">'+statusAr+' / '+statusEn+'</span>'),
     '</table>',
     // Report link
@@ -15379,10 +15454,7 @@ function _doPrintVisit(id, v, techSigImg, clientSigImg, visitDateTime, vtype, pa
     + '<th class="lbl"><span class="lbl-ar">نوع العطل</span><span class="lbl-en">Fault Type</span></th>'
     + '<td class="val">' + (v.fault||'—') + '</td>'
     + '</tr>'
-    + '<tr>'
-    + '<th class="lbl"><span class="lbl-ar">قطع الغيار المطلوبة</span><span class="lbl-en">Required Parts</span></th>'
-    + '<td class="val highlight" colspan="3">' + partsStr + '</td>'
-    + '</tr>'
+    + partsRowsHtml(v)
     + '<tr>'
     + '<th class="lbl"><span class="lbl-ar">ملاحظات الفني</span><span class="lbl-en">Tech Notes</span></th>'
     + '<td class="val" colspan="3" dir="' + (notesDir||'rtl') + '" style="white-space:pre-wrap;line-height:1.7">' + ((notesForPrint!==undefined && notesForPrint!==null && notesForPrint!=='') ? notesForPrint : (v.notes||'—')) + '</td>'
