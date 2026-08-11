@@ -2867,10 +2867,31 @@ function visitPartsBlock(v, asHtml){
   var list = Array.isArray(v.parts) ? v.parts : [];
   if(!list.length) return '\u2014';
 
-  var machine = [ (v.equipment || v.equip || ''), (v.model || '') ]
-    .filter(Boolean).join(' \u00b7 ');
-  var serial = v.serial_no || v.serial || '';
-  if(serial) machine += (machine ? '  \u00b7  ' : '') + serial;
+  var equip = v.equipment || v.equip || '';
+  var model = v.model || '';
+  var serial = v.serial_no || v.serial_number || v.serial || '';
+
+  // "Kitchen Equipment" is only the category the technician picked. When the
+  // model matches an archived drawing, that drawing carries the machine's real
+  // name and brand — add it so the warehouse knows what it's looking at.
+  var real = '';
+  try{
+    var hit = (typeof equipmentMatch === 'function') ? equipmentMatch(model, equip) : null;
+    if(hit && hit.eq){
+      var nm = String(hit.eq.name || '').trim();
+      var brand = String(hit.eq.brand || '').trim();
+      if(brand && nm.toLowerCase().indexOf(brand.toLowerCase()) === -1) nm = brand + ' ' + nm;
+      // Only worth adding when it says something the category doesn't
+      if(nm && nm.toLowerCase() !== equip.toLowerCase()) real = nm;
+    }
+  }catch(e){}
+
+  var parts = [];
+  if(equip) parts.push(equip);
+  if(real)  parts.push(real);
+  if(model) parts.push((asHtml ? 'Model: ' : 'Model: ') + model);
+  if(serial) parts.push((asHtml ? 'S/N: ' : 'S/N: ') + serial);
+  var machine = parts.join('  \u00b7  ');
 
   if(!asHtml){
     return (machine ? (machine + '\n') : '') + list.map(function(p){ return '\u2022 ' + p; }).join('\n');
@@ -14595,9 +14616,18 @@ async function saveAndSign() {
     if(_finalParts.length){
       // Name the machine above the parts, so the summary reads the same way
       // the printed report does.
-      var _eqName = [ (document.getElementById('inp-equipment')||{}).value || '',
-                      (document.getElementById('inp-model')||{}).value || '' ]
-                    .filter(Boolean).join(' · ');
+      // Same header the report prints, so the two never disagree
+      var _eqName = '';
+      try{
+        _eqName = visitPartsBlock({
+          equipment: (typeof currentEquipmentValue === 'function')
+                       ? currentEquipmentValue()
+                       : ((document.getElementById('inp-equipment')||{}).value || ''),
+          model:  (document.getElementById('inp-model')||{}).value || '',
+          serial: (document.getElementById('inp-serial')||{}).value || '',
+          parts:  ['x']
+        }, false).split('\n')[0];
+      }catch(e){}
       if(_eqName){
         var head = document.createElement('div');
         head.textContent = _eqName;
