@@ -386,6 +386,17 @@ html,body{height:100%;overflow:auto;font-family:Tajawal,sans-serif;font-size:14p
       </div>
       <div class="field"><label id="t-lbl-tech">Assigned Technician</label>
         <select id="sel-tech"></select>
+        <div id="tech-locked-note" style="display:none;font-size:11px;color:#718096;margin-top:4px">
+          <i class="ti ti-lock"></i> <span data-en="A visit is recorded under the technician who carried it out." data-ar="تُسجَّل الزيارة باسم الفني الذي نفّذها.">A visit is recorded under the technician who carried it out.</span>
+        </div>
+      </div>
+      <div class="field"><label data-en="Accompanied by (optional)" data-ar="المرافقون (اختياري)">Accompanied by (optional)</label>
+        <input type="text" id="inp-helpers"
+               data-ph-en="Names, separated by a comma" data-ph-ar="الأسماء مفصولة بفاصلة"
+               placeholder="Names, separated by a comma">
+        <div style="font-size:11px;color:#A0AEC0;margin-top:4px"
+             data-en="Anyone who came with you on this visit — typed, not from a list."
+             data-ar="من رافقك في هذه الزيارة — بالكتابة، وليس من قائمة.">Anyone who came with you on this visit.</div>
       </div>
     </div>
     <div class="fcard">
@@ -2289,7 +2300,12 @@ function _showVisitModal(v){
   currentViewId = v.id;
   document.getElementById('vm-title').textContent = 'Visit #' + v.id + ' — ' + (v.client||'');
   document.getElementById('vm-client').textContent = v.client || '—';
-  document.getElementById('vm-tech').textContent = v.tech || '—';
+  var _vmTech = document.getElementById('vm-tech');
+  if(_vmTech){
+    _vmTech.innerHTML = (v.tech || '—')
+      + (v.helpers ? ('<div style="font-size:11px;color:#718096;font-weight:400;margin-top:2px">'
+          + ((LNG==='ar') ? 'ومعه: ' : 'with: ') + String(v.helpers).replace(/</g,'&lt;') + '</div>') : '');
+  }
   document.getElementById('vm-equip').textContent = v.equipment || v.equip || '—';
   document.getElementById('vm-serial').textContent = v.serial_number || '—';
   document.getElementById('vm-date').textContent = v.date || '—';
@@ -2466,6 +2482,7 @@ function editVisit(id){
     var ft=document.getElementById('inp-fault'); if(ft) ft.value=v.fault||'';
     var nt=document.getElementById('notesArea'); if(nt) nt.value=v.notes||'';
     var tc=document.getElementById('sel-tech'); if(tc) tc.value=v.tech||'';
+    var hp=document.getElementById('inp-helpers'); if(hp) hp.value=v.helpers||'';
     currentVisitId = v.id;
     selParts = v.parts||[];
     renderTags();
@@ -12155,7 +12172,9 @@ async function doSendEmail(){
     '<table style="width:100%;border-collapse:collapse;font-size:13px;margin-bottom:20px">',
     '<tr style="background:#F0F4F8"><th colspan="2" style="padding:10px 14px;text-align:right;color:#0F2D52;font-size:14px">تفاصيل الزيارة / Visit Details</th></tr>',
     _emailRow('اسم العميل','Client',(v.client||'—')),
-    _emailRow('الفني المسؤول','Technician',(v.tech||'—')),
+    _emailRow('الفني المسؤول','Technician',
+      (v.tech||'—') + (v.helpers ? ('<div style="font-size:11px;color:#718096">ومعه / with: '
+        + String(v.helpers).replace(/</g,'&lt;') + '</div>') : '')),
     _emailRow('التاريخ','Date',(v.date||'—')),
     _emailRow('المعدة','Equipment',(v.equipment||v.equip||'—')),
     _emailRow('نوع الزيارة','Visit Type',(v.visit_type||v.type||'—')),
@@ -14946,7 +14965,7 @@ function resetNewVisitForm(){
   // Clear all inputs
   selUsedParts = [];
   try{ renderUsedTags(); }catch(e){}
-  ['inp-client','inp-location','inp-serial','inp-model','inp-fault','inp-part','inp-used-part'].forEach(function(id){
+  ['inp-client','inp-location','inp-serial','inp-model','inp-fault','inp-part','inp-used-part','inp-helpers'].forEach(function(id){
     var el=document.getElementById(id);if(el)el.value='';
   });
   var eq=document.getElementById('inp-equipment');if(eq)eq.value='';
@@ -14986,6 +15005,27 @@ function populateTechSelect(){
   sel.innerHTML = '';
   var active = techsData.filter(function(t){ return t.status === 'active'; });
   if(!active.length) active = techsData; // fallback: show all
+
+  // A technician records his OWN visit — he shouldn't be able to put another
+  // man's name on it. Managers still assign whoever they like.
+  if(curUserRole === 'technician'){
+    var me = String(curUser || '').toLowerCase();
+    var mine = active.filter(function(t){ return String(t.name||'').toLowerCase() === me; });
+    if(!mine.length) mine = [{ name: curUser || curUserLogin || '' }];
+    active = mine;
+    sel.disabled = true;
+    sel.style.background = '#F8FAFC';
+    sel.style.cursor = 'not-allowed';
+    var note = document.getElementById('tech-locked-note');
+    if(note) note.style.display = 'block';
+  } else {
+    sel.disabled = false;
+    sel.style.background = '';
+    sel.style.cursor = '';
+    var note2 = document.getElementById('tech-locked-note');
+    if(note2) note2.style.display = 'none';
+  }
+
   active.forEach(function(t){
     var opt = document.createElement('option');
     opt.value = t.name;
@@ -15173,7 +15213,11 @@ function collectVisitData() {
     serial_number: document.getElementById('inp-serial').value,
     model:         document.getElementById('inp-model').value,
     parts_used:    selUsedParts.slice(),
-    tech:          document.getElementById('sel-tech').value,
+    // A disabled select is a UI courtesy, not a rule — recompute it.
+    tech:          (curUserRole === 'technician')
+                     ? (curUser || document.getElementById('sel-tech').value)
+                     : document.getElementById('sel-tech').value,
+    helpers:       (document.getElementById('inp-helpers') || {}).value || '',
     visit_type:    vtMap[vt] || vt,
     status:        'معلقة',
     fault:         document.getElementById('inp-fault').value,
@@ -15446,7 +15490,10 @@ function _doPrintVisit(id, v, techSigImg, clientSigImg, visitDateTime, vtype, pa
     + '<th class="lbl"><span class="lbl-ar">الموديل</span><span class="lbl-en">Model</span></th>'
     + '<td class="val">' + (v.model||'—') + '</td>'
     + '<th class="lbl"><span class="lbl-ar">الفني المسؤول</span><span class="lbl-en">Technician</span></th>'
-    + '<td class="val">' + (v.tech||'—') + '</td>'
+    + '<td class="val">' + (v.tech||'—')
+    +   (v.helpers ? '<div style="font-size:11px;color:#718096;font-weight:400;margin-top:2px">'
+                     + 'ومعه / with: ' + String(v.helpers).replace(/</g,'&lt;') + '</div>' : '')
+    + '</td>'
     + '</tr>'
     + '<tr>'
     + '<th class="lbl"><span class="lbl-ar">نوع الزيارة</span><span class="lbl-en">Visit Type</span></th>'
