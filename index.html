@@ -1168,6 +1168,36 @@ function _warnMissingColumns(table, cols){
     + sql);
 }
 
+
+// Supabase hands JSON-ish text columns back as STRINGS, not arrays. Every
+// reader must cope with both shapes — this is the single place that decides.
+function asList(v){
+  if(Array.isArray(v)) return v;
+  if(v == null || v === '') return [];
+  if(typeof v === 'string'){
+    var t = v.trim();
+    if(!t || t === '[]') return [];
+    try{
+      var a = JSON.parse(t);
+      return Array.isArray(a) ? a : [String(a)];
+    }catch(e){
+      // Not JSON — a plain comma-separated string still means something
+      return t.split(',').map(function(x){ return x.trim(); }).filter(Boolean);
+    }
+  }
+  return [];
+}
+
+// A visit straight from the database, made safe for every renderer.
+function normaliseVisitRow(v){
+  if(!v) return v;
+  v.parts      = asList(v.parts);
+  v.parts_used = asList(v.parts_used);
+  v.photos     = asList(v.photos);
+  if(v.items !== undefined) v.items = asList(v.items);
+  return v;
+}
+
 async function dbSave(t,o){
   if(!_initSb()){ _showDbBanner(); alert('⚠️ لا يوجد اتصال بقاعدة البيانات، لن يتم حفظ هذه البيانات. تحقق من الإنترنت وأعد تحميل الصفحة.\n⚠️ Database not connected — this will not be saved. Check your internet and reload the page.'); return null; }
   _hideDbBanner();
@@ -1726,7 +1756,14 @@ function lgSuccess(u, restoring){
     try{ applyRolePermissions(); }catch(e){}
     try{ loadMaintRequests().then(function(){ updateMaintBadge(); }); }catch(e){}
     try{ loadTaskTemplates(); }catch(e){}
-    try{ loadClientOrders().then(function(){ if(typeof renderClientGrid==='function') renderClientGrid(); }); }catch(e){}
+    try{ loadClientOrders().then(function(){
+      if(typeof renderClientGrid==='function') renderClientGrid();
+      // The visits list prints the ORDER NAME, which it can only resolve once
+      // the orders are in memory — repaint whatever is on screen.
+      if(typeof renderVisits==='function' && document.getElementById('visBody')) renderVisits();
+      if(typeof renderMaintRequests==='function' && document.getElementById('mr-list')) renderMaintRequests();
+      if(typeof renderArchive==='function' && document.getElementById('archiveBody')) renderArchive();
+    }); }catch(e){}
     try{ loadAppSettings(); }catch(e){}
     try{ loadPartStock().then(function(){ if(typeof renderInvList==='function' && document.getElementById('invList')) renderInvList(); }); }catch(e){}
     try{ setTimeout(updateVisitsBadge, 1200); }catch(e){}
@@ -2225,12 +2262,7 @@ function viewVisit(id){
 // deduct it automatically: the same part may already have been deducted when
 // a parts request was marked Issued. So this is a deliberate action, taken
 // once, and the visit is stamped so it can never run twice.
-function visitUsedParts(v){
-  var raw = v && v.parts_used;
-  if(Array.isArray(raw)) return raw;
-  if(!raw) return [];
-  try{ var a = JSON.parse(raw); return Array.isArray(a) ? a : []; }catch(e){ return []; }
-}
+function visitUsedParts(v){ return asList(v && v.parts_used); }
 
 // "CODE — Name" back into something the catalogue can be searched with.
 function splitStoredPart(text){
@@ -2384,11 +2416,7 @@ function _showVisitModal(v){
   var partsWrap = document.getElementById('vm-parts-wrap');
   var partsEl = document.getElementById('vm-parts');
   var _ar = (LNG === 'ar');
-  var readList = function(x){
-    if(Array.isArray(x)) return x;
-    if(!x) return [];
-    try{ var a = JSON.parse(x); return Array.isArray(a) ? a : []; }catch(e){ return []; }
-  };
+  var readList = asList;
   var used = readList(v.parts_used);
   var req  = readList(v.parts);
 
@@ -2510,8 +2538,7 @@ function editVisit(id){
     var sr=document.getElementById('inp-serial'); if(sr) sr.value=v.serial_number||'';
     var md=document.getElementById('inp-model'); if(md) md.value=v.model||'';
     try{
-      selUsedParts = Array.isArray(v.parts_used) ? v.parts_used.slice()
-                   : (v.parts_used ? JSON.parse(v.parts_used) : []);
+      selUsedParts = asList(v.parts_used).slice();
     }catch(e){ selUsedParts = []; }
     renderUsedTags();
     var ft=document.getElementById('inp-fault'); if(ft) ft.value=v.fault||'';
@@ -3290,11 +3317,7 @@ function showUsedPartAC(val){
 
 // The email mirrors the printed sheet: used in green, required in red.
 function _emailPartsRows(v){
-  var readList = function(x){
-    if(Array.isArray(x)) return x;
-    if(!x) return [];
-    try{ var a = JSON.parse(x); return Array.isArray(a) ? a : []; }catch(e){ return []; }
-  };
+  var readList = asList;
   var used = readList(v.parts_used);
   var req  = readList(v.parts);
   if(!used.length && !req.length) return _emailRow('قطع الغيار','Spare Parts','—');
@@ -3315,11 +3338,7 @@ function _emailPartsRows(v){
 }
 
 function partsRowsHtml(v){
-  var readList = function(x){
-    if(Array.isArray(x)) return x;
-    if(!x) return [];
-    try{ var a = JSON.parse(x); return Array.isArray(a) ? a : []; }catch(e){ return []; }
-  };
+  var readList = asList;
   var used = readList(v.parts_used);
   var req  = readList(v.parts);
   if(!used.length && !req.length) return '';
@@ -3359,8 +3378,8 @@ function partsRowsHtml(v){
 }
 
 function visitPartsSections(v, asHtml){
-  var used = Array.isArray(v.parts_used) ? v.parts_used : [];
-  var req  = Array.isArray(v.parts) ? v.parts : [];
+  var used = asList(v.parts_used);
+  var req  = asList(v.parts);
   if(!used.length && !req.length) return '\u2014';
 
   var ar = (LNG === 'ar');
@@ -15250,7 +15269,8 @@ function collectVisitData() {
     equipment:     (typeof currentEquipmentValue === 'function') ? currentEquipmentValue() : document.getElementById('inp-equipment').value,
     serial_number: document.getElementById('inp-serial').value,
     model:         document.getElementById('inp-model').value,
-    parts_used:    selUsedParts.slice(),
+    // The column is text, so send text — an array would be mangled or rejected
+    parts_used:    JSON.stringify(selUsedParts),
     // A disabled select is a UI courtesy, not a rule — recompute it.
     tech:          (curUserRole === 'technician')
                      ? (curUser || document.getElementById('sel-tech').value)
@@ -15756,6 +15776,9 @@ async function loadVisitsFromDB() {
     if (r.data && r.data.length) {
       // Merge with local data
       r.data.forEach(function(v) {
+        // Text columns come back as strings — make them lists before anything
+        // downstream tries to read them.
+        normaliseVisitRow(v);
         v.equip = v.equipment || v.equip || '—';
         var existing = visData.find(function(x){ return x.id === v.id; });
         if(!existing) {
