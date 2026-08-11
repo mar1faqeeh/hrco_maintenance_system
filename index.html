@@ -4865,6 +4865,7 @@ var AP_SECTIONS = [
   { key:'overview', icon:'ti-layout-dashboard', en:'Overview',        ar:'نظرة عامة' },
   { key:'general',  icon:'ti-building',         en:'General',         ar:'عام' },
   { key:'features', icon:'ti-toggle-right',     en:'System Features', ar:'مميزات النظام' },
+  { key:'dbcheck',  icon:'ti-database-search',  en:'Database Check',  ar:'فحص قاعدة البيانات' },
   { key:'dash',     icon:'ti-layout-dashboard', en:'Dashboard',       ar:'لوحة المعلومات' },
   { key:'users',    icon:'ti-users',            en:'Users & Roles',   ar:'المستخدمون والصلاحيات' },
   { key:'log',      icon:'ti-history',          en:'Activity Log',    ar:'سجل الحركات' },
@@ -4938,6 +4939,7 @@ function apGo(key){
   else if(key === 'lists') apRenderLists();
   else if(key === 'dash'){ _apDash = null; apRenderDashboard(); }
   else if(key === 'general'){ _cmpLogoPending = null; apRenderGeneral(); }
+  else if(key === 'dbcheck'){ apRenderDbCheck(); }
   else if(key === 'tickets') apRenderTickets();
   else apRenderPlanned(sec);
 }
@@ -6777,6 +6779,168 @@ async function apDashSave(){
 
 
 // ── General / company profile section ────────────────────────────────────
+
+// ══════════════════════════════════════
+// DATABASE CHECK
+// Every "it saved then vanished" report so far has come down to a column the
+// database doesn't have. Rather than guessing which one, ask it directly.
+// ══════════════════════════════════════
+var DB_EXPECTED = {
+  visits: ['client','location','map_url','task_category','order_id','is_exception','exception_reason',
+           'items','equipment','serial_number','model','parts','parts_used','helpers','stock_deducted',
+           'tech','visit_type','status','fault','notes','date','time','sig_tech','sig_client','photos'],
+  maintenance_requests: ['client','client_id','order_id','city','zone','location','map_url','contact_person',
+           'contact_phone','contact_email','equipment','problem','items','attachments','visit_type',
+           'priority','preferred_date','preferred_time','status','date','requested_by','source',
+           'is_exception','exception_reason'],
+  client_orders: ['client_id','name','po_number','city','zone','handover_date','coverage_type',
+           'warranty_months','contract_start','contract_end','notes','items'],
+  clients: ['name','nickname','type','phone','email','loc','contract','warranty','ticket_token'],
+  parts: ['name','name_ar','code','cat','unit','min','supplier'],
+  part_stock: ['part_id','owner','qty','min'],
+  parts_history: ['part_id','type','qty','owner','dest','tech','note','date'],
+  parts_requests: ['equipment','equipment_id','tech','client','notes','parts','status','store_owner'],
+  contracts: ['client_id','name','start_date','end_date','frequency','notes'],
+  contract_items: ['contract_id','order_id','name','model','serial','location'],
+  contract_cards: ['contract_id','item_id','visit_id','visit_date','condition','notes','parts_needed','inspector'],
+  equipment_diagrams: ['name','brand','model','diagram_data','parts_list','extra_files'],
+  system_users: ['username','password','full_name','role','email','zones','active','must_change_password'],
+  app_settings: ['key','value']
+};
+
+async function apRenderDbCheck(){
+  var host = document.getElementById('ap-body');
+  if(!host) return;
+  var ar = (LNG === 'ar');
+
+  host.innerHTML = '<div style="padding:26px;color:#94A3B8;font-size:13px">'
+    + '<i class="ti ti-loader" style="animation:spin 1s linear infinite;display:inline-block"></i> '
+    + (ar ? 'جاري فحص قاعدة البيانات…' : 'Checking the database…') + '</div>';
+
+  if(!_initSb()){
+    host.innerHTML = '<div style="padding:26px;color:#F87171;font-size:13px">'
+      + (ar ? 'لا يوجد اتصال بقاعدة البيانات.' : 'No database connection.') + '</div>';
+    return;
+  }
+
+  var results = [];
+  var tables = Object.keys(DB_EXPECTED);
+
+  for(var i = 0; i < tables.length; i++){
+    var t = tables[i];
+    var row = null, missingTable = false, err = '';
+    try{
+      var r = await _sb.from(t).select('*').limit(1);
+      if(r.error){
+        // 42P01 = the table itself isn't there
+        missingTable = /does not exist|schema cache/i.test(r.error.message || '');
+        err = r.error.message || '';
+      } else {
+        row = (r.data && r.data.length) ? r.data[0] : {};
+      }
+    }catch(e){ err = e.message || String(e); }
+
+    if(missingTable || row === null){
+      results.push({ table: t, missingTable: true, missing: DB_EXPECTED[t], err: err });
+      continue;
+    }
+
+    // An empty table tells us nothing about its columns, so probe with a
+    // select of the exact column list instead.
+    var known = Object.keys(row);
+    var missing = [];
+    if(!known.length){
+      for(var c = 0; c < DB_EXPECTED[t].length; c++){
+        var col = DB_EXPECTED[t][c];
+        try{
+          var rc = await _sb.from(t).select(col).limit(1);
+          if(rc.error) missing.push(col);
+        }catch(e){ missing.push(col); }
+      }
+    } else {
+      missing = DB_EXPECTED[t].filter(function(c){ return known.indexOf(c) === -1; });
+    }
+    results.push({ table: t, missingTable: false, missing: missing, rows: known.length });
+  }
+
+  var totalMissing = results.reduce(function(n, r){ return n + (r.missingTable ? 1 : r.missing.length); }, 0);
+
+  var sqlLines = [];
+  results.forEach(function(r){
+    if(r.missingTable){
+      sqlLines.push('-- table "' + r.table + '" does not exist — run its own SQL file first');
+      return;
+    }
+    r.missing.forEach(function(c){
+      var type = /_id$|^qty$|^min$|_months$/.test(c) ? 'bigint'
+               : /^is_|^stock_deducted$|^active$|^must_change/.test(c) ? 'boolean'
+               : /_date$|^date$/.test(c) ? 'date' : 'text';
+      sqlLines.push('alter table ' + r.table + ' add column if not exists ' + c + ' ' + type + ';');
+    });
+  });
+
+  host.innerHTML =
+      '<div style="margin-bottom:18px">'
+    +   '<div style="font-size:19px;font-weight:700;color:#E2E8F0">'
+    +     (ar ? 'فحص قاعدة البيانات' : 'Database check') + '</div>'
+    +   '<div style="font-size:12px;color:#94A3B8;margin-top:4px">'
+    +     (ar ? 'يقارن ما يكتبه النظام بما هو موجود فعلاً — أي عمود ناقص يعني أن ذلك الحقل يُحفظ ثم يختفي.'
+          : 'Compares what the system writes against what actually exists — a missing column means that field is saved and then lost.')
+    +   '</div></div>'
+
+    + '<div style="background:' + (totalMissing ? '#3B1D1D' : '#14311F') + ';border:1px solid '
+    +   (totalMissing ? '#7F1D1D' : '#166534') + ';border-radius:10px;padding:14px 16px;margin-bottom:16px">'
+    +   '<div style="font-size:14px;font-weight:700;color:' + (totalMissing ? '#FCA5A5' : '#86EFAC') + '">'
+    +     (totalMissing
+            ? ('<i class="ti ti-alert-triangle"></i> ' + (ar ? (totalMissing + ' عنصر ناقص') : (totalMissing + ' item(s) missing')))
+            : ('<i class="ti ti-circle-check"></i> ' + (ar ? 'كل الأعمدة موجودة' : 'Everything is present')))
+    +   '</div></div>'
+
+    + results.map(function(r){
+        var bad = r.missingTable || r.missing.length;
+        return '<div style="background:#1E293B;border:1px solid ' + (bad ? '#7F1D1D' : '#334155')
+          + ';border-radius:9px;padding:11px 14px;margin-bottom:8px">'
+          + '<div style="display:flex;align-items:center;gap:8px">'
+          +   '<i class="ti ti-' + (bad ? 'alert-triangle' : 'circle-check') + '" style="color:'
+          +     (bad ? '#F87171' : '#4ADE80') + '"></i>'
+          +   '<span style="font-family:monospace;font-size:13px;color:#E2E8F0">' + r.table + '</span>'
+          +   (bad ? '' : '<span style="font-size:11px;color:#64748B">' + (ar?'سليم':'ok') + '</span>')
+          + '</div>'
+          + (r.missingTable
+              ? '<div style="font-size:12px;color:#FCA5A5;margin-top:6px">'
+                + (ar ? 'الجدول نفسه غير موجود' : 'The table itself does not exist') + '</div>'
+              : (r.missing.length
+                  ? '<div style="font-size:12px;color:#FCA5A5;margin-top:6px;font-family:monospace">'
+                    + r.missing.join(' · ') + '</div>'
+                  : ''))
+          + '</div>';
+      }).join('')
+
+    + (sqlLines.length
+        ? '<div style="margin-top:18px">'
+          + '<div style="font-size:13px;font-weight:700;color:#E2E8F0;margin-bottom:6px">'
+          +   (ar ? 'شغّل هذا في Supabase → SQL Editor' : 'Run this in Supabase → SQL Editor') + '</div>'
+          + '<textarea id="dbfix-sql" readonly style="width:100%;height:180px;background:#0F172A;color:#93C5FD;'
+          +   'border:1px solid #334155;border-radius:9px;padding:12px;font-family:monospace;font-size:12px;'
+          +   'resize:vertical">' + sqlLines.join('\n') + '</textarea>'
+          + '<button onclick="apCopyDbFix()" style="margin-top:8px;padding:9px 16px;border:none;border-radius:8px;'
+          +   'background:#1D4E89;color:#fff;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit">'
+          +   '<i class="ti ti-copy"></i> ' + (ar ? 'نسخ' : 'Copy') + '</button>'
+          + '</div>'
+        : '');
+}
+
+function apCopyDbFix(){
+  var ta = document.getElementById('dbfix-sql');
+  if(!ta) return;
+  ta.select();
+  var ok = false;
+  try{ ok = document.execCommand('copy'); }catch(e){}
+  if(!ok && navigator.clipboard) navigator.clipboard.writeText(ta.value);
+  alert((LNG==='ar') ? 'تم النسخ — الصقه في Supabase → SQL Editor.'
+                     : 'Copied — paste it into Supabase → SQL Editor.');
+}
+
 function apRenderGeneral(){
   var body = document.getElementById('ap-body');
   if(!body) return;
