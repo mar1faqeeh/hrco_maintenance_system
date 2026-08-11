@@ -224,7 +224,7 @@ html,body{height:100%;overflow:auto;font-family:Tajawal,sans-serif;font-size:14p
       <div style="padding:10px 0;flex:1">
         <div class="sb-sec" id="sb-main">Main</div>
         <div class="nav-item" onclick="go('dashboard')" id="nav-dashboard"><i class="ti ti-layout-dashboard"></i><span id="t-dashboard">Dashboard</span></div>
-        <div class="nav-item" onclick="go('visits')" id="nav-visits"><i class="ti ti-calendar"></i><span id="t-visits">Visits</span></div>
+        <div class="nav-item" onclick="go('visits')" id="nav-visits"><i class="ti ti-calendar"></i><span id="t-visits">Visits</span><span class="nbadge" id="vis-badge" style="display:none">0</span></div>
         <div class="nav-item" onclick="go('pending')" id="nav-pending"><i class="ti ti-clock-pause"></i><span id="t-pending">Pending</span><span class="nbadge">0</span></div>
         <div class="sb-sec" id="sb-mgmt">Management</div>
         <div class="nav-item" onclick="go('newvisit')" id="nav-newvisit"><i class="ti ti-plus"></i><span id="t-newvisit">New Visit</span></div>
@@ -302,6 +302,7 @@ html,body{height:100%;overflow:auto;font-family:Tajawal,sans-serif;font-size:14p
       <button class="ftab" onclick="setVF('Completed',this)" id="vf-done">Done</button>
       <button class="ftab" onclick="setVF('Pending',this)" id="vf-pend">Pending</button>
       <button class="ftab" onclick="setVF('contract',this)" id="vf-contract" data-en="Contract rounds" data-ar="جولات العقود">Contract rounds</button>
+      <button class="ftab" onclick="setVF('mine',this)" id="vf-mine" data-en="My visits" data-ar="زياراتي">My visits</button>
     </div>
   </div>
   <div class="tbl">
@@ -1656,6 +1657,7 @@ function lgSuccess(u, restoring){
     try{ loadClientOrders().then(function(){ if(typeof renderClientGrid==='function') renderClientGrid(); }); }catch(e){}
     try{ loadAppSettings(); }catch(e){}
     try{ loadPartStock().then(function(){ if(typeof renderInvList==='function' && document.getElementById('invList')) renderInvList(); }); }catch(e){}
+    try{ setTimeout(updateVisitsBadge, 1200); }catch(e){}
     try{ loadContracts().then(function(){
       // repaint whichever contract view is on screen
       if(typeof renderContracts === 'function' && document.getElementById('ct-list')) renderContracts();
@@ -1872,7 +1874,16 @@ function go(pg){
   if(pg==='parts-orders'){loadPartsRequests();}
   if(pg==='clients'){renderClientGrid();renderDonut();renderTopClients();}
   if(pg==='reports') runReport();
-  if(pg==='visits') renderVisits('all','');
+  if(pg==='visits'){
+    // A technician cares about his own work first; a manager wants the lot.
+    var _vf = (curUserRole === 'technician') ? 'mine' : 'all';
+    renderVisits(_vf, '');
+    var _tab = document.getElementById(_vf === 'mine' ? 'vf-mine' : 'vf-all');
+    if(_tab){
+      document.querySelectorAll('#pg-visits .ftab').forEach(function(x){ x.style.background=''; x.style.color='#718096'; });
+      _tab.style.background = '#1D4E89'; _tab.style.color = '#fff';
+    }
+  }
   if(pg==='archive') loadArchive();
   if(pg==='signature'){ try{ fillSummaryClient(); fillSummaryOrder(); }catch(e){} }
   if(pg==='client-orders'){ renderClientOrders(); attachCityAutocomplete('co-city','co-city-dd','co-city-zone'); }
@@ -1959,8 +1970,28 @@ function openContractOfVisit(visitId){
   go('contract-detail');
 }
 
+
+// How many visits are waiting for the person signed in. A technician who can't
+// see his own work at a glance won't notice a round scheduled for tomorrow.
+function myPendingVisits(){
+  if(typeof visData === 'undefined') return 0;
+  return visData.filter(function(v){
+    return isMyVisit(v) && String(v.status||'').toLowerCase() !== 'completed'
+        && String(v.status||'') !== 'مكتملة';
+  }).length;
+}
+
+function updateVisitsBadge(){
+  var b = document.getElementById('vis-badge');
+  if(!b) return;
+  var n = myPendingVisits();
+  b.textContent = n;
+  b.style.display = n ? '' : 'none';
+}
+
 function renderVisits(f,q){
   visFil=f||visFil;q=q||document.getElementById('visSearch').value||'';
+  updateVisitsBadge();
   var body=document.getElementById('visBody');if(!body)return;body.innerHTML='';
   var fl=visData.filter(function(r){
     var mq=!q||r.client.toLowerCase().includes(q.toLowerCase())||r.tech.toLowerCase().includes(q.toLowerCase());
@@ -1968,6 +1999,7 @@ function renderVisits(f,q){
     // separates it from an ordinary call-out, whatever its visit type says.
     var mf = (visFil==='all') ? true
            : (visFil==='contract') ? isContractRound(r)
+           : (visFil==='mine') ? isMyVisit(r)
            : (r.status===visFil);
     return mq&&mf;
   });
@@ -11895,6 +11927,117 @@ function exportPartsSummaryExcel(){
 }
 
 
+
+// ── Scheduling the due visit ─────────────────────────────────────────────
+// The contract flags what's due; the manager decides when and who. Creating
+// the visit up front is what puts it in the technician's own list — without
+// it the visit only appears at the moment he starts inspecting.
+function openScheduleRound(){
+  var ar = (LNG === 'ar');
+  var c = contractsData.find(function(x){ return String(x.id) === String(_cdContractId); });
+  if(!c) return;
+  if(!canManageClientRecords()){ denyClientEdit(); return; }
+
+  if(!itemsOfContract(c.id).length){
+    alert(ar ? 'أضف معدات العقد أولاً.' : 'Add the contract equipment first.');
+    return;
+  }
+
+  var st = contractStatus(c);
+  var cl = clientsData.find(function(x){ return String(x.id) === String(c.client_id); });
+
+  var t = document.getElementById('sr-title');
+  if(t) t.textContent = (ar ? 'جدولة زيارة: ' : 'Schedule a visit — ') + (c.name || '');
+
+  var info = document.getElementById('sr-info');
+  if(info){
+    info.innerHTML = '<b>' + (cl ? (cl.nickname || cl.name) : '') + '</b> · ' + freqLabel(c.frequency)
+      + '<br><span style="color:' + st.colour + '">' + st.label + '</span>'
+      + (st.next ? ('<span style="color:#718096"> · ' + (ar ? 'الاستحقاق: ' : 'due ') + st.next + '</span>') : '');
+  }
+
+  var d = document.getElementById('sr-date');
+  if(d) d.value = st.next || new Date().toISOString().split('T')[0];
+
+  // Technicians come from the same list the visit form uses
+  var sel = document.getElementById('sr-tech');
+  if(sel){
+    var techs = [];
+    if(typeof techData !== 'undefined' && techData.length){
+      techs = techData.map(function(x){ return x.name; });
+    } else {
+      Object.keys(USERS || {}).forEach(function(k){
+        if(USERS[k].role === 'technician' && USERS[k].active !== false) techs.push(USERS[k].name || k);
+      });
+    }
+    sel.innerHTML = '<option value="">' + (ar ? '— اختر الفني —' : '— Select a technician —') + '</option>'
+      + techs.map(function(n){ return '<option value="' + n + '">' + n + '</option>'; }).join('');
+  }
+
+  var n = document.getElementById('sr-notes');
+  if(n) n.value = '';
+  openMod('scheduleRoundModal');
+}
+
+async function saveScheduledRound(){
+  var ar = (LNG === 'ar');
+  var c = contractsData.find(function(x){ return String(x.id) === String(_cdContractId); });
+  if(!c) return;
+  var cl = clientsData.find(function(x){ return String(x.id) === String(c.client_id); });
+
+  var v = function(id){ var e = document.getElementById(id); return e ? e.value.trim() : ''; };
+  var date = v('sr-date'), tech = v('sr-tech');
+  if(!date){ alert(ar ? 'حدّد التاريخ.' : 'Please set the date.'); return; }
+  if(!tech){ alert(ar ? 'اختر الفني.' : 'Please choose a technician.'); return; }
+
+  var visit = {
+    client:     cl ? (cl.name || cl.nickname) : '',
+    tech:       tech,
+    visit_type: 'عقد',
+    status:     'معلقة',
+    date:       date,
+    notes:      (v('sr-notes') || ((ar ? 'جولة فحص عقد صيانة: ' : 'Contract inspection round: ') + (c.name || '')))
+  };
+
+  var saved;
+  try{ saved = await dbSave('visits', visit); }
+  catch(e){ alert((ar ? 'تعذّر الحفظ: ' : 'Could not save: ') + e.message); return; }
+  if(!saved || !saved.length){
+    alert(ar ? 'لم تُحفظ الزيارة في قاعدة البيانات.' : 'The visit was not saved to the database.');
+    return;
+  }
+  visit.id = saved[0].id;
+  if(typeof visData !== 'undefined') visData.unshift(visit);
+
+  logActivity('create', 'contract visit scheduled', (c.name || ''), null, { date: date, tech: tech });
+  closeMod('scheduleRoundModal');
+  updateVisitsBadge();
+  renderContractDetail();
+  alert(ar ? ('✅ جُدولت الزيارة رقم ' + visit.id + ' لـ ' + tech + ' بتاريخ ' + date + '.\n\nستظهر في "زياراتي" عنده.')
+           : ('✅ Visit #' + visit.id + ' scheduled for ' + tech + ' on ' + date + '.\n\nIt will appear under his "My visits".'));
+}
+
+// Any visit already booked for this contract's client that hasn't happened yet.
+function scheduledRoundFor(c){
+  if(!c || typeof visData === 'undefined') return null;
+  var cl = clientsData.find(function(x){ return String(x.id) === String(c.client_id); });
+  if(!cl) return null;
+  var name = String(cl.name || cl.nickname || '').toLowerCase();
+  // Any contract visit for this client that hasn't been completed — including
+  // one whose date has already passed. A late visit is still the booked visit,
+  // and treating it as gone would create a duplicate for the same trip.
+  var open = visData.filter(function(v){
+    return String(v.client||'').toLowerCase() === name
+        && String(v.visit_type||v.type||'') === 'عقد'
+        && String(v.status||'').toLowerCase() !== 'completed'
+        && String(v.status||'') !== 'مكتملة';
+  });
+  if(!open.length) return null;
+  // The soonest one, so a backlog doesn't hide the next appointment
+  open.sort(function(a, b){ return String(a.date||'').localeCompare(String(b.date||'')); });
+  return open[0];
+}
+
 // ── Recording a round into a real visit ──────────────────────────────────
 // Cards used to float free of any visit. Tying a round to a visit record means
 // the contract's history and the visit history are the same history: the visit
@@ -11950,17 +12093,20 @@ async function startContractRound(){
     return;
   }
 
-  // An existing open visit for this client today is almost certainly this trip
+  // Prefer the visit the manager already booked for this contract — creating a
+  // second record for the same trip is exactly what scheduling was meant to
+  // avoid. Otherwise fall back to any open visit for this client today.
   var today = new Date().toISOString().split('T')[0];
-  var open = (typeof visData !== 'undefined') ? visData.filter(function(v){
+  var booked = scheduledRoundFor(c);
+  var open = booked ? [booked] : ((typeof visData !== 'undefined') ? visData.filter(function(v){
     return String(v.client||'').toLowerCase() === String(clientName).toLowerCase()
         && v.date === today;
-  }) : [];
+  }) : []);
 
   if(open.length){
     var pick = confirm(ar
-      ? ('توجد زيارة لهذا العميل اليوم (رقم ' + open[0].id + ').\n\nموافق = تسجيل الجولة عليها\nإلغاء = إنشاء زيارة جديدة')
-      : ('There is already a visit for this client today (#' + open[0].id + ').\n\nOK = record the round into it\nCancel = create a new visit'));
+      ? ('توجد زيارة مجدولة لهذا العميل (رقم ' + open[0].id + ' — ' + open[0].date + ').\n\nموافق = تسجيل الجولة عليها\nإلغاء = إنشاء زيارة جديدة')
+      : ('A visit is already booked for this client (#' + open[0].id + ' — ' + open[0].date + ').\n\nOK = record the round into it\nCancel = create a new visit'));
     if(pick){
       _cdVisitId = open[0].id;
       activeRoundBanner();
@@ -12568,7 +12714,15 @@ function renderContractDetail(){
       + tile(ar?'الزيارة القادمة':'Next visit', st.next || '—', st.colour, 'ti-calendar-event')
       + tile(ar?'آخر زيارة':'Last visit', st.lastVisit || '—', '#1a202c', 'ti-history')
       + tile(ar?'تقدّم الدورة':'Cycle progress', pr.done + ' / ' + pr.total, '#1D4E89', 'ti-progress')
-      + tile(ar?'تحتاج متابعة':'Needs attention', String(watch), watch ? '#C4680A' : '#A0AEC0', 'ti-eye')
+      + (function(){
+          var bk = scheduledRoundFor(c);
+          var late = bk && bk.date && bk.date < new Date().toISOString().split('T')[0];
+          return bk
+            ? tile(ar?'زيارة مجدولة':'Visit booked',
+                   bk.date + ' · ' + (bk.tech || '') + (late ? (ar ? ' (متأخرة)' : ' (late)') : ''),
+                   late ? '#C0392B' : '#1D4E89', 'ti-calendar-check')
+            : tile(ar?'تحتاج متابعة':'Needs attention', String(watch), watch ? '#C4680A' : '#A0AEC0', 'ti-eye');
+        })()
       + tile(ar?'أعطال':'Faulty', String(faulty), faulty ? '#C0392B' : '#A0AEC0', 'ti-alert-triangle');
   }
 
@@ -12576,8 +12730,12 @@ function renderContractDetail(){
   var acts = document.getElementById('cd-item-actions');
   if(acts){
     var canEdit = canManageClientRecords();
+    var _booked = scheduledRoundFor(c);
     acts.innerHTML = (!_cdVisitId
-        ? '<button class="ca" style="color:#2D7D3A;font-weight:700" onclick="startContractRound()"><i class="ti ti-clipboard-plus"></i> ' + (ar?'بدء جولة فحص':'Start inspection round') + '</button>'
+        ? ((canManageClientRecords() && !_booked)
+            ? '<button class="ca" style="color:#1D4E89;font-weight:700" onclick="openScheduleRound()"><i class="ti ti-calendar-plus"></i> ' + (ar?'جدولة الزيارة':'Schedule the visit') + '</button>'
+            : '')
+          + '<button class="ca" style="color:#2D7D3A;font-weight:700" onclick="startContractRound()"><i class="ti ti-clipboard-plus"></i> ' + (ar?'بدء جولة فحص':'Start inspection round') + '</button>'
         : '')
       + (canEdit
       ? '<button class="ca" onclick="document.getElementById(\'ci-file\').click()"><i class="ti ti-file-spreadsheet"></i> ' + (ar?'رفع إكسل':'Upload Excel') + '</button>'
@@ -15792,6 +15950,37 @@ async function showPublicReport(token){
     <div class="mf">
       <button onclick="closeMod('forgotModal')" class="btn btn-o" style="flex:1" data-en="Cancel" data-ar="إلغاء">Cancel</button>
       <button id="fp-send" onclick="requestPasswordReset()" class="btn btn-p" style="flex:2"><i class="ti ti-mail"></i> <span data-en="Send new password" data-ar="إرسال كلمة مرور جديدة">Send new password</span></button>
+    </div>
+  </div>
+</div>
+
+
+<!-- SCHEDULE A CONTRACT VISIT -->
+<div id="scheduleRoundModal" class="modal" style="display:none">
+  <div class="mbox" style="max-width:460px">
+    <div class="mh">
+      <div class="mhtitle"><i class="ti ti-calendar-plus"></i> <span id="sr-title">Schedule a visit</span></div>
+      <button class="mclose" onclick="closeMod('scheduleRoundModal')"><i class="ti ti-x"></i></button>
+    </div>
+    <div class="mb">
+      <div id="sr-info" style="background:#F8FAFC;border-radius:8px;padding:11px 13px;font-size:12px;color:#4A5568;margin-bottom:14px"></div>
+
+      <label style="display:block;font-size:12px;font-weight:700;color:#4A5568;margin-bottom:5px" data-en="Visit date *" data-ar="تاريخ الزيارة *">Visit date *</label>
+      <input type="date" id="sr-date" style="width:100%;padding:10px 12px;border:1.5px solid #D9E2EC;border-radius:8px;font-size:13px;font-family:inherit;outline:none;box-sizing:border-box">
+
+      <label style="display:block;font-size:12px;font-weight:700;color:#4A5568;margin:13px 0 5px" data-en="Technician *" data-ar="الفني *">Technician *</label>
+      <select id="sr-tech" style="width:100%;padding:10px 12px;border:1.5px solid #D9E2EC;border-radius:8px;font-size:13px;font-family:inherit;outline:none;box-sizing:border-box"></select>
+
+      <label style="display:block;font-size:12px;font-weight:700;color:#4A5568;margin:13px 0 5px" data-en="Notes" data-ar="ملاحظات">Notes</label>
+      <input type="text" id="sr-notes" style="width:100%;padding:10px 12px;border:1.5px solid #D9E2EC;border-radius:8px;font-size:13px;font-family:inherit;outline:none;box-sizing:border-box">
+
+      <div style="font-size:11px;color:#A0AEC0;margin-top:10px"
+           data-en="The visit appears in the technician's list right away. When he arrives and starts the round, the system records into this same visit."
+           data-ar="تظهر الزيارة في قائمة الفني فوراً، وعند وصوله وبدء الجولة يسجّل النظام عليها نفسها.">The visit appears in the technician's list right away.</div>
+    </div>
+    <div class="mf">
+      <button onclick="closeMod('scheduleRoundModal')" class="btn btn-o" style="flex:1" data-en="Cancel" data-ar="إلغاء">Cancel</button>
+      <button onclick="saveScheduledRound()" class="btn btn-p" style="flex:2"><i class="ti ti-calendar-plus"></i> <span data-en="Schedule" data-ar="جدولة">Schedule</span></button>
     </div>
   </div>
 </div>
