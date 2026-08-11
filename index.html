@@ -420,11 +420,12 @@ html,body{height:100%;overflow:auto;font-family:Tajawal,sans-serif;font-size:14p
       </div>
       <div class="field"><label id="t-lbl-model">Model</label>
         <div style="display:flex;gap:8px">
-          <input type="text" id="inp-model" placeholder="Model..." style="flex:1">
+          <input type="text" id="inp-model" placeholder="Model..." oninput="updateVisitDiagramHint()" style="flex:1">
           <button class="btn btn-o" onclick="document.getElementById('cam-model').click()" style="padding:8px 10px;flex-shrink:0"><i class="ti ti-camera"></i></button>
         </div>
         <input type="file" id="cam-model" accept="image/*" capture="environment" style="display:none" onchange="handleCam('model',this)">
         <div id="model-cam-status" style="display:none;font-size:11px;margin-top:5px"></div>
+        <div id="nv-diagram-hint"></div>
       </div>
       <div class="field"><label id="t-lbl-fault">Fault Description</label><input type="text" id="inp-fault" placeholder="Fault..."></div>
       <div class="field"><label id="t-lbl-parts">Required Spare Parts</label>
@@ -2786,11 +2787,13 @@ function addTask(){
   document.getElementById('tasklist').appendChild(d);
 }
 var selParts=[];
-function addPart(){
-  var v=document.getElementById('inp-part').value.trim();
+// name/code are optional — the diagram picker passes them in, the input box
+// doesn't.
+function addPart(name, code){
+  var v = name || document.getElementById('inp-part').value.trim();
   if(!v) return;
   if(!selParts.includes(v)) selParts.push(v);
-  document.getElementById('inp-part').value='';
+  if(!name) document.getElementById('inp-part').value='';
   var dd=document.getElementById('dd-partAC');
   if(dd) dd.style.display='none';
   renderTags();
@@ -3914,6 +3917,7 @@ function fillSummaryOrder(){
 
 // ── "Other" equipment: let the technician name a machine that isn't listed ──
 function onEquipmentChange(){
+  try{ setTimeout(updateVisitDiagramHint, 50); }catch(e){}
   var sel = document.getElementById('inp-equipment');
   var box = document.getElementById('inp-equipment-new');
   var hint = document.getElementById('nv-equip-hint');
@@ -7331,6 +7335,24 @@ function addItemRow(name, model, serial){
 
 
 // Refresh the "drawing available" line under a request's item row.
+
+// The visit form gets the same offer: if a drawing matches this machine, open
+// it here and tick the parts straight into "Required Spare Parts".
+function updateVisitDiagramHint(){
+  var host = document.getElementById('nv-diagram-hint');
+  if(!host) return;
+  var model = (document.getElementById('inp-model') || {}).value || '';
+  var equip = (typeof currentEquipmentValue === 'function')
+    ? currentEquipmentValue() : ((document.getElementById('inp-equipment') || {}).value || '');
+
+  if(!String(model).trim() && !String(equip).trim()){ host.innerHTML = ''; return; }
+  var hit = equipmentMatch(model, equip);
+  // Stay quiet on the visit form unless there's something to offer — a
+  // technician filling a report doesn't need to be told what isn't archived.
+  if(!hit){ host.innerHTML = ''; return; }
+  host.innerHTML = diagramHintHtml(model, equip, 'nv-diagram-hint');
+}
+
 function updateRowDiagramHint(modelInput){
   if(!modelInput) return;
   var row = modelInput.closest('.mr-item-row');
@@ -9684,6 +9706,160 @@ function renderEquipGrid(){
 }
 
 
+
+// ── Picking parts off the drawing, without leaving the page ──────────────
+// Sending someone to Parts Request meant closing the card he was filling in
+// and typing part names from memory. Here the drawing opens over whatever he
+// is working on, and the parts he taps land straight in the right field.
+var _dpEquip = null, _dpPicked = {}, _dpTarget = null;
+
+// target: 'card' → the contract inspection card · 'visit' → the visit form
+function openDiagramPicker(equipId, target){
+  var ar = (LNG === 'ar');
+  var open = function(){
+    var eq = equipmentData.find(function(e){ return String(e.id) === String(equipId); });
+    if(!eq){ alert(ar ? 'تعذّر العثور على الرسم.' : 'That drawing could not be found.'); return; }
+    _dpEquip = eq;
+    _dpPicked = {};
+    _dpTarget = target || 'card';
+
+    var t = document.getElementById('dp-title');
+    if(t) t.textContent = (eq.name || '') + (eq.model ? (' · ' + eq.model) : '');
+
+    var img = document.getElementById('dp-diagram');
+    var none = document.getElementById('dp-nodiagram');
+    var src = eq.diagramBase64 || '';
+    if(src && src.indexOf('data:') !== 0) src = 'data:image/jpeg;base64,' + src;
+    if(src){
+      if(img){ img.src = src; img.style.display = 'block'; }
+      if(none) none.style.display = 'none';
+    } else {
+      if(img) img.style.display = 'none';
+      if(none){
+        none.style.display = 'block';
+        none.textContent = ar ? 'لا توجد صورة رسم — اختر من القائمة.' : 'No drawing image — pick from the list.';
+      }
+    }
+
+    var sb = document.getElementById('dp-search');
+    if(sb) sb.value = '';
+    renderDiagramPickPins();
+    renderDiagramPickList();
+    updateDiagramPickCount();
+    openMod('diagramPickModal');
+  };
+
+  if(typeof equipmentData === 'undefined' || !equipmentData.length){
+    loadEquipmentData().then(open);
+  } else open();
+}
+
+function renderDiagramPickPins(){
+  var overlay = document.getElementById('dp-pins');
+  if(!overlay || !_dpEquip) return;
+  overlay.innerHTML = '';
+  (_dpEquip.parts || []).forEach(function(p){
+    if(!p.pos) return;                 // only parts whose marker was placed
+    var on = !!_dpPicked[p.num];
+    var dot = document.createElement('div');
+    dot.style.cssText = 'position:absolute;left:' + p.pos[0] + '%;top:' + p.pos[1] + '%;'
+      + 'transform:translate(-50%,-50%);width:26px;height:26px;border-radius:50%;display:flex;'
+      + 'align-items:center;justify-content:center;font-size:11px;font-weight:700;color:#fff;'
+      + 'border:2px solid #fff;box-shadow:0 1px 5px rgba(0,0,0,.35);cursor:pointer;pointer-events:auto;'
+      + 'background:' + (on ? '#1D4E89' : '#C0392B');
+    dot.textContent = p.num;
+    dot.title = p.name || '';
+    dot.onclick = function(){ toggleDiagramPart(p.num); };
+    overlay.appendChild(dot);
+  });
+}
+
+function renderDiagramPickList(){
+  var host = document.getElementById('dp-list');
+  if(!host || !_dpEquip) return;
+  var ar = (LNG === 'ar');
+  var box = document.getElementById('dp-search');
+  var q = box ? box.value.trim().toLowerCase() : '';
+
+  var parts = (_dpEquip.parts || []).filter(function(p){
+    if(!q) return true;
+    return (String(p.num||'') + ' ' + String(p.name||'') + ' ' + String(p.desc||'')).toLowerCase().indexOf(q) !== -1;
+  });
+
+  if(!parts.length){
+    host.innerHTML = '<div style="padding:26px;text-align:center;color:#A0AEC0;font-size:12px">'
+      + (ar ? 'لا توجد قطع' : 'No parts') + '</div>';
+    return;
+  }
+
+  host.innerHTML = parts.map(function(p){
+    var on = !!_dpPicked[p.num];
+    return '<div onclick="toggleDiagramPart(\'' + String(p.num).replace(/'/g,"\\'") + '\')" '
+      + 'style="display:flex;align-items:center;gap:10px;padding:9px 12px;border-bottom:1px solid #F0F4F8;cursor:pointer;'
+      + 'background:' + (on ? '#E6F1FB' : '#fff') + '">'
+      + '<span style="width:26px;height:26px;border-radius:50%;flex-shrink:0;display:flex;align-items:center;justify-content:center;'
+      +   'font-size:11px;font-weight:700;color:#fff;background:' + (on ? '#1D4E89' : '#A0AEC0') + '">' + p.num + '</span>'
+      + '<div style="flex:1;min-width:0">'
+      +   '<div style="font-size:12px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"><bdi>' + (p.name || '—') + '</bdi></div>'
+      +   (p.desc ? '<div style="font-size:10px;color:#718096;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + p.desc + '</div>' : '')
+      + '</div>'
+      + (p.pos ? '<i class="ti ti-map-pin" style="color:#CBD5E1;font-size:12px" title="' + (ar?'له علامة على الرسم':'has a marker') + '"></i>' : '')
+      + (on ? '<i class="ti ti-check" style="color:#1D4E89"></i>' : '')
+      + '</div>';
+  }).join('');
+}
+
+function toggleDiagramPart(num){
+  var p = (_dpEquip.parts || []).find(function(x){ return String(x.num) === String(num); });
+  if(!p) return;
+  if(_dpPicked[p.num]) delete _dpPicked[p.num];
+  else _dpPicked[p.num] = p;
+  renderDiagramPickPins();
+  renderDiagramPickList();
+  updateDiagramPickCount();
+}
+
+function updateDiagramPickCount(){
+  var el = document.getElementById('dp-count');
+  if(!el) return;
+  var ar = (LNG === 'ar');
+  var n = Object.keys(_dpPicked).length;
+  el.innerHTML = n
+    ? ('<b style="color:#1D4E89">' + n + '</b>&nbsp;' + (ar ? 'قطعة محددة' : 'part(s) selected'))
+    : ('<span style="color:#A0AEC0">' + (ar ? 'اضغط على الأرقام في الرسم أو على القائمة' : 'Tap the numbers on the drawing, or the list') + '</span>');
+}
+
+// Send the picked parts to whichever field the user came from, matching them to
+// the catalogue first so a code goes with the name.
+function addPickedDiagramParts(){
+  var ar = (LNG === 'ar');
+  var picked = Object.keys(_dpPicked).map(function(k){ return _dpPicked[k]; });
+  if(!picked.length){
+    alert(ar ? 'لم تحدد أي قطعة.' : 'No parts selected.');
+    return;
+  }
+
+  var added = 0;
+  picked.forEach(function(p){
+    var name = p.name || ('Part ' + p.num);
+    var hit = (typeof matchCataloguePart === 'function')
+      ? matchCataloguePart({ name: name, code: '' }) : null;
+
+    if(_dpTarget === 'visit'){
+      // The visit form keeps its own list of required parts
+      if(typeof addPart === 'function'){ addPart(hit ? hit.name : name, hit ? hit.code : ''); added++; }
+    } else {
+      if(typeof addCardPart === 'function'){ addCardPart(hit ? hit.name : name, hit ? hit.code : ''); added++; }
+    }
+  });
+
+  closeMod('diagramPickModal');
+  if(added){
+    var el = document.getElementById(_dpTarget === 'visit' ? 'partsList' : 'ic-parts-tags');
+    if(el) el.scrollIntoView({ block:'nearest' });
+  }
+}
+
 // ── Linking a drawing to a machine by MODEL ──────────────────────────────
 // The archive holds exploded views and parts lists. Until now nothing tied
 // them to the equipment named in a request, a contract card or a visit, so a
@@ -9768,10 +9944,10 @@ function diagramHintHtml(model, name, elId){
                 : (ar ? 'رسم محتمل (مطابقة بالاسم): ' : 'Possible drawing (matched by name): '))
     + '<b>' + (eq.name || '') + '</b>'
     + (n ? (' · ' + n + ' ' + (ar ? 'قطعة' : 'parts')) : '')
-    + ' <button type="button" onclick="openDiagramFor(' + eq.id + ')" style="border:none;background:'
+    + ' <button type="button" onclick="openDiagramPicker(' + eq.id + ',\'' + (elId === 'nv-diagram-hint' ? 'visit' : 'card') + '\')" style="border:none;background:'
     + (hit.sure ? '#E7F6EC;color:#2D7D3A' : '#FDF0E0;color:#C4680A')
     + ';border-radius:6px;padding:3px 10px;font-size:11px;font-weight:700;cursor:pointer;font-family:inherit;margin-inline-start:6px">'
-    + (ar ? 'عرض الرسم' : 'Open') + '</button></div>';
+    + '<i class="ti ti-hand-click"></i> ' + (ar ? 'اختر القطع من الرسم' : 'Pick parts from the drawing') + '</button></div>';
 }
 
 // Jump to the Parts Request page with that drawing already open.
@@ -11772,7 +11948,7 @@ function renderPartsSummary(){
   var rows = partsSummaryRows();
 
   var t = document.getElementById('ps-title');
-  if(t) t.textContent = (ar ? 'القطع المطلوبة — ' : 'Parts needed — ') + (c ? (c.name || '') : '');
+  if(t) t.textContent = (ar ? 'قطع الغيار المطلوبة — ' : 'Required Spare Parts — ') + (c ? (c.name || '') : '');
 
   var tabs = document.getElementById('ps-scope');
   if(tabs){
@@ -11896,7 +12072,7 @@ function exportPartsSummaryExcel(){
     + '<Column ss:AutoFitWidth="0" ss:Width="80"/><Column ss:AutoFitWidth="0" ss:Width="100"/>'
     + '<Column ss:AutoFitWidth="0" ss:Width="300"/>'
     + '<Row><Cell ss:StyleID="ttl"><Data ss:Type="String">'
-    +   esc(companyName() + ' — ' + (ar ? 'قطع الغيار المطلوبة' : 'Spare parts needed')) + '</Data></Cell></Row>'
+    +   esc(companyName() + ' — ' + (ar ? 'قطع الغيار المطلوبة' : 'Required Spare Parts')) + '</Data></Cell></Row>'
     + '<Row><Cell ss:StyleID="sub"><Data ss:Type="String">'
     +   esc((cl ? (cl.nickname || cl.name) : '') + ' · ' + ((c||{}).name || '') + ' · '
         + (_psScope === 'current' ? (ar ? 'المطلوب حالياً' : 'outstanding now') : (ar ? 'كل الزيارات' : 'every visit')))
@@ -12314,7 +12490,7 @@ function printContractRound(){
   var esc = function(v){ return String(v==null?'':v).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); };
 
   var head = ar ? ['#','المعدة','الموديل','الرقم التسلسلي','الحالة','الملاحظات','قطع الغيار المطلوبة','الفني']
-                : ['#','Equipment','Model','Serial','Condition','Notes','Parts needed','Inspector'];
+                : ['#','Equipment','Model','Serial','Condition','Notes','Required Spare Parts','Inspector'];
 
   var body = rows.map(function(r, i){
     return '<tr>'
@@ -12395,7 +12571,7 @@ function exportContractExcel(){
   };
 
   var head = ar ? ['تاريخ الزيارة','المعدة','الموديل','الرقم التسلسلي','الموقع','الحالة','الملاحظات','قطع الغيار المطلوبة','الفني']
-                : ['Visit date','Equipment','Model','Serial','Location','Condition','Notes','Parts needed','Inspector'];
+                : ['Visit date','Equipment','Model','Serial','Location','Condition','Notes','Required Spare Parts','Inspector'];
 
   var xml = '<?xml version="1.0" encoding="UTF-8"?>'
     + '<?mso-application progid="Excel.Sheet"?>'
@@ -12801,7 +12977,7 @@ function renderContractItems(){
       +   '</div>'
       + '</div>'
       + (equipmentForModel(it.model, it.name)
-          ? '<button class="rbtn" onclick="event.stopPropagation();openDiagramFor(' + equipmentForModel(it.model, it.name).id + ')" title="'
+          ? '<button class="rbtn" onclick="event.stopPropagation();openDiagramPicker(' + equipmentForModel(it.model, it.name).id + ',\'card\')" title="'
             + (ar?'رسم القطع لهذا الموديل':'Parts drawing for this model') + '" style="color:#2D7D3A"><i class="ti ti-file-check"></i></button>'
           : '')
       + '<div style="font-size:11px;color:' + col + ';font-weight:700;min-width:90px">' + conditionLabel(k ? k.condition : null) + '</div>'
@@ -15559,7 +15735,7 @@ async function showPublicReport(token){
       <div class="ps" id="cd-sub"></div>
     </div>
     <div style="display:flex;gap:8px;flex-wrap:wrap">
-      <button class="btn btn-p" onclick="openPartsSummary()"><i class="ti ti-shopping-cart"></i> <span data-en="Parts needed" data-ar="القطع المطلوبة">Parts needed</span></button>
+      <button class="btn btn-p" onclick="openPartsSummary()"><i class="ti ti-shopping-cart"></i> <span data-en="Required Spare Parts" data-ar="قطع الغيار المطلوبة">Required Spare Parts</span></button>
       <button class="btn btn-o" onclick="printContractRound()"><i class="ti ti-printer"></i> <span data-en="Print" data-ar="طباعة">Print</span></button>
       <button class="btn btn-o" onclick="exportContractExcel()"><i class="ti ti-file-spreadsheet"></i> <span data-en="Export Excel" data-ar="تصدير إكسل">Export Excel</span></button>
       <button class="btn btn-o" id="cd-edit-btn" onclick="editContract()"><i class="ti ti-pencil"></i> <span data-en="Edit" data-ar="تعديل">Edit</span></button>
@@ -15878,7 +16054,7 @@ async function showPublicReport(token){
       <label style="display:block;font-size:12px;font-weight:700;color:#4A5568;margin:14px 0 6px" data-en="Notes" data-ar="الملاحظات">Notes</label>
       <textarea id="ic-notes" rows="3" style="width:100%;padding:10px 12px;border:1.5px solid #D9E2EC;border-radius:8px;font-size:13px;font-family:inherit;outline:none;resize:vertical"></textarea>
 
-      <label style="display:block;font-size:12px;font-weight:700;color:#4A5568;margin:14px 0 6px" data-en="Spare parts needed" data-ar="قطع الغيار المطلوبة">Spare parts needed</label>
+      <label style="display:block;font-size:12px;font-weight:700;color:#4A5568;margin:14px 0 6px" data-en="Required Spare Parts" data-ar="قطع الغيار المطلوبة">Required Spare Parts</label>
       <div style="position:relative">
         <div style="display:flex;gap:8px">
           <input type="text" id="ic-part" autocomplete="off" oninput="showCardPartAC(this.value)" onkeydown="if(event.key==='Enter'){event.preventDefault();addCardPart();}"
@@ -15938,7 +16114,7 @@ async function showPublicReport(token){
 <div id="partsSummaryModal" class="modal" style="display:none">
   <div class="mbox" style="max-width:660px">
     <div class="mh">
-      <div class="mhtitle"><i class="ti ti-shopping-cart"></i> <span id="ps-title">Parts needed</span></div>
+      <div class="mhtitle"><i class="ti ti-shopping-cart"></i> <span id="ps-title">Required Spare Parts</span></div>
       <button class="mclose" onclick="closeMod('partsSummaryModal')"><i class="ti ti-x"></i></button>
     </div>
     <div class="mb">
@@ -16006,6 +16182,39 @@ async function showPublicReport(token){
     <div class="mf">
       <button onclick="closeMod('scheduleRoundModal')" class="btn btn-o" style="flex:1" data-en="Cancel" data-ar="إلغاء">Cancel</button>
       <button onclick="saveScheduledRound()" class="btn btn-p" style="flex:2"><i class="ti ti-calendar-plus"></i> <span data-en="Schedule" data-ar="جدولة">Schedule</span></button>
+    </div>
+  </div>
+</div>
+
+<!-- PICK PARTS STRAIGHT OFF THE DRAWING -->
+<div id="diagramPickModal" class="modal" style="display:none;z-index:10002">
+  <div class="mbox" style="max-width:920px;width:96%">
+    <div class="mh">
+      <div class="mhtitle"><i class="ti ti-file-certificate"></i> <span id="dp-title">Parts drawing</span></div>
+      <button class="mclose" onclick="closeMod('diagramPickModal')"><i class="ti ti-x"></i></button>
+    </div>
+    <div class="mb" style="padding:0">
+      <div style="display:grid;grid-template-columns:1.25fr 1fr;gap:0;align-items:stretch" id="dp-grid">
+        <div style="background:#0B1B33;position:relative;min-height:320px;max-height:60vh;overflow:auto">
+          <div id="dp-diagram-wrap" style="position:relative;display:inline-block;min-width:100%">
+            <img id="dp-diagram" style="width:100%;display:block" alt="">
+            <div id="dp-pins" style="position:absolute;inset:0;pointer-events:none"></div>
+          </div>
+          <div id="dp-nodiagram" style="display:none;color:#7E93B5;font-size:12px;padding:40px;text-align:center"></div>
+        </div>
+        <div style="display:flex;flex-direction:column;border-inline-start:1px solid #E2E8F0;max-height:60vh">
+          <div style="padding:10px 12px;border-bottom:1px solid #E2E8F0">
+            <div class="sbox" style="max-width:none"><i class="ti ti-search"></i>
+              <input type="text" id="dp-search" oninput="renderDiagramPickList()" data-ph-en="Search parts…" data-ph-ar="ابحث في القطع…" placeholder="Search parts…"></div>
+          </div>
+          <div id="dp-list" style="flex:1;overflow-y:auto"></div>
+        </div>
+      </div>
+    </div>
+    <div class="mf">
+      <div id="dp-count" style="flex:1;font-size:12px;color:#718096;display:flex;align-items:center"></div>
+      <button onclick="closeMod('diagramPickModal')" class="btn btn-o" data-en="Cancel" data-ar="إلغاء">Cancel</button>
+      <button onclick="addPickedDiagramParts()" class="btn btn-p"><i class="ti ti-plus"></i> <span data-en="Add selected parts" data-ar="إضافة القطع المحددة">Add selected parts</span></button>
     </div>
   </div>
 </div>
