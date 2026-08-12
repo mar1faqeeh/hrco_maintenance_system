@@ -2247,7 +2247,7 @@ function renderPending(){
     var iconColor = days >= 3 ? '#C0392B' : '#C4680A';
     var dayLabel = days === 0 ? 'Today' : days === 1 ? 'Day 1' : 'Day ' + days;
 
-    var parts = Array.isArray(v.parts) ? v.parts.join(', ') : '—';
+    var parts = asList(v.parts).join(', ') || '—';
     var row = document.createElement('div');
     row.className = 'lr';
     row.style.cursor = 'pointer';
@@ -6941,10 +6941,15 @@ function applyDashboardLayout(){
     var el = document.getElementById(w.el);
     if(el) el.style.display = (on.indexOf(w.key) === -1) ? 'none' : '';
   });
-  // the two side-by-side rows collapse when both their cards are hidden
+  // The two side-by-side rows are a fixed 1fr 1fr grid, so hiding ONE of the
+  // pair used to leave its half as blank space. Collapse the row when both are
+  // gone, and make it full width when only one survives.
   [['dw-row1','techs','pending'], ['dw-row2','recent','weekly']].forEach(function(r){
     var row = document.getElementById(r[0]);
-    if(row) row.style.display = (on.indexOf(r[1]) === -1 && on.indexOf(r[2]) === -1) ? 'none' : '';
+    if(!row) return;
+    var a = on.indexOf(r[1]) !== -1, b = on.indexOf(r[2]) !== -1;
+    row.style.display = (!a && !b) ? 'none' : '';
+    row.style.gridTemplateColumns = (a && b) ? '' : '1fr';
   });
 
   // built-in blocks: order, by moving them to match the saved sequence
@@ -6971,6 +6976,11 @@ function applyDashboardLayout(){
     anchor = node;
   });
   page.appendChild(extra);
+  // Extras sit in their own grid; let it fill whatever space is left instead
+  // of holding empty columns.
+  extra.style.display = 'grid';
+  extra.style.gridTemplateColumns = 'repeat(auto-fit, minmax(320px, 1fr))';
+  extra.style.gap = '14px';
 
   // Re-pin the attention row under the header after the reshuffle
   var _act = document.getElementById('dw-action');
@@ -12739,7 +12749,7 @@ async function sendByEmail(id){
     var status_ar = v.status==='Completed'||v.status==='مكتملة' ? 'مكتملة ✓' : 'معلقة';
     var status_en = v.status==='Completed'||v.status==='مكتملة' ? 'Completed ✓' : 'Pending';
     var equip = v.equipment||v.equip||'—';
-    var parts = Array.isArray(v.parts)&&v.parts.length ? v.parts.join(', ') : '—';
+    var parts = asList(v.parts).join(', ') || '—';
 
     var subject = encodeURIComponent(
       'كشف زيارة صيانة ' + (company('short')||'') + ' #' + id + ' | Maintenance Visit Report - ' + (v.client||'')
@@ -15821,7 +15831,7 @@ function renderDashPending(){
     }
     var dayColor = days >= 5 ? '#C0392B' : days >= 3 ? '#C4680A' : '#2D7D3A';
     var dayLabel = days === 0 ? 'Today' : days === 1 ? 'Day 1' : 'Day ' + days;
-    var parts = Array.isArray(v.parts) ? v.parts.join(', ') : (v.parts||'—');
+    var parts = asList(v.parts).join(', ') || '—';
     var row = document.createElement('div');
     row.className = 'lr';
     row.style.cursor = 'pointer';
