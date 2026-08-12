@@ -257,6 +257,7 @@ html,body{height:100%;overflow:auto;font-family:Tajawal,sans-serif;font-size:14p
     <div><div class="pt" id="t-pg-dashboard">Dashboard</div><div class="ps" id="t-pg-dashboard-sub">Today's operations overview</div></div>
     <button class="btn btn-p" onclick="go('newvisit')"><i class="ti ti-plus"></i><span id="t-new-visit-btn">New Visit</span></button>
   </div>
+  <div id="dw-action" style="margin-bottom:14px"></div>
   <div class="sg sg-4" id="dw-stats">
     <div class="sc" onclick="go('visits')" style="cursor:pointer"><div class="si" style="background:#E6F1FB"><i class="ti ti-calendar-check" style="color:#1D4E89"></i></div><div class="sv" id="dash-total-visits">0</div><div class="sl" id="t-stat-today">Today's Visits</div><div class="sch cup"><i class="ti ti-trending-up"></i><span id="t-from-yest">+3 from yesterday</span></div></div>
     <div class="sc" onclick="go('visits')" style="cursor:pointer"><div class="si" style="background:#EAF3DE"><i class="ti ti-circle-check" style="color:#2D7D3A"></i></div><div class="sv" id="dash-completed">0</div><div class="sl" id="t-stat-done">Completed</div><div class="sch cup"><i class="ti ti-trending-up"></i> <span id="dash-comp-pct">72%</span></div></div>
@@ -6939,10 +6940,23 @@ function applyDashboardLayout(){
              : el;
     if(!node || node.parentElement !== page) return;
     if(anchor) page.insertBefore(node, anchor.nextSibling);
-    else page.insertBefore(node, page.querySelector('.ph') ? page.querySelector('.ph').nextSibling : page.firstChild);
+    else {
+      // "Needs your attention" is pinned directly under the header — it isn't a
+      // configurable widget, and reordering used to push it below everything.
+      var act = document.getElementById('dw-action');
+      var head = page.querySelector('.ph');
+      var after = (act && act.parentElement === page) ? act
+                : (head ? head : null);
+      page.insertBefore(node, after ? after.nextSibling : page.firstChild);
+    }
     anchor = node;
   });
   page.appendChild(extra);
+
+  // Re-pin the attention row under the header after the reshuffle
+  var _act = document.getElementById('dw-action');
+  var _head = page.querySelector('.ph');
+  if(_act && _head && _act.parentElement === page) page.insertBefore(_act, _head.nextSibling);
 
   // extras
   extra.innerHTML = '';
@@ -15648,6 +15662,109 @@ function renderDashRecent(){
   });
 }
 
+
+// ── "Needs your attention" ───────────────────────────────────────────────
+// The four summary cards are scoped to TODAY, so on any day without visits the
+// whole dashboard reads as empty even when work is piling up. This row answers
+// the only question that matters on opening the system: what is waiting for me?
+function dashAttention(){
+  var out = [];
+  var today = new Date().toISOString().split('T')[0];
+  var ar = (LNG === 'ar');
+
+  // 1. Contracts due or overdue
+  if(typeof contractsData !== 'undefined' && featureOn('maintenance_contracts')){
+    var due = 0, overdue = 0;
+    contractsData.forEach(function(c){
+      var st = contractStatus(c);
+      if(st.key === 'overdue') overdue++;
+      else if(st.key === 'due') due++;
+    });
+    if(due + overdue){
+      out.push({
+        n: due + overdue,
+        label: ar ? 'عقود مستحقة' : 'Contracts due',
+        sub: overdue ? (ar ? (overdue + ' متأخر') : (overdue + ' overdue')) : '',
+        colour: overdue ? '#C0392B' : '#C4680A',
+        bg: overdue ? '#FCEBEB' : '#FDF0E0',
+        icon: 'ti-file-certificate',
+        go: function(){ go('contracts'); setContractFilter(overdue ? 'overdue' : 'due'); }
+      });
+    }
+  }
+
+  // 2. Customer tickets not yet dealt with
+  if(typeof maintRequests !== 'undefined'){
+    var tickets = maintRequests.filter(function(r){
+      return r.source === 'customer' && (r.status || 'new') === 'new';
+    }).length;
+    if(tickets){
+      out.push({
+        n: tickets,
+        label: ar ? 'تذاكر عملاء جديدة' : 'New customer tickets',
+        sub: '', colour: '#2D7D3A', bg: '#E7F6EC', icon: 'ti-ticket',
+        go: function(){ go('maint-requests'); setMaintFilter('new'); }
+      });
+    }
+
+    // 3. Requests waiting to be scheduled
+    var waiting = maintRequests.filter(function(r){
+      return (r.status || 'new') === 'new' && r.source !== 'customer';
+    }).length;
+    if(waiting){
+      out.push({
+        n: waiting,
+        label: ar ? 'طلبات تنتظر الجدولة' : 'Requests to schedule',
+        sub: '', colour: '#1D4E89', bg: '#E6F1FB', icon: 'ti-clipboard-list',
+        go: function(){ go('maint-requests'); setMaintFilter('new'); }
+      });
+    }
+  }
+
+  return out;
+}
+
+var _dashActions = [];
+
+function renderDashAttention(){
+  var host = document.getElementById('dw-action');
+  if(!host) return;
+  var ar = (LNG === 'ar');
+  _dashActions = dashAttention();
+
+  if(!_dashActions.length){
+    // Say it plainly rather than leaving a blank strip that looks broken
+    host.innerHTML = '<div style="background:#E7F6EC;border:1px solid #BBE5C8;border-radius:11px;'
+      + 'padding:12px 16px;font-size:13px;color:#2D7D3A;font-weight:600">'
+      + '<i class="ti ti-circle-check"></i> '
+      + (ar ? 'لا يوجد ما ينتظرك — كل شيء مجدول.' : 'Nothing is waiting — everything is scheduled.')
+      + '</div>';
+    return;
+  }
+
+  host.innerHTML = '<div style="display:flex;gap:10px;flex-wrap:wrap">'
+    + _dashActions.map(function(a, i){
+        return '<div onclick="dashActionGo(' + i + ')" style="flex:1;min-width:200px;cursor:pointer;'
+          + 'background:' + a.bg + ';border:1px solid ' + a.colour + '33;border-radius:11px;padding:13px 15px;'
+          + 'display:flex;align-items:center;gap:12px">'
+          + '<div style="width:38px;height:38px;border-radius:10px;background:#fff;display:flex;align-items:center;'
+          +   'justify-content:center;flex-shrink:0"><i class="ti ' + a.icon + '" style="color:' + a.colour + ';font-size:19px"></i></div>'
+          + '<div style="flex:1;min-width:0">'
+          +   '<div style="font-size:21px;font-weight:800;color:' + a.colour + ';line-height:1.1">' + a.n + '</div>'
+          +   '<div style="font-size:12px;font-weight:600;color:#1a202c">' + a.label + '</div>'
+          +   (a.sub ? '<div style="font-size:11px;color:' + a.colour + '">' + a.sub + '</div>' : '')
+          + '</div>'
+          + '<i class="ti ti-chevron-' + (ar ? 'left' : 'right') + '" style="color:' + a.colour + ';opacity:.5"></i>'
+          + '</div>';
+      }).join('')
+    + '</div>';
+}
+
+function dashActionGo(i){
+  var a = _dashActions[i];
+  if(a && typeof a.go === 'function') a.go();
+}
+
 function updatePendingBadge(){
   var badge = document.querySelector('#nav-pending .nbadge');
   if(!badge) return;
@@ -15696,6 +15813,7 @@ function renderDashPending(){
 
 function updateDashStats(){
   updatePendingBadge();
+  try{ renderDashAttention(); }catch(e){}
   var today = new Date().toISOString().split('T')[0];
   var total = visData.length;
   var todayVisits = visData.filter(function(v){ return v.date===today; }).length;
@@ -15704,18 +15822,31 @@ function updateDashStats(){
   var missingParts = visData.filter(function(v){ return v.parts && v.parts.length>0 && (v.status==='معلقة'||v.status==='Pending'); }).length;
   var pct = total>0 ? Math.round(completed/total*100) : 0;
 
-  // Today's visits card
-  var e1=document.getElementById('dash-total-visits'); if(e1) e1.textContent=todayVisits;
-  // Completed today
+  // The cards used to count TODAY only, so a day without visits made the whole
+  // dashboard read as zero. Show the month, and put today in the sub-line.
+  var monthPrefix = today.slice(0, 7);
+  var monthVisits = visData.filter(function(v){ return String(v.date||'').indexOf(monthPrefix) === 0; }).length;
+  var completedMonth = visData.filter(function(v){
+    return (v.status==='مكتملة'||v.status==='Completed') && String(v.date||'').indexOf(monthPrefix) === 0;
+  }).length;
   var completedToday = visData.filter(function(v){ return (v.status==='مكتملة'||v.status==='Completed') && v.date===today; }).length;
-  var e2=document.getElementById('dash-completed'); if(e2) e2.textContent=completedToday;
+
+  var e1=document.getElementById('dash-total-visits'); if(e1) e1.textContent=monthVisits;
+  var e2=document.getElementById('dash-completed'); if(e2) e2.textContent=completedMonth;
+
+  // Relabel the two cards, since they no longer mean "today"
+  var ar_ = (LNG === 'ar');
+  var l1 = document.getElementById('t-stat-today');
+  if(l1) l1.textContent = ar_ ? 'زيارات هذا الشهر' : 'Visits this month';
+  var l2 = document.getElementById('t-stat-done');
+  if(l2) l2.textContent = ar_ ? 'مكتملة هذا الشهر' : 'Completed this month';
   // Pending (all)
   var e3=document.getElementById('dash-pending'); if(e3) e3.textContent=pending;
   // Missing parts (pending with parts)
   var e4=document.getElementById('dash-missing-parts'); if(e4) e4.textContent=missingParts;
   // Completion %
-  var todayPct = todayVisits>0 ? Math.round(completedToday/todayVisits*100) : 0;
-  var e5=document.getElementById('dash-comp-pct'); if(e5) e5.textContent=todayPct+'%';
+  var monthPct = monthVisits>0 ? Math.round(completedMonth/monthVisits*100) : 0;
+  var e5=document.getElementById('dash-comp-pct'); if(e5) e5.textContent=monthPct+'%';
 
   // Sub-labels
   var yesterday = new Date(Date.now()-86400000).toISOString().split('T')[0];
@@ -15723,10 +15854,11 @@ function updateDashStats(){
   var diff = todayVisits - yestVisits;
   var subEl = document.getElementById('dash-sub-today');
   if(subEl){
-    if(diff>0) subEl.innerHTML='<span style="color:#2D7D3A">&#8599; +'+diff+' from yesterday</span>';
-    else if(diff<0) subEl.innerHTML='<span style="color:#C0392B">&#8600; '+diff+' from yesterday</span>';
-    else subEl.innerHTML='<span style="color:#718096">Same as yesterday</span>';
+    subEl.innerHTML = '<span style="color:#718096">'
+      + (ar_ ? ('اليوم: ' + todayVisits) : ('Today: ' + todayVisits)) + '</span>';
   }
+  var fy = document.getElementById('t-from-yest');
+  if(fy) fy.textContent = ar_ ? ('اليوم: ' + todayVisits) : ('Today: ' + todayVisits);
   var subComp = document.getElementById('dash-sub-completed');
   if(subComp) subComp.innerHTML='<span style="color:#2D7D3A">&#8599; '+todayPct+'%</span>';
 
