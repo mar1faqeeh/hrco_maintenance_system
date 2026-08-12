@@ -2197,6 +2197,16 @@ async function deleteVisit(id){
   }
 }
 
+
+// The order is the unit of work here — a client with several sites tells you
+// nothing on its own. Everywhere a client is listed, name the order too.
+function clientOrderLabel(clientName, orderId, colour){
+  var name = clientName || '—';
+  var on = (typeof orderNameOf === 'function') ? orderNameOf(orderId) : '';
+  if(!on) return name;
+  return name + ' <span style="color:' + (colour || '#1D4E89') + ';font-weight:600">— ' + on + '</span>';
+}
+
 function renderPending(){
   updatePendingBadge();
   var body = document.getElementById('pendingBody');
@@ -2237,7 +2247,8 @@ function renderPending(){
     row.innerHTML = 
       '<div class="av" style="background:'+iconBg+';border-radius:8px"><i class="ti '+icon+'" style="color:'+iconColor+';font-size:16px"></i></div>'
       + '<div class="ri">'
-      +   '<div class="rn">'+(v.client||'—')+' — '+(v.equipment||v.equip||'—')+'</div>'
+      +   '<div class="rn">'+clientOrderLabel(v.client, v.order_id)+'</div>'
+      +   '<div style="font-size:11px;color:#718096">'+(v.equipment||v.equip||'—')+'</div>'
       +   '<div class="rs">'+(parts!=='—'?parts+' · ':'')+(v.tech||'—')+'</div>'
       + '</div>'
       + '<span style="font-size:11px;color:'+dayColor+';font-weight:700;flex-shrink:0">'+dayLabel+'</span>';
@@ -12735,7 +12746,8 @@ async function sendByEmail(id){
       '══════════════════════════',
       'تفاصيل الزيارة / Visit Details',
       '══════════════════════════',
-      'العميل / Client:    ' + (v.client||'—'),
+      'العميل / Client:    ' + (v.client||'—')
+        + (orderNameOf(v.order_id) ? (' — ' + orderNameOf(v.order_id)) : ''),
       'الفني / Technician: ' + (v.tech||'—'),
       'التاريخ / Date:     ' + (v.date||'—'),
       'المعدة / Equipment: ' + equip,
@@ -12813,7 +12825,7 @@ async function doSendEmail(){
     // Table
     '<table style="width:100%;border-collapse:collapse;font-size:13px;margin-bottom:20px">',
     '<tr style="background:#F0F4F8"><th colspan="2" style="padding:10px 14px;text-align:right;color:#0F2D52;font-size:14px">تفاصيل الزيارة / Visit Details</th></tr>',
-    _emailRow('اسم العميل','Client',(v.client||'—')),
+    _emailRow('اسم العميل','Client', clientOrderLabel(v.client, v.order_id, '#718096')),
     _emailRow('الفني المسؤول','Technician',
       (v.tech||'—') + (v.helpers ? ('<div style="font-size:11px;color:#718096">ومعه / with: '
         + String(v.helpers).replace(/</g,'&lt;') + '</div>') : '')),
@@ -15532,7 +15544,7 @@ function runReport(){
   res.forEach(function(r){
     var ph=r.parts.length?'<span class="bdg b-d" style="font-size:10px"><i class="ti ti-tool" style="font-size:10px"></i> '+r.parts.length+'</span>':'<span style="font-size:11px;color:#A0AEC0">—</span>';
     var row=document.createElement('div');row.className='trow';row.style.gridTemplateColumns='1.8fr 1.2fr 1fr 1.2fr 0.8fr 0.8fr 70px';
-    row.innerHTML='<div class="tc"><div style="font-weight:500">'+r.client+'</div><div class="tc2">'+r.equip+'</div></div><div class="tc">'+r.tech+'</div><div class="tc">'+ph+'</div><div class="tc"><span class="bdg b-i" style="font-size:10px">'+(typeLabel[r.type]||r.type)+'</span></div><div class="tc"><span class="bdg '+(stBdg[r.status]||'b-g')+'">'+r.status+'</span></div><div class="tc2">'+r.date+'</div><div style="display:flex;gap:4px"><button class="rbtn" onclick="viewVisit('+(r.visitId||r.id)+')" title="View"><i class="ti ti-eye"></i></button><button class="rbtn" onclick="showPrintOptions('+(r.visitId||r.id)+')" title="Print"><i class="ti ti-printer"></i></button></div>';
+    row.innerHTML='<div class="tc"><div style="font-weight:500">'+clientOrderLabel(r.client, r.order_id)+'</div><div class="tc2">'+r.equip+'</div></div><div class="tc">'+r.tech+'</div><div class="tc">'+ph+'</div><div class="tc"><span class="bdg b-i" style="font-size:10px">'+(typeLabel[r.type]||r.type)+'</span></div><div class="tc"><span class="bdg '+(stBdg[r.status]||'b-g')+'">'+r.status+'</span></div><div class="tc2">'+r.date+'</div><div style="display:flex;gap:4px"><button class="rbtn" onclick="viewVisit('+(r.visitId||r.id)+')" title="View"><i class="ti ti-eye"></i></button><button class="rbtn" onclick="showPrintOptions('+(r.visitId||r.id)+')" title="Print"><i class="ti ti-printer"></i></button></div>';
     body.appendChild(row);
   });
 }
@@ -15655,7 +15667,8 @@ function renderDashRecent(){
     row.style.cursor = 'pointer';
     row.onclick = function(){ viewVisit(v.id); };
     row.innerHTML = '<div class="av" style="background:'+iconBg+';border-radius:8px"><i class="ti '+iconClass+'" style="color:'+iconColor+';font-size:16px"></i></div>'
-      + '<div class="ri"><div class="rn">'+(v.client||'—')+(v.equipment||v.equip ? ' — '+(v.equipment||v.equip) : '')+'</div>'
+      + '<div class="ri"><div class="rn">'+clientOrderLabel(v.client, v.order_id)+'</div>'
+      + (v.equipment||v.equip ? '<div style="font-size:11px;color:#718096">'+(v.equipment||v.equip)+'</div>' : '')
       + '<div class="rs">'+(v.tech||'—')+(v.date?' · '+v.date:'')+'</div></div>'
       + '<span class="bdg '+badgeClass+'">'+statusLabel+'</span>';
     body.appendChild(row);
@@ -15805,7 +15818,9 @@ function renderDashPending(){
     row.className = 'lr';
     row.style.cursor = 'pointer';
     row.onclick = function(){ viewVisit(v.id); };
-    row.innerHTML = '<div class="ri"><div class="rn">'+(v.client||'—')+(v.equipment||v.equip?' — '+(v.equipment||v.equip):'')+'</div><div class="rs">'+(parts!=='—'?parts:(v.tech||'—'))+'</div></div>'
+    row.innerHTML = '<div class="ri"><div class="rn">'+clientOrderLabel(v.client, v.order_id)+'</div>'
+      + (v.equipment||v.equip ? '<div style="font-size:11px;color:#718096">'+(v.equipment||v.equip)+'</div>' : '')
+      + '<div class="rs">'+(parts!=='—'?parts:(v.tech||'—'))+'</div></div>'
       + '<span style="font-size:11px;color:'+dayColor+';font-weight:700;flex-shrink:0">'+dayLabel+'</span>';
     body.appendChild(row);
   });
@@ -16441,7 +16456,9 @@ function _doPrintVisit(id, v, techSigImg, clientSigImg, visitDateTime, vtype, pa
     + '<table>'
     + '<tr>'
     + '<th class="lbl"><span class="lbl-en">Client</span><span class="lbl-ar">اسم العميل</span></th>'
-    + '<td class="val"><strong>' + (v.client||'—') + '</strong></td>'
+    + '<td class="val"><strong>' + (v.client||'—') + '</strong>'
+    +   (orderNameOf(v.order_id) ? '<div style="font-size:11px;color:#718096;font-weight:400">' + orderNameOf(v.order_id) + '</div>' : '')
+    + '</td>'
     + '<th class="lbl"><span class="lbl-en">Location</span><span class="lbl-ar">الموقع / الفرع</span></th>'
     + '<td class="val">' + (v.location||'—') + '</td>'
     + '</tr>'
