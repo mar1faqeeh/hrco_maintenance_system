@@ -4998,6 +4998,7 @@ async function loadAppSettings(){
     (r.data||[]).forEach(function(row){ appSettings[row.key] = row.value; });
     applyFeatureFlags();
     try{ applyLists(); }catch(e){}
+    try{ applyLoginBrand(); }catch(e){}
     try{ applyDashboardLayout(); }catch(e){}
   }catch(e){ console.log('loadAppSettings error:', e); }
 }
@@ -6915,7 +6916,52 @@ function companyPrintFooter(){
 }
 
 // Put the company into the live interface.
+
+// The login screen is the first thing anyone sees, so it should carry the
+// company's own logo rather than a generic snowflake. Called once the settings
+// are loaded, since the logo lives in app_settings.
+function applyLoginBrand(){
+  var band = document.getElementById('lg-band');
+  var wrap = document.getElementById('lg-logo-wrap');
+  var logo = (typeof companyLogo === 'function') ? companyLogo() : '';
+
+  // The letterhead the company already prints on is the strongest possible
+  // brand mark — reuse it rather than inventing a look. It updates by itself
+  // whenever the letterhead is replaced in the control panel.
+  var head = (typeof appSettings !== 'undefined') ? (appSettings['company_header_img'] || '') : '';
+  if(head && typeof asImgSrc === 'function') head = asImgSrc(head);
+
+  if(band && head){
+    band.style.display = 'block';
+    band.innerHTML = '<img src="' + head + '" alt="" style="width:100%;display:block">'
+      + '<div style="height:3px;background:linear-gradient(90deg,#0F2D52,#8E2668,#E4032E)"></div>';
+    // With the band showing, the separate logo tile is redundant
+    if(wrap) wrap.style.display = 'none';
+  } else {
+    if(band) band.style.display = 'none';
+    if(wrap){
+      wrap.style.display = 'flex';
+      if(logo){
+        wrap.style.background = '#fff';
+        wrap.style.padding = '6px';
+        wrap.style.width = '84px';
+        wrap.style.height = '84px';
+        wrap.style.borderRadius = '18px';
+        wrap.style.boxShadow = '0 6px 20px rgba(15,45,82,.12)';
+        wrap.innerHTML = '<img src="' + logo + '" alt="" style="width:100%;height:100%;object-fit:contain">';
+      }
+    }
+  }
+
+  var nm = document.getElementById('lg-company');
+  if(nm && typeof company === 'function'){
+    var short = company('short') || company('name_en') || '';
+    if(short) nm.textContent = short;
+  }
+}
+
 function applyCompany(){
+  try{ applyLoginBrand(); }catch(e){}
   var short = company('short');
 
   var sub = document.querySelector('.tsub');
@@ -18174,16 +18220,19 @@ async function showPublicReport(token){
   </div>
 </div>
 
-<div id="loginScreen" style="position:fixed;inset:0;background:#0F2D52;z-index:9999;display:flex;align-items:center;justify-content:center;padding:16px;font-family:Tajawal,sans-serif">
+<div id="loginScreen" style="position:fixed;inset:0;background:#EEF2F7;z-index:9999;display:flex;align-items:center;justify-content:center;padding:16px;font-family:Tajawal,sans-serif">
   <div style="background:#fff;border-radius:16px;width:100%;max-width:400px;overflow:hidden;box-shadow:0 20px 60px rgba(0,0,0,.3)">
-    <div style="background:#0F2D52;padding:24px 20px;text-align:center">
-      <div style="width:52px;height:52px;background:rgba(255,255,255,.12);border-radius:12px;display:flex;align-items:center;justify-content:center;margin:0 auto 12px"><i class="ti ti-snowflake" style="color:#7EC8E3;font-size:28px"></i></div>
-      <div style="color:#fff;font-size:16px;font-weight:700" id="lg-appname">Maintenance Management System</div>
-      <div style="color:#7EC8E3;font-size:12px;margin-top:4px" id="lg-company">HRCO</div>
-      <div style="display:flex;justify-content:center;gap:6px;margin-top:14px">
-        <button id="lg-en" onclick="lgLang('en')" style="padding:4px 12px;border-radius:99px;font-size:11px;font-weight:700;cursor:pointer;border:1px solid rgba(255,255,255,.3);background:#fff;color:#0F2D52;font-family:Tajawal,sans-serif">EN</button>
-        <button id="lg-ar" onclick="lgLang('ar')" style="padding:4px 12px;border-radius:99px;font-size:11px;font-weight:700;cursor:pointer;border:1px solid rgba(255,255,255,.3);background:transparent;color:#fff;font-family:Tajawal,sans-serif">ع</button>
-        <button id="lg-ur" onclick="lgLang('ur')" style="padding:4px 12px;border-radius:99px;font-size:11px;font-weight:700;cursor:pointer;border:1px solid rgba(255,255,255,.3);background:transparent;color:#fff;font-family:Tajawal,sans-serif">اردو</button>
+    <div id="lg-head" style="background:#fff;padding:0;text-align:center">
+      <div id="lg-band" style="display:none"></div>
+      <div id="lg-logo-wrap" style="width:52px;height:52px;background:rgba(15,45,82,.08);border-radius:12px;display:flex;align-items:center;justify-content:center;margin:18px auto 12px;overflow:hidden"><i class="ti ti-snowflake" style="color:#1D4E89;font-size:28px"></i></div>
+      <div id="lg-titles" style="padding:16px 20px 18px">
+        <div style="color:#0F2D52;font-size:17px;font-weight:800;line-height:1.4" id="lg-appname">Maintenance Management System</div>
+        <div style="color:#8E2668;font-size:12px;font-weight:700;margin-top:3px" id="lg-company">HRCO</div>
+        <div style="display:flex;justify-content:center;gap:6px;margin-top:13px">
+          <button id="lg-en" onclick="lgLang('en')" style="padding:4px 13px;border-radius:99px;font-size:11px;font-weight:700;cursor:pointer;border:1px solid #0F2D52;background:#0F2D52;color:#fff;font-family:Tajawal,sans-serif">EN</button>
+          <button id="lg-ar" onclick="lgLang('ar')" style="padding:4px 13px;border-radius:99px;font-size:11px;font-weight:700;cursor:pointer;border:1px solid #D9E2EC;background:#fff;color:#4A5568;font-family:Tajawal,sans-serif">ع</button>
+          <button id="lg-ur" onclick="lgLang('ur')" style="padding:4px 13px;border-radius:99px;font-size:11px;font-weight:700;cursor:pointer;border:1px solid #D9E2EC;background:#fff;color:#4A5568;font-family:Tajawal,sans-serif">اردو</button>
+        </div>
       </div>
     </div>
     <div style="padding:24px 20px">
