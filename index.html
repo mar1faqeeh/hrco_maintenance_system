@@ -14997,6 +14997,7 @@ function sendTicketLinkWhatsApp(){
 }
 
 function renderClientGrid(){
+  try{ recomputeClientStats(); }catch(e){}
   var isManagerRole   = can('clients.delete');
   var canManageClients = can('clients.manage');
   var g=document.getElementById('clientGrid');if(!g)return;g.innerHTML='';
@@ -15106,8 +15107,52 @@ function renderDonut(){
   var legend=data.map(function(d){return'<div class="dli"><div class="ddot" style="background:'+d.c+'"></div><span>'+d.l+'</span><span style="margin-right:auto;font-weight:700">'+d.v+'</span><span style="font-size:10px;color:#A0AEC0">'+Math.round(d.v/Math.max(tot,1)*100)+'%</span></div>';}).join('');
   el.innerHTML='<svg width="128" height="128" viewBox="0 0 128 128">'+arcs+'<text x="64" y="60" text-anchor="middle" font-size="18" font-weight="700" fill="#1a202c">'+tot+'</text><text x="64" y="75" text-anchor="middle" font-size="10" fill="#718096">visits</text></svg><div class="dleg">'+legend+'</div>';
 }
+
+// Client visit counters were read from a `total_visits` column that is written
+// as 0 when the client is created and never touched again — so every counter
+// on the Clients page, and the Top Clients widget, sat at zero forever.
+// Count the real visits instead; they're already in memory.
+function recomputeClientStats(){
+  if(typeof clientsData === 'undefined' || !clientsData.length) return;
+  if(typeof visData === 'undefined') return;
+
+  // Match a visit to a client the same way the visit form resolves a typed
+  // name — official name, nickname, or the consonant skeleton of either.
+  var key = function(v){
+    var t = String(v || '').trim().toLowerCase();
+    if(!t) return '';
+    if(typeof skeleton === 'function'){
+      try{ return skeleton(t) || t; }catch(e){}
+    }
+    return t;
+  };
+
+  var index = {};
+  clientsData.forEach(function(c){
+    c.total = 0; c.completed = 0; c.pending = 0; c.parts = 0; c.wv = 0;
+    [c.name, c.nickname].forEach(function(n){
+      var k = key(n);
+      if(k) index[k] = c;
+    });
+  });
+
+  visData.forEach(function(v){
+    var c = index[key(v.client)];
+    if(!c) return;
+    c.total++;
+    var st = String(v.status || '').toLowerCase();
+    if(st === 'completed' || v.status === 'مكتملة') c.completed++;
+    else c.pending++;
+    var needs = (typeof asList === 'function') ? asList(v.parts) : (Array.isArray(v.parts) ? v.parts : []);
+    if(needs.length) c.parts++;
+    var vt = String(v.visit_type || v.type || '').toLowerCase();
+    if(vt === 'warranty' || v.visit_type === 'ضمان') c.wv++;
+  });
+}
+
 function renderTopClients(){
   var el=document.getElementById('topClientsList');if(!el)return;el.innerHTML='';
+  recomputeClientStats();
   var sorted=clientsData.slice().sort(function(a,b){return (b.total||0)-(a.total||0);}).slice(0,5);
   if(!sorted.length){
     el.innerHTML = '<div style="padding:20px;text-align:center;color:#A0AEC0;font-size:12px">No clients yet</div>';
