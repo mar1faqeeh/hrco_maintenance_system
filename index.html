@@ -271,8 +271,10 @@ html,body{height:100%;overflow:auto;font-family:Tajawal,sans-serif;font-size:14p
     <div class="sc" onclick="go('pending')" style="cursor:pointer"><div class="si" style="background:#FDF0E0"><i class="ti ti-clock-pause" style="color:#C4680A"></i></div><div class="sv" id="dash-pending">0</div><div class="sl" id="t-stat-pend">Pending</div><div class="sch cwn"><i class="ti ti-alert-triangle"></i><span id="t-needs-fu">Needs follow-up</span></div></div>
     <div class="sc" onclick="go('parts')" style="cursor:pointer"><div class="si" style="background:#FCEBEB"><i class="ti ti-tool" style="color:#C0392B"></i></div><div class="sv" id="dash-missing-parts">0</div><div class="sl" id="t-stat-parts">Missing Parts</div><div class="sch cdn"><i class="ti ti-trending-down"></i> 3</div></div>
   </div>
-  <div class="g2" id="dw-row1">
-    <div class="card" id="dw-techs">
+    <!-- One grid for the four cards. They used to sit in two fixed pairs, so
+       ordering a card only moved its whole row and a hidden card left a gap. -->
+  <div id="dw-cards" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(340px,1fr));gap:14px;margin-bottom:14px">
+<div class="card" id="dw-techs">
       <div class="ch"><div class="ct"><i class="ti ti-users"></i><span id="t-tech-status">Technician Status</span></div><button class="ca" onclick="go('technicians')" id="t-view-all">View All</button></div>
       <div id="dash-tech-body"><div style="padding:20px;text-align:center;color:#A0AEC0;font-size:13px">Loading...</div></div>
     </div>
@@ -280,8 +282,8 @@ html,body{height:100%;overflow:auto;font-family:Tajawal,sans-serif;font-size:14p
       <div class="ch"><div class="ct"><i class="ti ti-clock-pause" style="color:#C4680A"></i><span id="t-pend-reports">Pending Reports</span></div><button class="ca" onclick="go('pending')" id="t-view-all2">View All</button></div>
       <div id="dash-pending-body"><div style="padding:20px;text-align:center;color:#A0AEC0;font-size:13px">Loading...</div></div>
     </div>
-  </div>
-  <div class="g2" id="dw-row2">
+  
+  
     <div class="card" id="dw-recent">
       <div class="ch"><div class="ct"><i class="ti ti-history"></i><span id="t-recent">Recent Visits</span></div><button class="ca" onclick="go('visits')" id="t-archive-btn">Full Archive</button></div>
       <div id="dash-recent-body"><div style="padding:20px;text-align:center;color:#A0AEC0;font-size:13px">Loading...</div></div>
@@ -294,10 +296,10 @@ html,body{height:100%;overflow:auto;font-family:Tajawal,sans-serif;font-size:14p
         <div style="text-align:center;padding:10px;border-left:1px solid #D9E2EC;border-right:1px solid #D9E2EC"><div style="font-size:18px;font-weight:700;color:#2D7D3A">54</div><div style="font-size:10px;color:#718096">Done</div></div>
         <div style="text-align:center;padding:10px"><div style="font-size:18px;font-weight:700;color:#C4680A">13</div><div style="font-size:10px;color:#718096">Pending</div></div>
       </div>
-    </div>
+  </div>
   </div>
 
-  <div id="dw-extra" style="display:flex;flex-direction:column;gap:14px;margin-top:14px"></div>
+<div id="dw-extra" style="display:flex;flex-direction:column;gap:14px;margin-top:14px"></div>
 </div>
 
 <!-- ═══ VISITS ═══ -->
@@ -6990,16 +6992,13 @@ function applyDashboardLayout(){
     var el = document.getElementById(w.el);
     if(el) el.style.display = (on.indexOf(w.key) === -1) ? 'none' : '';
   });
-  // The two side-by-side rows are a fixed 1fr 1fr grid, so hiding ONE of the
-  // pair used to leave its half as blank space. Collapse the row when both are
-  // gone, and make it full width when only one survives.
-  [['dw-row1','techs','pending'], ['dw-row2','recent','weekly']].forEach(function(r){
-    var row = document.getElementById(r[0]);
-    if(!row) return;
-    var a = on.indexOf(r[1]) !== -1, b = on.indexOf(r[2]) !== -1;
-    row.style.display = (!a && !b) ? 'none' : '';
-    row.style.gridTemplateColumns = (a && b) ? '' : '1fr';
-  });
+  // All four cards now live in one auto-fitting grid, so a hidden card leaves
+  // no gap and each can be ordered on its own.
+  var cardBox = document.getElementById('dw-cards');
+  if(cardBox){
+    var anyCard = ['techs','pending','recent','weekly'].some(function(k){ return on.indexOf(k) !== -1; });
+    cardBox.style.display = anyCard ? 'grid' : 'none';
+  }
 
   // built-in blocks: order, by moving them to match the saved sequence
   var anchor = null;
@@ -7008,9 +7007,16 @@ function applyDashboardLayout(){
     if(!w || !w.built) return;
     var el = document.getElementById(w.el);
     if(!el) return;
-    var node = (w.key === 'techs' || w.key === 'pending') ? document.getElementById('dw-row1')
-             : (w.key === 'recent' || w.key === 'weekly') ? document.getElementById('dw-row2')
-             : el;
+    // A card inside the grid is ordered within it; everything else is ordered
+    // among the page's own children.
+    var node = el;
+    if(['techs','pending','recent','weekly'].indexOf(w.key) !== -1){
+      var box = document.getElementById('dw-cards');
+      if(box && el.parentElement === box) box.appendChild(el);   // append in saved order
+      var first = ['techs','pending','recent','weekly'].filter(function(k){ return on.indexOf(k) !== -1; })[0];
+      if(w.key !== first) return;          // the grid itself is placed once
+      node = box;
+    }
     if(!node || node.parentElement !== page) return;
     if(anchor) page.insertBefore(node, anchor.nextSibling);
     else {
@@ -16033,14 +16039,12 @@ function renderDashAttention(){
   _dashActions = dashAttention();
 
   if(!_dashActions.length){
-    // Say it plainly rather than leaving a blank strip that looks broken
-    host.innerHTML = '<div style="background:#E7F6EC;border:1px solid #BBE5C8;border-radius:11px;'
-      + 'padding:12px 16px;font-size:13px;color:#2D7D3A;font-weight:600">'
-      + '<i class="ti ti-circle-check"></i> '
-      + (ar ? 'لا يوجد ما ينتظرك — كل شيء مجدول.' : 'Nothing is waiting — everything is scheduled.')
-      + '</div>';
+    // Nothing waiting needs no announcement — an empty top is the message.
+    host.style.display = 'none';
+    host.innerHTML = '';
     return;
   }
+  host.style.display = '';
 
   host.innerHTML = '<div style="display:flex;gap:10px;flex-wrap:wrap">'
     + _dashActions.map(function(a, i){
