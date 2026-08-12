@@ -1764,6 +1764,14 @@ function lgSuccess(u, restoring){
       if(typeof renderVisits==='function' && document.getElementById('visBody')) renderVisits();
       if(typeof renderMaintRequests==='function' && document.getElementById('mr-list')) renderMaintRequests();
       if(typeof renderArchive==='function' && document.getElementById('archiveBody')) renderArchive();
+      // The DASHBOARD is the first screen anyone sees and it prints the order
+      // name too — it was left out of this repaint, which is why the order kept
+      // missing there while every other list showed it.
+      if(typeof renderDashRecent==='function' && document.getElementById('dash-recent-body')) renderDashRecent();
+      if(typeof renderDashPending==='function' && document.getElementById('dash-pending-body')) renderDashPending();
+      if(typeof renderPending==='function' && document.getElementById('pendingBody')) renderPending();
+      if(typeof runReport==='function' && document.getElementById('pg-reports')
+         && document.getElementById('pg-reports').style.display !== 'none') runReport();
     }); }catch(e){}
     try{ loadAppSettings(); }catch(e){}
     try{ loadPartStock().then(function(){ if(typeof renderInvList==='function' && document.getElementById('invList')) renderInvList(); }); }catch(e){}
