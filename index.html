@@ -5002,15 +5002,51 @@ async function loadAppSettings(){
 }
 
 async function saveAppSetting(key, value){
-  if(!_initSb()) return false;
+  if(!_initSb()){
+    console.error('saveAppSetting: no database connection');
+    return false;
+  }
   try{
-    var r = await _sb.from('app_settings')
-      .upsert({ key: key, value: String(value), updated_at: new Date().toISOString() }, { onConflict: 'key' })
-      .select();
-    if(r.error){ console.error('saveAppSetting:', r.error); return false; }
+    var row = { key: key, value: String(value), updated_at: new Date().toISOString() };
+    var r = await _sb.from('app_settings').upsert(row, { onConflict: 'key' }).select();
+
+    // Not every database has updated_at — it was added later. Losing a setting
+    // over a bookkeeping column is not acceptable, so drop it and retry.
+    if(r.error && /updated_at|column/i.test(r.error.message || '')){
+      delete row.updated_at;
+      r = await _sb.from('app_settings').upsert(row, { onConflict: 'key' }).select();
+    }
+
+    if(r.error){
+      console.error('saveAppSetting:', r.error);
+      _settingSaveFailed(key, r.error.message);
+      return false;
+    }
+    if(!r.data || !r.data.length){
+      console.error('saveAppSetting: nothing was written for', key);
+      _settingSaveFailed(key, 'No row was written — check the UPDATE/INSERT policy on app_settings.');
+      return false;
+    }
     appSettings[key] = String(value);
     return true;
-  }catch(e){ console.error('saveAppSetting:', e); return false; }
+  }catch(e){
+    console.error('saveAppSetting:', e);
+    _settingSaveFailed(key, e.message || String(e));
+    return false;
+  }
+}
+
+// A setting that fails to save leaves the screen looking unchanged, which reads
+// as "the feature is broken". Say what happened, once per key per session.
+var _settingFailWarned = {};
+function _settingSaveFailed(key, msg){
+  if(_settingFailWarned[key]) return;
+  _settingFailWarned[key] = true;
+  var ar = (typeof LNG !== 'undefined' && LNG === 'ar');
+  alert((ar
+      ? ('⚠️ لم يُحفظ الإعداد "' + key + '" في قاعدة البيانات، لذلك لن يظهر أثره بعد التحديث.\n\nالسبب:\n')
+      : ('⚠️ The setting "' + key + '" was NOT saved, so it will not survive a refresh.\n\nReason:\n'))
+    + msg);
 }
 
 // Reflect the flags in the main app.
@@ -7469,7 +7505,7 @@ var DB_EXPECTED = {
   contract_cards: ['contract_id','item_id','visit_id','visit_date','condition','notes','parts_needed','inspector'],
   equipment_diagrams: ['name','brand','model','diagram_data','parts_list','extra_files'],
   system_users: ['username','password','full_name','role','email','zones','active','must_change_password'],
-  app_settings: ['key','value']
+  app_settings: ['key','value','updated_at']
 };
 
 async function apRenderDbCheck(){
