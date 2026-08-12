@@ -273,7 +273,7 @@ html,body{height:100%;overflow:auto;font-family:Tajawal,sans-serif;font-size:14p
   </div>
     <!-- One grid for the four cards. They used to sit in two fixed pairs, so
        ordering a card only moved its whole row and a hidden card left a gap. -->
-  <div id="dw-cards" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(340px,1fr));gap:14px;margin-bottom:14px">
+  
 <div class="card" id="dw-techs">
       <div class="ch"><div class="ct"><i class="ti ti-users"></i><span id="t-tech-status">Technician Status</span></div><button class="ca" onclick="go('technicians')" id="t-view-all">View All</button></div>
       <div id="dash-tech-body"><div style="padding:20px;text-align:center;color:#A0AEC0;font-size:13px">Loading...</div></div>
@@ -297,9 +297,8 @@ html,body{height:100%;overflow:auto;font-family:Tajawal,sans-serif;font-size:14p
         <div style="text-align:center;padding:10px"><div style="font-size:18px;font-weight:700;color:#C4680A">13</div><div style="font-size:10px;color:#718096">Pending</div></div>
       </div>
   </div>
-  </div>
 
-<div id="dw-extra" style="display:flex;flex-direction:column;gap:14px;margin-top:14px"></div>
+  <div id="dw-extra" style="display:none"></div>
 </div>
 
 <!-- ═══ VISITS ═══ -->
@@ -6983,73 +6982,60 @@ function dashLayout(){
 // Reorder and show/hide the dashboard to match the saved layout.
 function applyDashboardLayout(){
   var page = document.getElementById('pg-dashboard');
-  var extra = document.getElementById('dw-extra');
-  if(!page || !extra) return;
+  if(!page) return;
   var on = dashLayout();
 
-  // built-in blocks: visibility
-  DASH_WIDGETS.filter(function(w){ return w.built; }).forEach(function(w){
-    var el = document.getElementById(w.el);
-    if(el) el.style.display = (on.indexOf(w.key) === -1) ? 'none' : '';
-  });
-  // All four cards now live in one auto-fitting grid, so a hidden card leaves
-  // no gap and each can be ordered on its own.
-  var cardBox = document.getElementById('dw-cards');
-  if(cardBox){
-    var anyCard = ['techs','pending','recent','weekly'].some(function(k){ return on.indexOf(k) !== -1; });
-    cardBox.style.display = anyCard ? 'grid' : 'none';
+  // ONE ordered flow for every widget. Built-in cards used to live in their own
+  // grid and the extras in another, so a built-in card could never be placed
+  // after an extra one — "Pending Reports" stayed stuck near the top however it
+  // was ordered. Now they share a single container and the saved order is the
+  // only thing that decides position.
+  var flow = document.getElementById('dw-flow');
+  if(!flow){
+    flow = document.createElement('div');
+    flow.id = 'dw-flow';
+    flow.style.cssText = 'display:grid;grid-template-columns:repeat(auto-fit,minmax(340px,1fr));'
+                       + 'gap:14px;align-items:start';
+    page.appendChild(flow);
   }
 
-  // built-in blocks: order, by moving them to match the saved sequence
-  var anchor = null;
-  on.forEach(function(key){
-    var w = DASH_WIDGETS.find(function(x){ return x.key === key; });
-    if(!w || !w.built) return;
+  // Park every built-in block somewhere safe before re-placing the visible ones
+  var parked = document.getElementById('dw-parked');
+  if(!parked){
+    parked = document.createElement('div');
+    parked.id = 'dw-parked';
+    parked.style.display = 'none';
+    page.appendChild(parked);
+  }
+  DASH_WIDGETS.filter(function(w){ return w.built; }).forEach(function(w){
     var el = document.getElementById(w.el);
-    if(!el) return;
-    // A card inside the grid is ordered within it; everything else is ordered
-    // among the page's own children.
-    var node = el;
-    if(['techs','pending','recent','weekly'].indexOf(w.key) !== -1){
-      var box = document.getElementById('dw-cards');
-      if(box && el.parentElement === box) box.appendChild(el);   // append in saved order
-      var first = ['techs','pending','recent','weekly'].filter(function(k){ return on.indexOf(k) !== -1; })[0];
-      if(w.key !== first) return;          // the grid itself is placed once
-      node = box;
-    }
-    if(!node || node.parentElement !== page) return;
-    if(anchor) page.insertBefore(node, anchor.nextSibling);
-    else {
-      // "Needs your attention" is pinned directly under the header — it isn't a
-      // configurable widget, and reordering used to push it below everything.
-      var act = document.getElementById('dw-action');
-      var head = page.querySelector('.ph');
-      var after = (act && act.parentElement === page) ? act
-                : (head ? head : null);
-      page.insertBefore(node, after ? after.nextSibling : page.firstChild);
-    }
-    anchor = node;
+    if(el) parked.appendChild(el);
   });
-  page.appendChild(extra);
-  // Extras sit in their own grid; let it fill whatever space is left instead
-  // of holding empty columns.
-  extra.style.display = 'grid';
-  extra.style.gridTemplateColumns = 'repeat(auto-fit, minmax(320px, 1fr))';
-  extra.style.gap = '14px';
 
-  // Re-pin the attention row under the header after the reshuffle
-  var _act = document.getElementById('dw-action');
-  var _head = page.querySelector('.ph');
-  if(_act && _head && _act.parentElement === page) page.insertBefore(_act, _head.nextSibling);
-
-  // extras
-  extra.innerHTML = '';
+  // Rebuild the flow in the saved order
+  flow.innerHTML = '';
   on.forEach(function(key){
     var w = DASH_WIDGETS.find(function(x){ return x.key === key; });
-    if(!w || w.built) return;
-    var html = dashWidgetHtml(key);
-    if(html) extra.insertAdjacentHTML('beforeend', html);
+    if(!w) return;
+    if(w.built){
+      var el = document.getElementById(w.el);
+      if(!el) return;
+      el.style.display = '';
+      // The summary cards are a strip of four, so they take the full width
+      el.style.gridColumn = (w.key === 'stats') ? '1 / -1' : '';
+      flow.appendChild(el);
+    } else {
+      var html = dashWidgetHtml(key);
+      if(html) flow.insertAdjacentHTML('beforeend', html);
+    }
   });
+
+  // Keep the attention row directly under the header, and the flow after it
+  var head = page.querySelector('.ph');
+  var act = document.getElementById('dw-action');
+  if(act && head && act.parentElement === page) page.insertBefore(act, head.nextSibling);
+  page.appendChild(flow);
+  page.appendChild(parked);
 }
 
 // ── The extra widgets ────────────────────────────────────────────────────
