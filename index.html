@@ -222,23 +222,30 @@ html,body{height:100%;overflow:auto;font-family:Tajawal,sans-serif;font-size:14p
 
     <div id="sidebar">
       <div style="padding:10px 0;flex:1">
-        <div class="sb-sec" id="sb-main">Main</div>
+        <div class="sb-sec" id="sb-main" data-en="OPERATIONS" data-ar="العمليات اليومية">OPERATIONS</div>
         <div class="nav-item" onclick="go('dashboard')" id="nav-dashboard"><i class="ti ti-layout-dashboard"></i><span id="t-dashboard">Dashboard</span></div>
-        <div class="nav-item" onclick="go('visits')" id="nav-visits"><i class="ti ti-calendar"></i><span id="t-visits">Visits</span><span class="nbadge" id="vis-badge" style="display:none">0</span></div>
-        <div class="nav-item" onclick="go('pending')" id="nav-pending"><i class="ti ti-clock-pause"></i><span id="t-pending">Pending</span><span class="nbadge">0</span></div>
-        <div class="sb-sec" id="sb-mgmt">Management</div>
         <div class="nav-item" onclick="go('newvisit')" id="nav-newvisit"><i class="ti ti-plus"></i><span id="t-newvisit">New Visit</span></div>
-        <div class="nav-item" onclick="go('technicians')" id="nav-technicians"><i class="ti ti-users"></i><span id="t-techs">Technicians</span></div>
-        <div class="nav-item" onclick="go('parts')" id="nav-parts"><i class="ti ti-tool"></i><span id="t-parts">Spare Parts</span></div>
-        <div class="nav-item" onclick="go('parts-request')" id="nav-parts-request"><i class="ti ti-zoom-question"></i><span>Parts Request</span></div>
-        <div class="nav-item" onclick="go('parts-orders')" id="nav-parts-orders"><i class="ti ti-clipboard-list"></i><span>Parts Orders</span><span class="nbadge" id="po-badge" style="display:none">0</span></div>
-        <div class="nav-item" onclick="go('maint-requests')" id="nav-maint-requests"><i class="ti ti-headset"></i><span>Maintenance Requests</span><span class="nbadge" id="mr-badge" style="display:none">0</span></div>
+        <div class="nav-item" onclick="go('visits')" id="nav-visits"><i class="ti ti-calendar"></i><span id="t-visits">Visits</span><span class="nbadge" id="vis-badge" style="display:none">0</span></div>
+        <div class="nav-item" onclick="go('pending')" id="nav-pending"><i class="ti ti-clock-pause"></i><span id="t-pending">Pending Reports</span><span class="nbadge">0</span></div>
+        <div class="nav-item" onclick="go('maint-requests')" id="nav-maint-requests"><i class="ti ti-headset"></i><span data-en="Maintenance Requests" data-ar="طلبات الصيانة">Maintenance Requests</span><span class="nbadge" id="mr-badge" style="display:none">0</span></div>
+
+        <div class="sb-sec" id="sb-clients" data-en="CLIENTS &amp; CONTRACTS" data-ar="العملاء والعقود">CLIENTS &amp; CONTRACTS</div>
         <div class="nav-item" onclick="go('clients')" id="nav-clients"><i class="ti ti-building"></i><span id="t-clients">Clients</span></div>
         <div class="nav-item" onclick="go('contracts')" id="nav-contracts"><i class="ti ti-file-certificate"></i><span data-en="Maintenance Contracts" data-ar="عقود الصيانة">Maintenance Contracts</span></div>
-        <div class="sb-sec" id="sb-rep">Reports</div>
+
+        <div class="sb-sec" id="sb-wh" data-en="WAREHOUSE" data-ar="المستودع">WAREHOUSE</div>
+        <div class="nav-item" onclick="go('parts')" id="nav-parts"><i class="ti ti-tool"></i><span id="t-parts">Spare Parts</span></div>
+        <div class="nav-item" onclick="go('parts-request')" id="nav-parts-request"><i class="ti ti-zoom-question"></i><span data-en="Find a Part" data-ar="البحث عن قطعة">Find a Part</span></div>
+        <div class="nav-item" onclick="go('parts-orders')" id="nav-parts-orders"><i class="ti ti-clipboard-list"></i><span data-en="Parts Requests" data-ar="طلبات القطع">Parts Requests</span><span class="nbadge" id="po-badge" style="display:none">0</span></div>
+
+        <div class="sb-sec" id="sb-team" data-en="TEAM" data-ar="الفريق">TEAM</div>
+        <div class="nav-item" onclick="go('technicians')" id="nav-technicians"><i class="ti ti-users"></i><span id="t-techs">Technicians</span></div>
+
+        <div class="sb-sec" id="sb-rep" data-en="RECORDS" data-ar="السجلات">RECORDS</div>
         <div class="nav-item" onclick="go('reports')" id="nav-reports"><i class="ti ti-chart-bar"></i><span id="t-reports">Reports</span></div>
         <div class="nav-item" onclick="go('archive')" id="nav-archive"><i class="ti ti-history"></i><span id="t-archive">Archive</span></div>
-        <div class="sb-sec" id="sb-acc">Account</div>
+
+        <div class="sb-sec" id="sb-acc" data-en="ACCOUNT" data-ar="الحساب">ACCOUNT</div>
         <div class="nav-item" onclick="go('settings')" id="nav-settings"><i class="ti ti-settings"></i><span id="t-settings">Settings</span></div>
       </div>
       <div class="sb-foot">
@@ -1279,7 +1286,7 @@ function setLang(l){
   if(sb){sb.style.borderLeft=(l==='ar'||l==='ur')?'1px solid #D9E2EC':'none';sb.style.borderRight=(l==='en')?'1px solid #D9E2EC':'none';}
   // Apply all translations
   var map={
-    't-appname':'appName','sb-main':'main','sb-mgmt':'mgmt','sb-rep':'rep','sb-acc':'acc',
+    't-appname':'appName',
     't-dashboard':'dashboard','t-visits':'visits','t-pending':'pending','t-newvisit':'newvisit',
     't-techs':'techs','t-parts':'parts','t-clients':'clients','t-reports':'reports','t-archive':'archive','t-settings':'settings',
     't-pg-dashboard':'dashboard','t-pg-dashboard-sub':'newvisitSub',
@@ -5010,6 +5017,8 @@ async function saveAppSetting(key, value){
 function applyFeatureFlags(){
   var navC = document.getElementById('nav-contracts');
   if(navC) navC.style.display = featureOn('maintenance_contracts') ? '' : 'none';
+  // A hidden feature must not leave its section heading stranded
+  try{ hideEmptyNavSections(); }catch(e){}
 
   var aiCard = document.getElementById('ai-search-card');
   if(aiCard) aiCard.style.display = featureOn('ai_diagram_search') ? '' : 'none';
@@ -9506,6 +9515,31 @@ async function reopenMaintRequest(id){
 }
 
 // Sales users may only use this one section.
+
+// Walk the sidebar and hide any section heading with no visible item beneath
+// it. Written generically so adding or moving a nav item never leaves an
+// orphan heading behind.
+function hideEmptyNavSections(){
+  var nav = document.querySelector('.sb-sec');
+  if(!nav || !nav.parentElement) return;
+  var kids = Array.prototype.slice.call(nav.parentElement.children);
+  var current = null, seen = false;
+
+  var close = function(){
+    if(current) current.style.display = seen ? '' : 'none';
+  };
+
+  kids.forEach(function(el){
+    if(el.classList.contains('sb-sec')){
+      close();
+      current = el; seen = false;
+      return;
+    }
+    if(el.classList.contains('nav-item') && el.style.display !== 'none') seen = true;
+  });
+  close();
+}
+
 function applyRolePermissions(){
   var salesOnly = (curUserRole === 'salesman');
   // Sales staff track their requests across every stage, so default to All.
@@ -9525,13 +9559,10 @@ function applyRolePermissions(){
     if(dataEntry)  hide = ['nav-clients','nav-visits','nav-maint-requests'].indexOf(n.id) === -1;
     n.style.display = hide ? 'none' : '';
   });
-  var narrow = salesOnly || dataEntry;
-  ['sb-main','sb-mgmt','sb-rep'].forEach(function(id){
-    var e = document.getElementById(id);
-    if(e) e.style.display = narrow ? 'none' : '';
-  });
-  var acc = document.getElementById('sb-acc');
-  if(acc) acc.style.display = narrow ? 'none' : '';
+  // A section heading with nothing under it is clutter — hide any group whose
+  // items are all hidden for this role, rather than naming a fixed list that
+  // goes stale every time the sidebar changes.
+  hideEmptyNavSections();
 
   // Only the manager and data entry may add or edit clients.
   // Only the manager and data entry maintain the client register — that
