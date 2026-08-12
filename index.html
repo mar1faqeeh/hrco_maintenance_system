@@ -4108,9 +4108,140 @@ function orderItems(o){
   try{ var a = JSON.parse(v); return Array.isArray(a) ? a : []; }catch(e){ return []; }
 }
 
-function canManageClientRecords(){
-  return curUserRole === 'manager' || curUserRole === 'data_entry';
+
+// ══════════════════════════════════════
+// ROLES & PERMISSIONS
+// Permissions used to be written into the code in 37 places, so every change
+// needed a new build. They now live in app_settings, and the defaults below
+// reproduce EXACTLY what each built-in role could do before this existed.
+// ══════════════════════════════════════
+var PERMISSIONS = [
+  { group:'clients', gEn:'Clients & Orders', gAr:'العملاء والأوردرات', items:[
+    { key:'clients.manage',   en:'Add and edit clients and orders', ar:'إضافة وتعديل العملاء والأوردرات' },
+    { key:'clients.delete',   en:'Delete a client',                 ar:'حذف عميل' },
+    { key:'tickets.links',    en:'Manage customer ticket links',    ar:'إدارة روابط تذاكر العملاء' }
+  ]},
+  { group:'visits', gEn:'Visits', gAr:'الزيارات', items:[
+    { key:'visits.create',    en:'Record a visit',                  ar:'تسجيل زيارة' },
+    { key:'visits.editAny',   en:"Edit anyone's visit",             ar:'تعديل زيارات الآخرين' },
+    { key:'visits.delete',    en:'Delete a visit',                  ar:'حذف زيارة' },
+    { key:'visits.assign',    en:'Assign a visit to another technician', ar:'إسناد الزيارة لفني آخر' }
+  ]},
+  { group:'requests', gEn:'Maintenance Requests', gAr:'طلبات الصيانة', items:[
+    { key:'requests.create',  en:'Raise a request',                 ar:'رفع طلب صيانة' },
+    { key:'requests.act',     en:'Schedule, complete, hold or reject', ar:'الجدولة والإنهاء والتعليق والرفض' },
+    { key:'requests.exception', en:'Grant a warranty exception',    ar:'منح استثناء ضمان' }
+  ]},
+  { group:'parts', gEn:'Spare Parts', gAr:'قطع الغيار', items:[
+    { key:'parts.manage',     en:'Add, edit and import parts',      ar:'إضافة وتعديل واستيراد القطع' },
+    { key:'parts.stocktake',  en:'Run a stocktake',                 ar:'إجراء الجرد' },
+    { key:'parts.issue',      en:'Issue parts from the store',      ar:'صرف القطع من المخزن' },
+    { key:'parts.request',    en:'Request parts',                   ar:'طلب قطع غيار' }
+  ]},
+  { group:'contracts', gEn:'Maintenance Contracts', gAr:'عقود الصيانة', items:[
+    { key:'contracts.manage', en:'Create and edit contracts',       ar:'إنشاء وتعديل العقود' },
+    { key:'contracts.inspect',en:'Fill inspection cards',           ar:'تعبئة بطاقات الفحص' }
+  ]},
+  { group:'reports', gEn:'Reports', gAr:'التقارير', items:[
+    { key:'reports.view',     en:'View reports and the archive',    ar:'عرض التقارير والأرشيف' },
+    { key:'reports.export',   en:'Print and export',                ar:'الطباعة والتصدير' }
+  ]}
+];
+
+function allPermissionKeys(){
+  var out = [];
+  PERMISSIONS.forEach(function(g){ g.items.forEach(function(i){ out.push(i.key); }); });
+  return out;
 }
+
+// The built-in roles, set to exactly what they could already do.
+var ROLE_DEFAULTS = {
+  manager: ['clients.manage','clients.delete','tickets.links',
+            'visits.create','visits.editAny','visits.delete','visits.assign',
+            'requests.create','requests.act','requests.exception',
+            'parts.manage','parts.stocktake','parts.issue','parts.request',
+            'contracts.manage','contracts.inspect',
+            'reports.view','reports.export'],
+  technician: ['visits.create','contracts.inspect','parts.request','reports.view'],
+  salesman:   ['requests.create','reports.view'],
+  data_entry: ['clients.manage','tickets.links','reports.view','reports.export']
+};
+
+var ROLE_LABELS = {
+  sysadmin:   { en:'System Administrator', ar:'مدير النظام' },
+  manager:    { en:'Maintenance Manager',  ar:'مدير الصيانة' },
+  technician: { en:'Technician',           ar:'فني' },
+  salesman:   { en:'Salesman',             ar:'مندوب مبيعات' },
+  data_entry: { en:'Data Entry',           ar:'مدخل بيانات' }
+};
+
+var BUILTIN_ROLES = ['sysadmin','manager','technician','salesman','data_entry'];
+var rolesConfig = null;   // { roleKey: { en, ar, custom, perms:[] } }
+
+// Read the saved matrix, falling back to the defaults for anything unset.
+function loadRolesConfig(){
+  if(rolesConfig) return rolesConfig;
+  var saved = null;
+  try{
+    var raw = appSettings && appSettings.roles_config;
+    if(raw) saved = (typeof raw === 'string') ? JSON.parse(raw) : raw;
+  }catch(e){ saved = null; }
+
+  rolesConfig = {};
+  BUILTIN_ROLES.forEach(function(k){
+    rolesConfig[k] = {
+      en: ROLE_LABELS[k].en, ar: ROLE_LABELS[k].ar, custom: false,
+      perms: (k === 'sysadmin') ? allPermissionKeys() : (ROLE_DEFAULTS[k] || []).slice()
+    };
+  });
+  if(saved){
+    Object.keys(saved).forEach(function(k){
+      var s = saved[k] || {};
+      rolesConfig[k] = {
+        en: s.en || (ROLE_LABELS[k] ? ROLE_LABELS[k].en : k),
+        ar: s.ar || (ROLE_LABELS[k] ? ROLE_LABELS[k].ar : k),
+        custom: BUILTIN_ROLES.indexOf(k) === -1,
+        perms: Array.isArray(s.perms) ? s.perms.slice() : []
+      };
+    });
+  }
+  // The system administrator can never be stripped of anything — otherwise a
+  // careless edit locks the owner out of his own system.
+  rolesConfig.sysadmin = { en: ROLE_LABELS.sysadmin.en, ar: ROLE_LABELS.sysadmin.ar,
+                           custom: false, perms: allPermissionKeys() };
+  return rolesConfig;
+}
+
+// THE gate. Everything else asks this.
+function can(perm, role){
+  if(typeof isSysAdmin === 'function' && isSysAdmin()) return true;
+  var r = role || curUserRole;
+  var cfg = loadRolesConfig();
+  var entry = cfg[r];
+  if(!entry) return false;
+  return entry.perms.indexOf(perm) !== -1;
+}
+
+function roleLabel(key){
+  var cfg = loadRolesConfig();
+  var e = cfg[key];
+  if(!e) return key;
+  return (LNG === 'ar') ? e.ar : e.en;
+}
+
+function allRoleKeys(){ return Object.keys(loadRolesConfig()); }
+
+async function saveRolesConfig(){
+  var payload = {};
+  Object.keys(rolesConfig).forEach(function(k){
+    if(k === 'sysadmin') return;           // never stored, always full
+    payload[k] = { en: rolesConfig[k].en, ar: rolesConfig[k].ar, perms: rolesConfig[k].perms };
+  });
+  appSettings.roles_config = JSON.stringify(payload);
+  return saveAppSetting('roles_config', JSON.stringify(payload));
+}
+
+function canManageClientRecords(){ return can('clients.manage'); }
 
 function denyClientEdit(){
   alert('ليس لديك صلاحية لتعديل بيانات العملاء أو الأوردرات.\nYou do not have permission to change client records or orders.');
@@ -4829,6 +4960,8 @@ function featureOn(key){
 }
 
 async function loadAppSettings(){
+  // Settings drive the permission matrix, so drop the cache and let it rebuild
+  rolesConfig = null;
   if(!_initSb()) return;
   try{
     var r = await _sb.from('app_settings').select('*');
@@ -4874,11 +5007,13 @@ var AP_SECTIONS = [
   { key:'dbcheck',  icon:'ti-database-search',  en:'Database Check',  ar:'فحص قاعدة البيانات' },
   { key:'dash',     icon:'ti-layout-dashboard', en:'Dashboard',       ar:'لوحة المعلومات' },
   { key:'users',    icon:'ti-users',            en:'Users & Roles',   ar:'المستخدمون والصلاحيات' },
+  { key:'roles',    icon:'ti-shield-check',     en:'Roles & Permissions', ar:'الرتب والصلاحيات' },
   { key:'log',      icon:'ti-history',          en:'Activity Log',    ar:'سجل الحركات' },
   { key:'lists',    icon:'ti-list-details',     en:'Lists & Settings',ar:'القوائم والإعدادات' },
   { key:'tickets',  icon:'ti-ticket',           en:'Ticket Portal',   ar:'بوابة التذاكر' }
 ];
 var apSection = 'overview';
+
 
 function openAdminPanel(){
   if(!isSysAdmin()){
@@ -4897,6 +5032,186 @@ function openAdminPanel(){
 function closeAdminPanel(){
   document.getElementById('adminPanel').style.display = 'none';
   document.body.style.overflow = '';
+}
+
+
+// ── Roles & Permissions screen ───────────────────────────────────────────
+function apRenderRoles(){
+  var host = document.getElementById('ap-body');
+  if(!host) return;
+  var ar = (LNG === 'ar');
+  var cfg = loadRolesConfig();
+  var keys = Object.keys(cfg);
+
+  host.innerHTML =
+      '<div style="margin-bottom:18px">'
+    +   '<div style="font-size:19px;font-weight:700;color:#E2E8F0">'
+    +     (ar ? 'الرتب والصلاحيات' : 'Roles & Permissions') + '</div>'
+    +   '<div style="font-size:12px;color:#94A3B8;margin-top:4px">'
+    +     (ar ? 'حدّد ما تستطيعه كل رتبة. التغيير يسري على الجميع فوراً.'
+          : 'Decide what each role may do. Changes apply to everyone immediately.')
+    +   '</div></div>'
+
+    + '<div style="background:#1E293B;border:1px solid #334155;border-radius:10px;padding:12px 14px;margin-bottom:16px;font-size:12px;color:#94A3B8">'
+    +   '<i class="ti ti-info-circle" style="color:#60A5FA"></i> '
+    +   (ar ? 'مدير النظام يملك كل الصلاحيات دائماً ولا يمكن تعديله. وحصر المناطق يبقى منفصلاً: الصلاحية تحدد <b>ماذا</b>، والمنطقة تحدد <b>أين</b>.'
+          : 'The system administrator always holds every permission and cannot be edited. Zone limits stay separate: a permission decides <b>what</b>, the zone decides <b>where</b>.')
+    + '</div>'
+
+    + '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:16px">'
+    +   keys.map(function(k){
+          var on = (_apRole === k);
+          return '<button onclick="apPickRole(\'' + k + '\')" style="padding:8px 15px;border-radius:99px;'
+            + 'font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;'
+            + 'border:1px solid ' + (on ? '#2563EB' : '#334155') + ';'
+            + 'background:' + (on ? '#2563EB' : '#1E293B') + ';color:' + (on ? '#fff' : '#94A3B8') + '">'
+            + ((LNG==='ar') ? cfg[k].ar : cfg[k].en)
+            + (cfg[k].custom ? ' <span style="opacity:.7">•</span>' : '')
+            + '</button>';
+        }).join('')
+    +   '<button onclick="apAddRole()" style="padding:8px 15px;border-radius:99px;font-size:12px;font-weight:700;'
+    +     'cursor:pointer;font-family:inherit;border:1px dashed #475569;background:transparent;color:#60A5FA">'
+    +     '<i class="ti ti-plus"></i> ' + (ar ? 'رتبة جديدة' : 'New role') + '</button>'
+    + '</div>'
+
+    + '<div id="ap-role-body"></div>';
+
+  apRenderRoleBody();
+}
+
+var _apRole = 'manager';
+
+function apPickRole(k){ _apRole = k; apRenderRoles(); }
+
+function apRenderRoleBody(){
+  var host = document.getElementById('ap-role-body');
+  if(!host) return;
+  var ar = (LNG === 'ar');
+  var cfg = loadRolesConfig();
+  var role = cfg[_apRole];
+  if(!role){ _apRole = 'manager'; role = cfg.manager; }
+
+  var locked = (_apRole === 'sysadmin');
+  var count = (typeof USERS !== 'undefined')
+    ? Object.keys(USERS).filter(function(u){ return USERS[u].role === _apRole; }).length : 0;
+
+  host.innerHTML =
+      '<div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:12px">'
+    +   '<div style="font-size:15px;font-weight:700;color:#E2E8F0">'
+    +     ((LNG==='ar') ? role.ar : role.en) + '</div>'
+    +   '<span style="font-size:11px;color:#64748B">' + count + ' ' + (ar ? 'مستخدم' : 'user(s)') + '</span>'
+    +   (locked
+        ? '<span style="font-size:11px;color:#FBBF24"><i class="ti ti-lock"></i> ' + (ar?'غير قابل للتعديل':'not editable') + '</span>'
+        : '<div style="margin-inline-start:auto;display:flex;gap:6px">'
+          + '<button onclick="apSetAllPerms(true)" style="padding:5px 11px;border-radius:7px;border:1px solid #334155;background:#1E293B;color:#94A3B8;font-size:11px;font-weight:700;cursor:pointer;font-family:inherit">'
+          +   (ar ? 'تحديد الكل' : 'Select all') + '</button>'
+          + '<button onclick="apSetAllPerms(false)" style="padding:5px 11px;border-radius:7px;border:1px solid #334155;background:#1E293B;color:#94A3B8;font-size:11px;font-weight:700;cursor:pointer;font-family:inherit">'
+          +   (ar ? 'مسح الكل' : 'Clear all') + '</button>'
+          + (role.custom
+              ? '<button onclick="apDeleteRole()" style="padding:5px 11px;border-radius:7px;border:1px solid #7F1D1D;background:#3B1D1D;color:#FCA5A5;font-size:11px;font-weight:700;cursor:pointer;font-family:inherit">'
+                + '<i class="ti ti-trash"></i> ' + (ar ? 'حذف الرتبة' : 'Delete role') + '</button>'
+              : '')
+          + '</div>')
+    + '</div>'
+
+    + PERMISSIONS.map(function(g){
+        return '<div style="background:#1E293B;border:1px solid #334155;border-radius:10px;padding:13px 15px;margin-bottom:9px">'
+          + '<div style="font-size:12px;font-weight:700;color:#93C5FD;margin-bottom:9px">'
+          +   ((LNG==='ar') ? g.gAr : g.gEn) + '</div>'
+          + g.items.map(function(it){
+              var on = role.perms.indexOf(it.key) !== -1;
+              return '<label style="display:flex;align-items:center;gap:10px;padding:6px 0;'
+                + (locked ? 'opacity:.55;cursor:not-allowed' : 'cursor:pointer') + '">'
+                + '<input type="checkbox" ' + (on ? 'checked' : '') + (locked ? ' disabled' : '')
+                +   ' onchange="apTogglePerm(\'' + it.key + '\', this.checked)"'
+                +   ' style="width:16px;height:16px;margin:0;accent-color:#2563EB">'
+                + '<span style="font-size:13px;color:' + (on ? '#E2E8F0' : '#94A3B8') + '">'
+                +   ((LNG==='ar') ? it.ar : it.en) + '</span>'
+                + '</label>';
+            }).join('')
+          + '</div>';
+      }).join('')
+
+    + (locked ? '' :
+        '<button onclick="apSaveRoles()" class="btn btn-p" style="margin-top:12px;background:#2563EB">'
+        + '<i class="ti ti-device-floppy"></i> ' + (ar ? 'حفظ الصلاحيات' : 'Save permissions') + '</button>');
+}
+
+function apTogglePerm(key, on){
+  var cfg = loadRolesConfig();
+  var role = cfg[_apRole];
+  if(!role || _apRole === 'sysadmin') return;
+  var i = role.perms.indexOf(key);
+  if(on && i === -1) role.perms.push(key);
+  if(!on && i !== -1) role.perms.splice(i, 1);
+  apRenderRoleBody();
+}
+
+function apSetAllPerms(on){
+  var cfg = loadRolesConfig();
+  var role = cfg[_apRole];
+  if(!role || _apRole === 'sysadmin') return;
+  role.perms = on ? allPermissionKeys() : [];
+  apRenderRoleBody();
+}
+
+async function apSaveRoles(){
+  var ar = (LNG === 'ar');
+  var ok = await saveRolesConfig();
+  if(ok === false){
+    alert(ar ? 'تعذّر الحفظ في قاعدة البيانات.' : 'Could not save to the database.');
+    return;
+  }
+  logActivity('update', 'role permissions', roleLabel(_apRole), null,
+              { permissions: String(loadRolesConfig()[_apRole].perms.length) });
+  try{ applyRolePermissions(); }catch(e){}
+  alert(ar ? '✅ حُفظت الصلاحيات — تسري على الجميع فوراً.'
+           : '✅ Saved — this applies to everyone immediately.');
+}
+
+async function apAddRole(){
+  var ar = (LNG === 'ar');
+  var en = prompt(ar ? 'اسم الرتبة بالإنجليزية:' : 'Role name in English:');
+  if(!en || !en.trim()) return;
+  var arName = prompt(ar ? 'اسم الرتبة بالعربية:' : 'Role name in Arabic:', en.trim());
+  if(arName === null) return;
+
+  // The key goes into the database and into user records, so keep it plain
+  var key = en.trim().toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '');
+  if(!key){ alert(ar ? 'اسم غير صالح.' : 'That name cannot be used.'); return; }
+
+  var cfg = loadRolesConfig();
+  if(cfg[key]){ alert(ar ? 'هذه الرتبة موجودة.' : 'That role already exists.'); return; }
+
+  // A new role starts with NOTHING — you grant what it needs, rather than
+  // discovering later that it could already do everything.
+  cfg[key] = { en: en.trim(), ar: (arName.trim() || en.trim()), custom: true, perms: [] };
+  _apRole = key;
+  await saveRolesConfig();
+  logActivity('create', 'role', en.trim(), null, { key: key });
+  apRenderRoles();
+}
+
+async function apDeleteRole(){
+  var ar = (LNG === 'ar');
+  var cfg = loadRolesConfig();
+  var role = cfg[_apRole];
+  if(!role || !role.custom) return;
+
+  var users = (typeof USERS !== 'undefined')
+    ? Object.keys(USERS).filter(function(u){ return USERS[u].role === _apRole; }) : [];
+  if(users.length){
+    alert(ar ? ('لا يمكن حذف الرتبة — ' + users.length + ' مستخدم يستعملها.\nغيّر رتبتهم أولاً.')
+             : ('This role is in use by ' + users.length + ' user(s).\nMove them to another role first.'));
+    return;
+  }
+  if(!confirm(ar ? ('حذف رتبة "' + role.ar + '"؟') : ('Delete the role "' + role.en + '"?'))) return;
+
+  delete cfg[_apRole];
+  logActivity('delete', 'role', (role.en || _apRole), null, null);
+  _apRole = 'manager';
+  await saveRolesConfig();
+  apRenderRoles();
 }
 
 function apRenderNav(){
@@ -4946,6 +5261,7 @@ function apGo(key){
   else if(key === 'dash'){ _apDash = null; apRenderDashboard(); }
   else if(key === 'general'){ _cmpLogoPending = null; apRenderGeneral(); }
   else if(key === 'dbcheck'){ apRenderDbCheck(); }
+  else if(key === 'roles'){ apRenderRoles(); }
   else if(key === 'tickets') apRenderTickets();
   else apRenderPlanned(sec);
 }
@@ -5182,8 +5498,9 @@ function apEditUser(login){
     +   fld(ar?'البريد الإلكتروني':'Email', '<input id="apu-email" type="email" dir="ltr" style="' + inputStyle + '" value="' + String(u.email||'').replace(/"/g,'&quot;') + '">')
     +   fld(ar?'الرتبة':'Role',
           '<select id="apu-role" onchange="apOnRoleChange()" style="' + inputStyle + '">'
-          + AP_ROLES.map(function(r){
-              return '<option value="' + r.key + '"' + ((u.role||'technician')===r.key ? ' selected' : '') + '>' + (ar?r.ar:r.en) + '</option>';
+          + allRoleKeys().map(function(k){
+              // Every role, including ones added in Roles & Permissions
+              return '<option value="' + k + '"' + ((u.role||'technician')===k ? ' selected' : '') + '>' + roleLabel(k) + '</option>';
             }).join('')
           + '</select>')
     +   '<div style="grid-column:1/-1">'
@@ -5404,6 +5721,11 @@ async function showTicketPortal(token){
     +   '<div style="background:#E6F1FB;color:#1D4E89;border-radius:9px;padding:10px 13px;font-size:13px">'
     +     '<i class="ti ti-building"></i> ' + (client.name || client.nickname || '') + '</div>'
 
+    // Where his earlier requests stand — hidden until we know there are some
+    +   '<div id="tp-history" style="display:none;margin-top:16px"></div>'
+
+    +   '<div style="font-size:13px;font-weight:700;color:#1a202c;margin-top:18px;padding-top:16px;border-top:1px solid #E2E8F0">New request</div>'
+
     +   lbl('Project / Order')
     +   (orders.length
           ? '<select id="tp-order" onchange="tpOrderChanged()" style="' + fld + '">'
@@ -5497,6 +5819,9 @@ async function showTicketPortal(token){
     +     'font-size:15px;font-weight:700;cursor:pointer;font-family:inherit;margin-top:16px">'
     +     '<i class="ti ti-send"></i> Submit request</button>'
     + '</div>');
+
+  // Fire-and-forget: a failure here must never stop him raising a new ticket
+  try{ loadCustomerTickets(token); }catch(e){ console.log('ticket history:', e); }
 }
 
 // ── Portal helpers ───────────────────────────────────────────────────────
@@ -5729,6 +6054,83 @@ async function notifyTicketArrived(req, id){
   }
 }
 
+
+// ── Letting the customer see where his tickets stand ─────────────────────
+// The status words the customer sees are deliberately NOT our internal ones.
+// He doesn't need to know a request is "on hold pending parts" — he needs to
+// know someone has it and roughly when they're coming.
+function ticketPublicStatus(st, visitDate){
+  var s = String(st || 'new').toLowerCase();
+  if(s === 'completed' || s === 'مكتملة' || s === 'closed'){
+    return { label: 'Completed', colour: '#2D7D3A', bg: '#E7F6EC', icon: 'ti-circle-check' };
+  }
+  if(s === 'rejected' || s === 'cancelled'){
+    return { label: 'Closed', colour: '#718096', bg: '#F1F5F9', icon: 'ti-circle-minus' };
+  }
+  if(s === 'scheduled' || s === 'assigned' || s === 'in_progress' || s === 'معلقة'){
+    return { label: visitDate ? ('Scheduled — ' + visitDate) : 'Scheduled',
+             colour: '#1D4E89', bg: '#E6F1FB', icon: 'ti-calendar-check' };
+  }
+  if(s === 'hold' || s === 'on_hold'){
+    return { label: 'In progress', colour: '#C4680A', bg: '#FDF0E0', icon: 'ti-progress' };
+  }
+  return { label: 'Received — under review', colour: '#C4680A', bg: '#FDF0E0', icon: 'ti-clock' };
+}
+
+async function loadCustomerTickets(token){
+  var host = document.getElementById('tp-history');
+  if(!host) return;
+
+  if(!_initSb()){ host.style.display = 'none'; return; }
+
+  var rows = [];
+  try{
+    var r = await _sb.rpc('customer_ticket_status', { p_token: token });
+    if(r.error){
+      // The function isn't installed yet — say nothing rather than showing a
+      // broken panel on a page a customer is looking at.
+      console.log('ticket status:', r.error.message);
+      host.style.display = 'none';
+      return;
+    }
+    rows = r.data || [];
+  }catch(e){
+    console.log('ticket status failed:', e);
+    host.style.display = 'none';
+    return;
+  }
+
+  if(!rows.length){ host.style.display = 'none'; return; }
+
+  host.style.display = 'block';
+  host.innerHTML =
+      '<div style="font-size:13px;font-weight:700;color:#1a202c;margin-bottom:10px">'
+    +   'Your previous requests'
+    +   '<span style="font-size:11px;color:#A0AEC0;font-weight:400"> · ' + rows.length + '</span>'
+    + '</div>'
+    + rows.map(function(t){
+        var st = ticketPublicStatus(t.status, t.visit_date);
+        var esc = function(x){ return String(x == null ? '' : x).replace(/</g, '&lt;'); };
+        return '<div style="border:1px solid #E2E8F0;border-radius:10px;padding:11px 13px;margin-bottom:8px;background:#fff">'
+          + '<div style="display:flex;align-items:flex-start;gap:8px;flex-wrap:wrap">'
+          +   '<div style="flex:1;min-width:140px">'
+          +     '<div style="font-size:12px;color:#A0AEC0">#' + t.id
+          +       (t.created_date ? (' · ' + t.created_date) : '') + '</div>'
+          +     '<div style="font-size:13px;color:#1a202c;margin-top:2px">' + esc(t.problem) + '</div>'
+          +     (t.equipment || t.location
+                  ? '<div style="font-size:11px;color:#718096;margin-top:2px">'
+                    + [esc(t.equipment), esc(t.location)].filter(Boolean).join(' · ') + '</div>'
+                  : '')
+          +   '</div>'
+          +   '<span style="background:' + st.bg + ';color:' + st.colour + ';font-size:11px;font-weight:700;'
+          +     'padding:4px 11px;border-radius:99px;white-space:nowrap">'
+          +     '<i class="ti ' + st.icon + '"></i> ' + st.label + '</span>'
+          + '</div></div>';
+      }).join('')
+    + '<div style="font-size:11px;color:#A0AEC0;margin-top:4px">'
+    +   'Showing your most recent requests. Contact us if anything looks wrong.</div>';
+}
+
 async function submitTicket(token, clientId){
   var err = document.getElementById('tp-err');
   var btn = document.getElementById('tp-send');
@@ -5846,6 +6248,8 @@ async function submitTicket(token, clientId){
       +   '<div style="font-size:13px;color:#64748B;margin-top:10px;line-height:1.9">'
       +     (id ? 'Reference: <b style="color:#1D4E89">#' + id + '</b><br>' : '')
       +     'Our maintenance team will contact you shortly.'
+      +     '<div style="margin-top:14px"><a href="?ticket=' + token + '" style="color:#1D4E89;font-size:12px">'
+      +       'Open this link any time to check the status of your requests</a></div>'
       +     (_tpAttachmentsDropped
               ? '<div style="color:#C4680A;margin-top:10px">Your photos could not be attached — please send them on WhatsApp.</div>'
               : '')
@@ -9360,7 +9764,7 @@ function findExistingPart(it){
 
 // Export the inventory to a file that can be edited and imported straight back —
 // same seven columns as the template, in the same order.
-function canManageParts(){ return curUserRole === 'manager'; }
+function canManageParts(){ return can('parts.manage'); }
 function denyParts(){
   alert('هذا الإجراء متاح لمدير النظام فقط.\nThis action is available to the manager only.');
 }
@@ -14459,9 +14863,142 @@ function openItemHistory(itemId){
   openMod('itemHistoryModal');
 }
 
+
+// ── Ticket links from the ordinary app ───────────────────────────────────
+// The control panel stays shut to everyone but the system administrator, so
+// the people who actually deal with customers manage these links from the
+// client card instead.
+function canManageTicketLinks(){ return can('tickets.links'); }
+
+function openTicketLink(clientId){
+  var ar = (LNG === 'ar');
+  if(!canManageTicketLinks()){
+    alert(ar ? 'ليست لديك صلاحية إدارة روابط التذاكر.' : 'You may not manage ticket links.');
+    return;
+  }
+  var c = clientsData.find(function(x){ return String(x.id) === String(clientId); });
+  if(!c) return;
+  _tlClientId = clientId;
+
+  var t = document.getElementById('tl-title');
+  if(t) t.textContent = (ar ? 'رابط التذاكر: ' : 'Ticket link — ') + (c.nickname || c.name || '');
+  renderTicketLinkBox();
+  openMod('ticketLinkModal');
+}
+
+var _tlClientId = null;
+
+function renderTicketLinkBox(){
+  var host = document.getElementById('tl-body');
+  if(!host) return;
+  var ar = (LNG === 'ar');
+  var c = clientsData.find(function(x){ return String(x.id) === String(_tlClientId); });
+  if(!c) return;
+
+  if(!c.ticket_token){
+    host.innerHTML = '<div style="text-align:center;padding:16px 6px">'
+      + '<i class="ti ti-ticket-off" style="font-size:32px;color:#CBD5E1"></i>'
+      + '<div style="font-size:13px;color:#4A5568;margin-top:10px">'
+      +   (ar ? 'لا يوجد رابط لهذا العميل بعد.' : 'This client has no link yet.') + '</div>'
+      + '<div style="font-size:11px;color:#A0AEC0;margin-top:5px">'
+      +   (ar ? 'أنشئ رابطاً وأرسله له ليفتح تذاكر الصيانة بنفسه.'
+            : 'Create one and send it to him so he can raise maintenance tickets himself.') + '</div>'
+      + '<button onclick="createTicketLink()" class="btn btn-p" style="margin-top:14px">'
+      +   '<i class="ti ti-link"></i> ' + (ar ? 'إنشاء الرابط' : 'Create the link') + '</button>'
+      + '</div>';
+    return;
+  }
+
+  var url = ticketLinkFor(c.ticket_token);
+  host.innerHTML =
+      '<div style="background:#E7F6EC;border:1px solid #BBE5C8;border-radius:9px;padding:11px 13px;margin-bottom:12px">'
+    +   '<div style="font-size:11px;color:#2D7D3A;font-weight:700;margin-bottom:5px">'
+    +     '<i class="ti ti-circle-check"></i> ' + (ar ? 'الرابط نشط' : 'The link is active') + '</div>'
+    +   '<div style="font-size:11px;color:#1a202c;word-break:break-all;font-family:monospace" dir="ltr">' + url + '</div>'
+    + '</div>'
+    + '<div style="display:flex;gap:8px;flex-wrap:wrap">'
+    +   '<button onclick="copyTicketLink()" class="btn btn-p" style="flex:1;min-width:120px">'
+    +     '<i class="ti ti-copy"></i> ' + (ar ? 'نسخ الرابط' : 'Copy link') + '</button>'
+    +   (c.phone
+        ? '<button onclick="sendTicketLinkWhatsApp()" class="btn btn-o" style="flex:1;min-width:120px;color:#2D7D3A;border-color:#BBE5C8">'
+          + '<i class="ti ti-brand-whatsapp"></i> ' + (ar ? 'إرسال واتساب' : 'Send on WhatsApp') + '</button>'
+        : '')
+    + '</div>'
+    + '<button onclick="revokeTicketLink()" style="width:100%;margin-top:10px;padding:9px;border-radius:8px;'
+    +   'border:1px solid #F5C6C6;background:#fff;color:#C0392B;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit">'
+    +   '<i class="ti ti-link-off"></i> ' + (ar ? 'إلغاء الرابط' : 'Revoke the link') + '</button>'
+    + '<div style="font-size:11px;color:#A0AEC0;margin-top:8px">'
+    +   (ar ? 'الإلغاء يوقف الرابط فوراً، ويمكنك إنشاء رابط جديد بعده.'
+          : 'Revoking stops it immediately; you can create a new one afterwards.') + '</div>';
+}
+
+async function createTicketLink(){
+  var ar = (LNG === 'ar');
+  var c = clientsData.find(function(x){ return String(x.id) === String(_tlClientId); });
+  if(!c) return;
+  var token = makeTicketToken();
+  try{
+    var r = await _sb.from('clients').update({ ticket_token: token }).eq('id', c.id).select();
+    if(r.error) throw new Error(r.error.message);
+    if(!r.data || !r.data.length) throw new Error('No row was updated — check the UPDATE policy on clients.');
+  }catch(e){
+    alert((ar ? 'تعذّر إنشاء الرابط: ' : 'Could not create the link: ') + e.message);
+    return;
+  }
+  c.ticket_token = token;
+  logActivity('create', 'ticket link', (c.nickname || c.name), null, { link: 'created' });
+  renderTicketLinkBox();
+  try{ renderClientGrid(); }catch(e){}
+}
+
+async function revokeTicketLink(){
+  var ar = (LNG === 'ar');
+  var c = clientsData.find(function(x){ return String(x.id) === String(_tlClientId); });
+  if(!c) return;
+  if(!confirm(ar ? 'إلغاء الرابط؟ سيتوقف فوراً ولن يتمكن العميل من فتح تذاكر.'
+                 : 'Revoke this link? It stops working immediately.')) return;
+  try{
+    var r = await _sb.from('clients').update({ ticket_token: null }).eq('id', c.id).select();
+    if(r.error) throw new Error(r.error.message);
+  }catch(e){
+    alert((ar ? 'تعذّر الإلغاء: ' : 'Could not revoke it: ') + e.message);
+    return;
+  }
+  c.ticket_token = null;
+  logActivity('delete', 'ticket link', (c.nickname || c.name), { link: 'active' }, null);
+  renderTicketLinkBox();
+  try{ renderClientGrid(); }catch(e){}
+}
+
+function copyTicketLink(){
+  var ar = (LNG === 'ar');
+  var c = clientsData.find(function(x){ return String(x.id) === String(_tlClientId); });
+  if(!c || !c.ticket_token) return;
+  var url = ticketLinkFor(c.ticket_token);
+  var done = function(){ alert(ar ? 'تم نسخ الرابط.' : 'The link was copied.'); };
+  if(navigator.clipboard && navigator.clipboard.writeText){
+    navigator.clipboard.writeText(url).then(done, function(){ prompt(ar ? 'انسخ الرابط:' : 'Copy the link:', url); });
+  } else {
+    prompt(ar ? 'انسخ الرابط:' : 'Copy the link:', url);
+  }
+}
+
+function sendTicketLinkWhatsApp(){
+  var ar = (LNG === 'ar');
+  var c = clientsData.find(function(x){ return String(x.id) === String(_tlClientId); });
+  if(!c || !c.ticket_token) return;
+  var phone = (typeof waNormalisePhone === 'function') ? waNormalisePhone(c.phone) : String(c.phone||'').replace(/\D/g,'');
+  if(!phone){ alert(ar ? 'لا يوجد رقم جوال لهذا العميل.' : 'This client has no mobile number.'); return; }
+  var url = ticketLinkFor(c.ticket_token);
+  var msg = (ar
+      ? ('مرحباً ' + (c.name || '') + '،\n\nيمكنكم فتح طلب صيانة ومتابعة حالته من هذا الرابط:\n' + url + '\n\n' + companyName())
+      : ('Hello ' + (c.name || '') + ',\n\nYou can raise a maintenance request and follow its status here:\n' + url + '\n\n' + companyName()));
+  window.open('https://wa.me/' + phone + '?text=' + encodeURIComponent(msg), '_blank');
+}
+
 function renderClientGrid(){
-  var isManagerRole   = (curUserRole === 'manager');
-  var canManageClients = isManagerRole || (curUserRole === 'data_entry');
+  var isManagerRole   = can('clients.delete');
+  var canManageClients = can('clients.manage');
   var g=document.getElementById('clientGrid');if(!g)return;g.innerHTML='';
   var fl=clientsData.filter(function(c){
     return(!cSrch|| c.name.toLowerCase().includes(cSrch.toLowerCase())
@@ -14501,6 +15038,11 @@ function renderClientGrid(){
       +'<button onclick="viewClientHistory('+c.id+')" style="flex:1;padding:6px;border-radius:6px;font-size:11px;font-weight:600;cursor:pointer;border:1px solid #D9E2EC;background:#F8FAFC;color:#718096;font-family:Tajawal,sans-serif">History</button>'
       +(canManageClients ? '<button onclick="editClient('+c.id+')" style="flex:1;padding:6px;border-radius:6px;font-size:11px;font-weight:600;cursor:pointer;border:1px solid #D9E2EC;background:#F8FAFC;color:#718096;font-family:Tajawal,sans-serif">'+(LNG==='ar'?'تعديل':'Edit')+'</button>' : '')
       +'<button onclick="openClientOrders('+c.id+')" title="'+(LNG==='ar'?'الأوردرات والمشاريع':'Orders & projects')+'" style="flex:1.2;padding:6px;border-radius:6px;font-size:11px;font-weight:700;cursor:pointer;border:none;background:#1D4E89;color:#fff;font-family:Tajawal,sans-serif"><i class="ti ti-package"></i> '+(LNG==='ar'?'الأوردرات':'Orders')+' ('+ordersOfClient(c.id).length+')</button>'
+      +(canManageTicketLinks() && featureOn('customer_tickets')
+          ? '<button onclick="openTicketLink('+c.id+')" title="'+(LNG==='ar'?'رابط تذاكر العميل':'Customer ticket link')+'" style="padding:6px 9px;border-radius:6px;font-size:11px;cursor:pointer;border:1px solid '
+            + (c.ticket_token ? '#BBE5C8;background:#E7F6EC;color:#2D7D3A' : '#D9E2EC;background:#F8FAFC;color:#718096')
+            + ';font-family:Tajawal,sans-serif"><i class="ti ti-ticket"></i></button>'
+          : '')
       +(isManagerRole ? '<button onclick="deleteClient('+c.id+')" title="'+(LNG==='ar'?'حذف العميل وكل أوردراته':'Delete client and all its orders')+'" style="padding:6px 9px;border-radius:6px;font-size:11px;cursor:pointer;border:1px solid #F5C6C6;background:#FCEBEB;color:#C0392B;font-family:Tajawal,sans-serif"><i class="ti ti-trash"></i></button>' : '')
       +'</div>';
     g.appendChild(card);
@@ -17111,6 +17653,18 @@ async function showPublicReport(token){
       <button onclick="closeMod('diagramPickModal')" class="btn btn-o" data-en="Cancel" data-ar="إلغاء">Cancel</button>
       <button onclick="addPickedDiagramParts()" class="btn btn-p"><i class="ti ti-plus"></i> <span data-en="Add selected parts" data-ar="إضافة القطع المحددة">Add selected parts</span></button>
     </div>
+  </div>
+</div>
+
+
+<!-- CUSTOMER TICKET LINK -->
+<div id="ticketLinkModal" class="modal" style="display:none">
+  <div class="mbox" style="max-width:440px">
+    <div class="mh">
+      <div class="mhtitle"><i class="ti ti-ticket"></i> <span id="tl-title">Ticket link</span></div>
+      <button class="mclose" onclick="closeMod('ticketLinkModal')"><i class="ti ti-x"></i></button>
+    </div>
+    <div class="mb"><div id="tl-body"></div></div>
   </div>
 </div>
 
