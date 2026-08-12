@@ -6924,7 +6924,11 @@ var DASH_WIDGETS = [
   { key:'lowstock', en:'Low stock parts',        ar:'قطع تحت الحد الأدنى',      icon:'ti-package' },
   { key:'zones',    en:'Visits by zone',         ar:'الزيارات حسب المنطقة',     icon:'ti-map-pin' },
   { key:'types',    en:'Visit types breakdown',  ar:'توزيع أنواع الزيارات',     icon:'ti-chart-pie' },
-  { key:'topclients', en:'Top clients',          ar:'أكثر العملاء زيارات',      icon:'ti-building' }
+  { key:'topclients', en:'Top clients',          ar:'أكثر العملاء زيارات',      icon:'ti-building' },
+  { key:'toporders',  en:'Busiest orders',        ar:'الأوردرات الأكثر زيارة',   icon:'ti-briefcase' },
+  { key:'topparts',   en:'Most used parts',       ar:'أكثر القطع استهلاكاً',      icon:'ti-packages' },
+  { key:'response',   en:'Response time',         ar:'زمن الاستجابة',            icon:'ti-clock-hour-4' },
+  { key:'problems',   en:'Equipment that keeps failing', ar:'الأجهزة الأكثر تعطلاً', icon:'ti-alert-triangle' }
 ];
 
 var DASH_DEFAULT = ['stats','techs','pending','recent','weekly'];
@@ -7015,6 +7019,141 @@ function dashCard(icon, title, inner, action){
 }
 function dashEmpty(msg){
   return '<div style="padding:22px;text-align:center;color:#A0AEC0;font-size:12px">' + msg + '</div>';
+}
+
+
+// ── Chart helpers ────────────────────────────────────────────────────────
+// A horizontal bar list — readable with long Arabic names, which a pie or a
+// vertical bar chart is not.
+function dashBarList(rows, colour, unitEn, unitAr){
+  var ar = (LNG === 'ar');
+  if(!rows.length){
+    return '<div style="padding:20px;text-align:center;color:#A0AEC0;font-size:12px">'
+      + (ar ? 'لا توجد بيانات بعد' : 'No data yet') + '</div>';
+  }
+  var max = rows.reduce(function(m, r){ return Math.max(m, r.n); }, 0) || 1;
+  return '<div style="padding:10px 16px 14px">'
+    + rows.map(function(r){
+        var pct = Math.round(r.n * 100 / max);
+        var c = r.colour || colour;
+        return '<div style="margin-bottom:11px">'
+          + '<div style="display:flex;justify-content:space-between;gap:8px;font-size:12px;margin-bottom:4px">'
+          +   '<span style="font-weight:600;color:#1a202c;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"><bdi>'
+          +     r.label + '</bdi></span>'
+          +   '<span style="font-weight:700;color:' + c + ';white-space:nowrap">' + r.n
+          +     '<span style="font-size:10px;font-weight:400;color:#A0AEC0"> ' + (ar ? unitAr : unitEn) + '</span></span>'
+          + '</div>'
+          + (r.sub ? '<div style="font-size:10px;color:#A0AEC0;margin-bottom:3px">' + r.sub + '</div>' : '')
+          + '<div style="height:7px;background:#F0F4F8;border-radius:99px;overflow:hidden">'
+          +   '<div style="height:100%;width:' + pct + '%;background:' + c + ';border-radius:99px"></div></div>'
+          + '</div>';
+      }).join('')
+    + '</div>';
+}
+
+// Every part named across the visits, counted. What to buy in bulk.
+function dashTopParts(limit){
+  var tally = {};
+  (typeof visData === 'undefined' ? [] : visData).forEach(function(v){
+    // Used parts are what actually left the shelf; required ones are what will
+    // have to be bought — count both, since both drive purchasing.
+    asList(v.parts_used).concat(asList(v.parts)).forEach(function(txt){
+      var sp = (typeof splitStoredPart === 'function') ? splitStoredPart(txt) : { code:'', name:String(txt) };
+      var key = (sp.code || sp.name || '').toLowerCase();
+      if(!key) return;
+      if(!tally[key]) tally[key] = { code: sp.code, name: sp.name, n: 0 };
+      tally[key].n++;
+    });
+  });
+  return Object.keys(tally).map(function(k){ return tally[k]; })
+    .sort(function(a, b){ return b.n - a.n; })
+    .slice(0, limit || 6);
+}
+
+// Which ORDER draws the most visits — he works by order, not by client.
+function dashTopOrders(limit){
+  if(typeof clientOrders === 'undefined') return [];
+  var tally = {};
+  (typeof visData === 'undefined' ? [] : visData).forEach(function(v){
+    if(!v.order_id) return;
+    var k = String(v.order_id);
+    if(!tally[k]) tally[k] = { n: 0, id: v.order_id, client: v.client };
+    tally[k].n++;
+  });
+  return Object.keys(tally).map(function(k){
+      var t = tally[k];
+      var o = clientOrders.find(function(x){ return String(x.id) === String(t.id); });
+      return { label: (o ? (o.name || '') : ('#' + t.id)), sub: t.client || '', n: t.n, id: t.id };
+    })
+    .sort(function(a, b){ return b.n - a.n; })
+    .slice(0, limit || 6);
+}
+
+// How long from a request being raised to the visit closing it.
+function dashResponseTimes(){
+  if(typeof maintRequests === 'undefined') return null;
+  var days = [];
+  var slow = [];
+  maintRequests.forEach(function(r){
+    if(!r.date) return;
+    // The visit that answered it: same client, on or after the request
+    var v = (typeof visData === 'undefined' ? [] : visData)
+      .filter(function(x){
+        return String(x.client||'').toLowerCase() === String(r.client||'').toLowerCase()
+            && x.date && x.date >= r.date
+            && (String(x.status||'') === 'مكتملة' || String(x.status||'').toLowerCase() === 'completed');
+      })
+      .sort(function(a,b){ return String(a.date).localeCompare(String(b.date)); })[0];
+    if(!v) return;
+    var d = Math.round((new Date(v.date) - new Date(r.date)) / 86400000);
+    if(d < 0 || d > 365) return;
+    days.push(d);
+    slow.push({ label: (r.client || '') , sub: r.problem || '', n: d });
+  });
+  if(!days.length) return null;
+  days.sort(function(a,b){ return a-b; });
+  var avg = Math.round(days.reduce(function(s,d){ return s+d; }, 0) / days.length * 10) / 10;
+  var median = days[Math.floor(days.length/2)];
+  var sameDay = days.filter(function(d){ return d === 0; }).length;
+  var within3 = days.filter(function(d){ return d <= 3; }).length;
+  slow.sort(function(a,b){ return b.n - a.n; });
+  return { avg: avg, median: median, count: days.length,
+           sameDayPct: Math.round(sameDay*100/days.length),
+           within3Pct: Math.round(within3*100/days.length),
+           slowest: slow.slice(0, 3) };
+}
+
+// Machines that keep breaking — from contract inspection cards and from visits
+// whose equipment needed parts.
+function dashProblemEquipment(limit){
+  var tally = {};
+  var add = function(name, serial, fault){
+    var key = (serial || name || '').toLowerCase();
+    if(!key) return;
+    if(!tally[key]) tally[key] = { label: name || serial, sub: serial && name ? serial : '', n: 0, faults: 0 };
+    tally[key].n++;
+    if(fault) tally[key].faults++;
+  };
+
+  // contract cards carry an explicit condition
+  if(typeof contractCards !== 'undefined' && typeof contractItems !== 'undefined'){
+    contractCards.forEach(function(k){
+      if(k.condition !== 'faulty' && k.condition !== 'watch') return;
+      var it = contractItems.find(function(x){ return String(x.id) === String(k.item_id); });
+      if(!it) return;
+      add(it.name, it.serial, k.condition === 'faulty');
+    });
+  }
+  // a visit that consumed parts is a fault by another name
+  (typeof visData === 'undefined' ? [] : visData).forEach(function(v){
+    var used = asList(v.parts_used).length + asList(v.parts).length;
+    if(!used) return;
+    add(v.equipment || v.equip, v.serial_number || v.serial, true);
+  });
+
+  return Object.keys(tally).map(function(k){ return tally[k]; })
+    .sort(function(a, b){ return (b.faults - a.faults) || (b.n - a.n); })
+    .slice(0, limit || 6);
 }
 
 function dashWidgetHtml(key){
@@ -7135,6 +7274,69 @@ function dashWidgetHtml(key){
     }).join('');
     return dashCard('ti-building', title, rowsC || dashEmpty(ar ? 'لا توجد زيارات بعد' : 'No visits yet'),
       '<button class="ca" onclick="go(\'clients\')">' + (ar?'العملاء':'Clients') + '</button>');
+  }
+
+  // ── Busiest orders — he works by order, not by client ──
+  if(key === 'toporders'){
+    var ords = dashTopOrders(6);
+    return dashCard('ti-briefcase', title,
+      dashBarList(ords, '#1D4E89', 'visits', 'زيارة'),
+      '<button class="ca" onclick="go(\'visits\')">' + (ar?'الزيارات':'Visits') + '</button>');
+  }
+
+  // ── Most used parts — drives what to buy in bulk ──
+  if(key === 'topparts'){
+    var prts = dashTopParts(6).map(function(p){
+      return { label: p.name || p.code, sub: (p.code && p.name) ? p.code : '', n: p.n };
+    });
+    return dashCard('ti-packages', title,
+      dashBarList(prts, '#C4680A', 'times', 'مرة'),
+      '<button class="ca" onclick="go(\'parts\')">' + (ar?'قطع الغيار':'Spare Parts') + '</button>');
+  }
+
+  // ── Response time — the number you negotiate contracts with ──
+  if(key === 'response'){
+    var rt = dashResponseTimes();
+    if(!rt){
+      return dashCard('ti-clock-hour-4', title,
+        dashEmpty(ar ? 'لا توجد طلبات مكتملة بعد لحسابها' : 'No completed requests to measure yet'));
+    }
+    var tile = function(v, lbl, colour){
+      return '<div style="flex:1;min-width:90px;text-align:center;padding:10px 6px">'
+        + '<div style="font-size:21px;font-weight:800;color:' + colour + '">' + v + '</div>'
+        + '<div style="font-size:11px;color:#718096;margin-top:2px">' + lbl + '</div></div>';
+    };
+    var body = '<div style="display:flex;flex-wrap:wrap;border-bottom:1px solid #F0F4F8">'
+      + tile(rt.avg, ar ? 'متوسط الأيام' : 'Average days', '#1D4E89')
+      + tile(rt.sameDayPct + '%', ar ? 'بنفس اليوم' : 'Same day', '#2D7D3A')
+      + tile(rt.within3Pct + '%', ar ? 'خلال 3 أيام' : 'Within 3 days', '#2D7D3A')
+      + '</div>'
+      + '<div style="padding:10px 16px 4px;font-size:11px;color:#718096">'
+      +   (ar ? ('محسوب من ' + rt.count + ' طلب مكتمل') : ('From ' + rt.count + ' completed request(s)')) + '</div>'
+      + (rt.slowest.length
+          ? '<div style="padding:0 16px 12px">'
+            + '<div style="font-size:11px;font-weight:700;color:#C0392B;margin-bottom:5px">'
+            +   (ar ? 'أبطأ الاستجابات' : 'Slowest') + '</div>'
+            + rt.slowest.map(function(x){
+                return '<div style="display:flex;justify-content:space-between;gap:8px;font-size:12px;padding:3px 0">'
+                  + '<span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap"><bdi>' + x.label + '</bdi></span>'
+                  + '<span style="font-weight:700;color:#C0392B;white-space:nowrap">' + x.n + ' ' + (ar?'يوم':'d') + '</span></div>';
+              }).join('')
+            + '</div>'
+          : '');
+    return dashCard('ti-clock-hour-4', title, body,
+      '<button class="ca" onclick="go(\'maint-requests\')">' + (ar?'الطلبات':'Requests') + '</button>');
+  }
+
+  // ── Equipment that keeps failing — the machine costing you the contract ──
+  if(key === 'problems'){
+    var probs = dashProblemEquipment(6).map(function(x){
+      return { label: x.label, sub: x.sub, n: x.n,
+               colour: x.faults >= 3 ? '#C0392B' : (x.faults ? '#C4680A' : '#718096') };
+    });
+    return dashCard('ti-alert-triangle', title,
+      dashBarList(probs, '#C0392B', 'faults', 'عطل'),
+      '<button class="ca" onclick="go(\'archive\')">' + (ar?'الأرشيف':'Archive') + '</button>');
   }
 
   return '';
