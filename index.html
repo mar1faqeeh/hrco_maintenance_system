@@ -544,6 +544,7 @@ html,body{height:100%;overflow:auto;font-family:Tajawal,sans-serif;font-size:14p
   <div style="display:flex;gap:10px;justify-content:flex-end;margin-bottom:20px">
     <button class="btn btn-o" onclick="go('dashboard')"><i class="ti ti-arrow-right"></i><span id="t-back">Back</span></button>
     <button class="btn btn-o" onclick="saveVisitDraft()"><i class="ti ti-device-floppy"></i><span id="t-save-draft">Save Draft</span></button>
+    <button class="btn btn-p" id="nv-save-edit" onclick="saveVisitEdits()" style="display:none;background:#2D7D3A"><i class="ti ti-check"></i><span data-en="Save Changes" data-ar="حفظ التعديلات">Save Changes</span></button>
     <button class="btn btn-p" onclick="saveAndSign()"><i class="ti ti-pencil"></i><span id="t-next-sign">Next: Signatures</span></button>
   </div>
 </div>
@@ -2580,7 +2581,10 @@ function editVisit(id){
     var tc=document.getElementById('sel-tech'); if(tc) tc.value=v.tech||'';
     var hp=document.getElementById('inp-helpers'); if(hp) hp.value=v.helpers||'';
     currentVisitId = v.id;
-    selParts = v.parts||[];
+    try{ showEditSaveButton(true); }catch(e){}
+    // A visit loaded from the database hands parts back as TEXT, and the tag
+    // renderer then blew up on selParts.forEach — parse it like everywhere else.
+    selParts = asList(v.parts);
     renderTags();
   }, 100);
 }
@@ -16257,6 +16261,7 @@ function resetNewVisitForm(){
   // Clear all inputs
   selUsedParts = [];
   try{ renderUsedTags(); }catch(e){}
+  try{ showEditSaveButton(false); }catch(e){}
   ['inp-client','inp-location','inp-serial','inp-model','inp-fault','inp-part','inp-used-part','inp-helpers'].forEach(function(id){
     var el=document.getElementById(id);if(el)el.value='';
   });
@@ -16331,6 +16336,89 @@ function populateTechSelect(){
 // SAVE VISIT TO SUPABASE
 // ══════════════════════════════════════
 var currentVisitId = null;
+
+
+// Editing an existing visit had no way to just SAVE — the only route onward was
+// "Next: Signatures", which is wrong when all you did was correct a serial.
+// This button appears only while editing, and returns you to where you came
+// from once the change is stored.
+function showEditSaveButton(on){
+  var b = document.getElementById('nv-save-edit');
+  if(b) b.style.display = on ? '' : 'none';
+  // "Next: Signatures" still makes sense for a NEW visit; while editing a
+  // completed one it just gets in the way, so soften it to a secondary action.
+  var next = document.querySelector('#pg-newvisit .btn-p[onclick="saveAndSign()"]');
+  if(next){
+    next.className = on ? 'btn btn-o' : 'btn btn-p';
+  }
+}
+
+async function saveVisitEdits(){
+  var ar = (LNG === 'ar');
+  if(!currentVisitId){
+    // Nothing to update — fall back to the normal draft save
+    return saveVisitDraft();
+  }
+
+  var visit = collectVisitData();
+  visit.id = currentVisitId;
+
+  // Keep whatever status the visit already had; editing is not closing.
+  var existing = visData.find(function(x){ return String(x.id) === String(currentVisitId); });
+  if(existing && existing.status) visit.status = existing.status;
+
+  if(!visit.client || visit.client === 'Unknown'){
+    alert(ar ? 'اكتب اسم العميل.' : 'Please enter the client name.');
+    return;
+  }
+
+  // A manager may only edit inside his own zones; a technician is unrestricted
+  // on a visit assigned to him.
+  if(curUserRole === 'manager' && !isSysAdmin()){
+    var z = visitZone(visit);
+    if(!canEditZone(z)){ denyRecordZone(z); return; }
+  }
+
+  var btn = document.getElementById('nv-save-edit');
+  if(btn){ btn.disabled = true; btn.style.opacity = '.6'; }
+
+  var before = existing ? logSnapshot(existing, ['client','equipment','model','serial_number','visit_type','tech','status','date']) : null;
+
+  var result;
+  try{
+    result = await dbSave('visits', visit);
+  }catch(e){
+    if(btn){ btn.disabled = false; btn.style.opacity = '1'; }
+    alert((ar ? 'تعذّر الحفظ: ' : 'Could not save: ') + e.message);
+    return;
+  }
+
+  if(!result || !result.length){
+    if(btn){ btn.disabled = false; btn.style.opacity = '1'; }
+    alert(ar ? 'لم تُحفظ التعديلات في قاعدة البيانات.\nتحقّق من صلاحيات التعديل على جدول visits.'
+             : 'The changes were NOT saved to the database.\nCheck the UPDATE policy on the visits table.');
+    return;
+  }
+
+  var merged = Object.assign({}, visit, { equip: visit.equipment, type: visit.visit_type });
+  if(existing) Object.assign(existing, merged);
+  else visData.unshift(merged);
+
+  logActivity('update', 'visit', (visit.client || '') + ' — ' + (visit.equipment || ''),
+              before, logSnapshot(visit, ['client','equipment','model','serial_number','visit_type','tech','status','date']));
+
+  if(btn){ btn.disabled = false; btn.style.opacity = '1'; }
+  alert(ar ? ('✅ تم حفظ التعديلات على الزيارة رقم ' + currentVisitId + '.')
+           : ('✅ Changes saved to visit #' + currentVisitId + '.'));
+
+  // Back to the list, refreshed
+  try{
+    currentVisitId = null;
+    showEditSaveButton(false);
+    go('visits');
+    renderVisits();
+  }catch(e){}
+}
 
 async function saveVisitDraft() {
   var visit = collectVisitData();
