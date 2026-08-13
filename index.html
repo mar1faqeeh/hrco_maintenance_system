@@ -16342,6 +16342,17 @@ var currentVisitId = null;
 // "Next: Signatures", which is wrong when all you did was correct a serial.
 // This button appears only while editing, and returns you to where you came
 // from once the change is stored.
+
+// The visits table only accepts the Arabic status values, but the loader
+// converts them to English for display — so writing a visit back straight from
+// memory violated visits_status_check. Everything that saves a status goes
+// through here.
+function statusForDb(v){
+  var t = String(v == null ? '' : v).trim().toLowerCase();
+  if(t === 'completed' || t === 'مكتملة' || t === 'done' || t === 'closed') return 'مكتملة';
+  return 'معلقة';
+}
+
 function showEditSaveButton(on){
   var b = document.getElementById('nv-save-edit');
   if(b) b.style.display = on ? '' : 'none';
@@ -16363,9 +16374,10 @@ async function saveVisitEdits(){
   var visit = collectVisitData();
   visit.id = currentVisitId;
 
-  // Keep whatever status the visit already had; editing is not closing.
+  // Keep whatever status the visit already had; editing is not closing. The
+  // value has to go back in the form the database accepts.
   var existing = visData.find(function(x){ return String(x.id) === String(currentVisitId); });
-  if(existing && existing.status) visit.status = existing.status;
+  visit.status = statusForDb(existing && existing.status ? existing.status : visit.status);
 
   if(!visit.client || visit.client === 'Unknown'){
     alert(ar ? 'اكتب اسم العميل.' : 'Please enter the client name.');
@@ -16422,7 +16434,7 @@ async function saveVisitEdits(){
 
 async function saveVisitDraft() {
   var visit = collectVisitData();
-  visit.status = 'معلقة';
+  visit.status = statusForDb(visit.status);
   if(currentVisitId) visit.id = currentVisitId;
   logActivity(currentVisitId ? 'update' : 'create', 'visit',
               (visit.client || '') + ' — ' + (visit.equipment || ''),
@@ -16603,7 +16615,7 @@ function collectVisitData() {
                      : document.getElementById('sel-tech').value,
     helpers:       (document.getElementById('inp-helpers') || {}).value || '',
     visit_type:    vtMap[vt] || vt,
-    status:        'معلقة',
+    status:        'معلقة',   // the only two the database accepts are معلقة / مكتملة
     fault:         document.getElementById('inp-fault').value,
     notes:         document.getElementById('notesArea').value,
     parts:         selParts,
