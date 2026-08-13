@@ -17114,6 +17114,12 @@ window.addEventListener('load', async function() {
   // Load DB users first, then populate dropdown
   await loadSystemUsers();
   populateLoginDropdown();
+
+  // The login screen shows the company logo, and settings were only loaded
+  // AFTER signing in — so the first thing anyone saw was the placeholder
+  // snowflake. Fetch them here, before the screen is looked at.
+  try{ await loadAppSettings(); }catch(e){}
+  try{ applyLoginBrand(); }catch(e){}
   // Check if this is a public report link (?report=TOKEN)
   var urlParams = new URLSearchParams(window.location.search);
   var reportToken = urlParams.get('report');
