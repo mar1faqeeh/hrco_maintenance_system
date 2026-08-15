@@ -15778,18 +15778,34 @@ function blankQuotation(){
            status:'draft', date:new Date().toISOString().split('T')[0] };
 }
 
-// QT-2026-001, counting only this year's.
+// HRCO-QT-AMMAR-2026-001 — brand, the person who raised it, the year, then a
+// running number. The sequence is read from the END of the number, so the old
+// QT-2026-001 rows still count and numbering carries on without a gap.
+function quoteUserTag(){
+  var raw = String(curUserLogin || curUser || '').split('@')[0];
+  var tag = raw.replace(/[^A-Za-z0-9]/g, '').toUpperCase();
+  // An Arabic-only account would slug down to nothing — keep its first word
+  // rather than leaving a blank slot in the middle of the number.
+  if(!tag){
+    tag = String(curUser || '').trim().split(/\s+/)[0].replace(/[^\u0600-\u06FF0-9]/g, '');
+  }
+  return tag || 'USER';
+}
+
 function nextQuoteNumber(){
   var year = new Date().getFullYear();
-  var mine = quotationsData.filter(function(q){
-    return String(q.number || '').indexOf('QT-' + year + '-') === 0;
-  });
+  var re = new RegExp('-' + year + '-(\\d+)$');
   var top = 0;
-  mine.forEach(function(q){
-    var n = parseInt(String(q.number).split('-')[2], 10);
+  quotationsData.forEach(function(q){
+    var m = String(q.number || '').match(re);
+    if(!m) return;
+    var n = parseInt(m[1], 10);
     if(!isNaN(n) && n > top) top = n;
   });
-  return 'QT-' + year + '-' + String(top + 1).padStart(3, '0');
+  var brand = (typeof companyShortSlug === 'function') ? companyShortSlug() : '';
+  if(brand === 'Company') brand = '';   // the placeholder is not a brand
+  return [brand, 'QT', quoteUserTag(), year, String(top + 1).padStart(3, '0')]
+         .filter(Boolean).join('-');
 }
 
 // What he has actually paid for a room in this city before — a better guide
