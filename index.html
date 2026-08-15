@@ -225,6 +225,8 @@ html,body{height:100%;overflow:auto;font-family:Tajawal,sans-serif;font-size:14p
         <div class="nav-item" onclick="go('pending')" id="nav-pending"><i class="ti ti-clock-pause"></i><span id="t-pending">Pending Reports</span><span class="nbadge">0</span></div>
         <div class="nav-item" onclick="go('maint-requests')" id="nav-maint-requests"><i class="ti ti-headset"></i><span data-en="Maintenance Requests" data-ar="طلبات الصيانة">Maintenance Requests</span><span class="nbadge" id="mr-badge" style="display:none">0</span></div>
 
+        <div class="nav-item" onclick="go('checklists')" id="nav-checklists"><i class="ti ti-checklist"></i><span data-en="Maintenance Checklists" data-ar="قوائم مهام الصيانة">Maintenance Checklists</span></div>
+
         <div class="sb-sec" id="sb-clients" data-en="CLIENTS &amp; CONTRACTS" data-ar="العملاء والعقود">CLIENTS &amp; CONTRACTS</div>
         <div class="nav-item" onclick="go('clients')" id="nav-clients"><i class="ti ti-building"></i><span id="t-clients">Clients</span></div>
         <div class="nav-item" onclick="go('quotations')" id="nav-quotations"><i class="ti ti-file-dollar"></i><span data-en="Quotations" data-ar="عروض الأسعار">Quotations</span></div>
@@ -1055,6 +1057,31 @@ html,body{height:100%;overflow:auto;font-family:Tajawal,sans-serif;font-size:14p
   </div>
 </div>
 
+<!-- ═══ MAINTENANCE CHECKLISTS ═══ -->
+<div id="pg-checklists" style="display:none">
+  <div class="ph">
+    <div>
+      <div class="pt" data-en="Maintenance Checklists" data-ar="قوائم مهام الصيانة">Maintenance Checklists</div>
+      <div class="ps" data-en="The tasks technicians tick off on a visit, per equipment type" data-ar="المهام التي يعلّمها الفني في الزيارة حسب نوع المعدة">The tasks technicians tick off on a visit, per equipment type</div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div style="padding:16px">
+      <div id="tt-cats" style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px"></div>
+      <div id="tt-list" style="display:flex;flex-direction:column;gap:6px;margin-bottom:10px"></div>
+      <div style="display:flex;gap:6px;flex-wrap:wrap">
+        <input type="text" id="tt-new-ar" placeholder="المهمة بالعربية…" data-ph-en="Task in Arabic…" data-ph-ar="المهمة بالعربية…" onkeydown="if(event.key==='Enter')ttAddTask()" style="flex:1;min-width:190px;padding:9px 12px;border:1.5px solid #D9E2EC;border-radius:8px;font-size:13px;font-family:inherit;outline:none">
+        <input type="text" id="tt-new-en" dir="ltr" placeholder="Task in English…" data-ph-en="Task in English…" data-ph-ar="المهمة بالإنجليزية…" onkeydown="if(event.key==='Enter')ttAddTask()" style="flex:1;min-width:190px;padding:9px 12px;border:1.5px solid #D9E2EC;border-radius:8px;font-size:13px;font-family:inherit;outline:none">
+        <button class="btn btn-o" onclick="ttAddTask()"><i class="ti ti-plus"></i> <span data-en="Add" data-ar="إضافة">Add</span></button>
+        <button class="btn btn-o" onclick="ttResetCat()"><i class="ti ti-rotate"></i> <span data-en="Restore defaults" data-ar="استعادة الافتراضي">Restore defaults</span></button>
+        <button class="btn btn-p" onclick="ttSave()"><i class="ti ti-device-floppy"></i> <span data-en="Save" data-ar="حفظ">Save</span></button>
+      </div>
+      <div id="tt-status" style="font-size:11px;color:#718096;margin-top:8px"></div>
+    </div>
+  </div>
+</div>
+
 <!-- SETTINGS PAGE -->
 <div id="pg-settings" style="display:none">
   <div class="ph"><div><div class="pt">Settings</div><div class="ps">System configuration & user management</div></div></div>
@@ -1074,25 +1101,6 @@ html,body{height:100%;overflow:auto;font-family:Tajawal,sans-serif;font-size:14p
         <div style="grid-column:1/-1">
           <button onclick="saveMyAccount()" style="padding:10px 24px;border-radius:8px;border:none;background:#1D4E89;color:#fff;cursor:pointer;font-size:13px;font-weight:700;font-family:inherit"><i class="ti ti-device-floppy"></i> Save Changes</button>
         </div>
-      </div>
-    </div>
-
-    <div class="card" id="tasks-mgmt-card" style="margin-bottom:14px">
-      <div class="ch">
-        <div class="ct"><i class="ti ti-checklist" style="color:#1D4E89"></i> <span data-en="Maintenance Checklists" data-ar="قوائم مهام الصيانة">Maintenance Checklists</span></div>
-      </div>
-      <div style="padding:16px">
-        <div style="font-size:11px;color:#718096;margin-bottom:10px" data-en="Edit the tasks technicians see for each equipment type." data-ar="عدّل المهام التي تظهر للفني حسب نوع المعدة">Edit the tasks technicians see for each equipment type.</div>
-        <div id="tt-cats" style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px"></div>
-        <div id="tt-list" style="display:flex;flex-direction:column;gap:6px;margin-bottom:10px"></div>
-        <div style="display:flex;gap:6px;flex-wrap:wrap">
-          <input type="text" id="tt-new-ar" placeholder="المهمة بالعربية…" onkeydown="if(event.key==='Enter')ttAddTask()" style="flex:1;min-width:190px;padding:9px 12px;border:1.5px solid #D9E2EC;border-radius:8px;font-size:13px;font-family:inherit;outline:none">
-          <input type="text" id="tt-new-en" dir="ltr" placeholder="Task in English…" onkeydown="if(event.key==='Enter')ttAddTask()" style="flex:1;min-width:190px;padding:9px 12px;border:1.5px solid #D9E2EC;border-radius:8px;font-size:13px;font-family:inherit;outline:none">
-          <button class="btn btn-o" onclick="ttAddTask()"><i class="ti ti-plus"></i> Add</button>
-          <button class="btn btn-o" onclick="ttResetCat()" title="Restore the built-in list"><i class="ti ti-rotate"></i> Reset</button>
-          <button class="btn btn-p" onclick="ttSave()"><i class="ti ti-device-floppy"></i> Save Checklists</button>
-        </div>
-        <div id="tt-status" style="font-size:11px;color:#718096;margin-top:8px"></div>
       </div>
     </div>
 
@@ -1799,6 +1807,10 @@ function lgSuccess(u, restoring){
       if(typeof renderDashRecent==='function' && document.getElementById('dash-recent-body')) renderDashRecent();
       if(typeof renderDashPending==='function' && document.getElementById('dash-pending-body')) renderDashPending();
       if(typeof renderPending==='function' && document.getElementById('pendingBody')) renderPending();
+      // The extra widgets ("Busiest orders") resolve the order name too, and
+      // they were left out of this repaint — which is why they kept printing
+      // #id instead of the order name.
+      if(typeof applyDashboardLayout==='function' && document.getElementById('pg-dashboard')) applyDashboardLayout();
       if(typeof runReport==='function' && document.getElementById('pg-reports')
          && document.getElementById('pg-reports').style.display !== 'none') runReport();
     }); }catch(e){}
@@ -1993,8 +2005,21 @@ function logout(){
 // ══════════════════════════════════════
 // NAVIGATION
 // ══════════════════════════════════════
-var PAGES=['dashboard','visits','pending','newvisit','signature','technicians','parts','parts-request','parts-orders','maint-requests','clients','client-orders','contracts','contract-detail','quotations','quotation-detail','reports','archive','settings'];
+var PAGES=['dashboard','visits','pending','newvisit','signature','technicians','parts','parts-request','parts-orders','maint-requests','clients','client-orders','contracts','contract-detail','quotations','quotation-detail','checklists','reports','archive','settings'];
+// The checklists decide what every technician has to tick off, so only the
+// maintenance manager may edit them (the sysadmin keeps access — locking the
+// owner out of anything is never right).
+function canEditChecklists(){
+  if(typeof isSysAdmin === 'function' && isSysAdmin()) return true;
+  return curUserRole === 'manager';
+}
+
 function go(pg){
+  // Hiding the nav entry is not a rule — refuse the page itself too.
+  if(pg === 'checklists' && !canEditChecklists()){
+    alert(LNG==='ar' ? 'هذه الصفحة لمدير الصيانة فقط.' : 'This page is for the maintenance manager only.');
+    pg = 'dashboard';
+  }
   try{
   PAGES.forEach(function(p){var el=document.getElementById('pg-'+p);if(el){el.style.cssText='display:none';}});
   var el=document.getElementById('pg-'+pg);if(el){el.style.cssText='display:block';}
@@ -2055,7 +2080,8 @@ function go(pg){
   if(pg==='contracts'){ renderContractFilters(); fillContractClients(); renderContracts(); }
   if(pg==='contract-detail'){ renderContractDetail(); }
   if(pg==='maint-requests'){ fillMaintClientList(); fillRequestOrders(); refreshRequestItemsMode(); attachCityAutocomplete('mr-city','mr-city-dd','mr-city-zone'); loadMaintRequests().then(renderMaintRequests); }
-  if(pg==='settings'){renderTaskEditor();renderUsersList();try{checkDBStatus();}catch(e){}}
+  if(pg==='checklists'){ renderTaskEditor(); }
+  if(pg==='settings'){renderUsersList();try{checkDBStatus();}catch(e){}}
 }
 function setBn(b){document.querySelectorAll('.bn').forEach(function(x){x.style.color='#A0AEC0';});b.style.color='#1D4E89';}
 function toggleSb(){
@@ -2994,22 +3020,29 @@ function renderTaskEditor(){
   var tasks = taskTemplates[ttCat] || [];
   list.innerHTML = '';
   if(!tasks.length){
-    list.innerHTML = '<div style="padding:14px;text-align:center;color:#A0AEC0;font-size:12px">No tasks yet — add one below.</div>';
+    list.innerHTML = '<div style="padding:14px;text-align:center;color:#A0AEC0;font-size:12px">'
+      + (LNG==='ar' ? 'لا توجد مهام — أضف واحدة بالأسفل.' : 'No tasks yet — add one below.')
+      + '</div>';
     return;
   }
+  var _ar = (LNG === 'ar');
   tasks.forEach(function(item, i){
     var o = taskObj(item);
     var esc = function(v){ return String(v||'').replace(/</g,'&lt;'); };
+    // The interface language leads; the other language sits underneath.
+    var main = _ar ? o.ar : o.en;
+    var sub  = _ar ? o.en : o.ar;
+    var subDir = _ar ? 'ltr' : 'rtl';
     var row = document.createElement('div');
     row.style.cssText = 'display:flex;align-items:center;gap:8px;padding:8px 10px;background:#F8FAFC;border:1px solid #D9E2EC;border-radius:8px';
     row.innerHTML = '<span style="font-size:11px;color:#A0AEC0;min-width:20px">'+(i+1)+'</span>'
       + '<span style="flex:1;font-size:13px">'
-      +   '<span style="display:block">'+esc(o.ar || '—')+'</span>'
-      +   '<span style="display:block;color:#718096;font-size:11px" dir="ltr">'+esc(o.en || '—')+'</span>'
+      +   '<span style="display:block"><bdi>'+esc(main || '—')+'</bdi></span>'
+      +   '<span style="display:block;color:#718096;font-size:11px" dir="'+subDir+'"><bdi>'+esc(sub || '—')+'</bdi></span>'
       + '</span>'
-      + '<button onclick="ttMove('+i+',-1)" title="Move up" style="border:none;background:none;color:#A0AEC0;cursor:pointer"><i class="ti ti-arrow-up"></i></button>'
-      + '<button onclick="ttMove('+i+',1)" title="Move down" style="border:none;background:none;color:#A0AEC0;cursor:pointer"><i class="ti ti-arrow-down"></i></button>'
-      + '<button onclick="ttRemove('+i+')" title="Remove" style="border:none;background:none;color:#C0392B;cursor:pointer"><i class="ti ti-trash"></i></button>';
+      + '<button onclick="ttMove('+i+',-1)" title="' + (_ar?'تحريك لأعلى':'Move up') + '" style="border:none;background:none;color:#A0AEC0;cursor:pointer"><i class="ti ti-arrow-up"></i></button>'
+      + '<button onclick="ttMove('+i+',1)" title="' + (_ar?'تحريك لأسفل':'Move down') + '" style="border:none;background:none;color:#A0AEC0;cursor:pointer"><i class="ti ti-arrow-down"></i></button>'
+      + '<button onclick="ttRemove('+i+')" title="' + (_ar?'حذف':'Remove') + '" style="border:none;background:none;color:#C0392B;cursor:pointer"><i class="ti ti-trash"></i></button>';
     list.appendChild(row);
   });
 }
@@ -3025,13 +3058,13 @@ function ttAddTask(){
   taskTemplates[ttCat].push({ ar: ar || en, en: en || ar });
   arEl.value = ''; enEl.value = '';
   renderTaskEditor();
-  ttMark('غير محفوظ — اضغط "Save Checklists" / Unsaved — press "Save Checklists"', '#C4680A');
+  ttMark(LNG==='ar' ? 'غير محفوظ — اضغط حفظ' : 'Unsaved — press Save', '#C4680A');
 }
 
 function ttRemove(i){
   (taskTemplates[ttCat]||[]).splice(i,1);
   renderTaskEditor();
-  ttMark('غير محفوظ — اضغط "Save Checklists" / Unsaved — press "Save Checklists"', '#C4680A');
+  ttMark(LNG==='ar' ? 'غير محفوظ — اضغط حفظ' : 'Unsaved — press Save', '#C4680A');
 }
 
 function ttMove(i, dir){
@@ -3040,14 +3073,14 @@ function ttMove(i, dir){
   if(j < 0 || j >= arr.length) return;
   var tmp = arr[i]; arr[i] = arr[j]; arr[j] = tmp;
   renderTaskEditor();
-  ttMark('غير محفوظ — اضغط "Save Checklists" / Unsaved — press "Save Checklists"', '#C4680A');
+  ttMark(LNG==='ar' ? 'غير محفوظ — اضغط حفظ' : 'Unsaved — press Save', '#C4680A');
 }
 
 function ttResetCat(){
-  if(!confirm('استعادة القائمة الافتراضية لهذا النوع؟\nRestore the built-in list for this type?')) return;
+  if(!confirm(LNG==='ar' ? 'استعادة القائمة الافتراضية لهذا النوع؟' : 'Restore the built-in list for this type?')) return;
   taskTemplates[ttCat] = (DEFAULT_TASKS[ttCat]||[]).slice();
   renderTaskEditor();
-  ttMark('تمت الاستعادة — اضغط حفظ / Restored — press Save', '#C4680A');
+  ttMark(LNG==='ar' ? 'تمت الاستعادة — اضغط حفظ' : 'Restored — press Save', '#C4680A');
 }
 
 function ttMark(msg, colour){
@@ -3056,8 +3089,8 @@ function ttMark(msg, colour){
 }
 
 async function ttSave(){
-  if(!_initSb()){ ttMark('لا يوجد اتصال بقاعدة البيانات / No database connection', '#C0392B'); return; }
-  ttMark('جاري الحفظ... / Saving...');
+  if(!_initSb()){ ttMark(LNG==='ar' ? 'لا يوجد اتصال بقاعدة البيانات' : 'No database connection', '#C0392B'); return; }
+  ttMark(LNG==='ar' ? 'جاري الحفظ…' : 'Saving…');
   try{
     var rows = TASK_CATEGORIES.map(function(c){
       var norm = (taskTemplates[c.key]||[]).map(taskObj);
@@ -3067,13 +3100,13 @@ async function ttSave(){
     var r = await _sb.from('task_templates').upsert(rows, { onConflict: 'category' }).select();
     if(r.error){
       console.error('ttSave:', r.error);
-      ttMark('فشل الحفظ: ' + r.error.message + ' / Save failed', '#C0392B');
+      ttMark((LNG==='ar' ? 'فشل الحفظ: ' : 'Save failed: ') + r.error.message, '#C0392B');
       return;
     }
-    ttMark('✅ تم حفظ القوائم / Checklists saved', '#2D7D3A');
+    ttMark(LNG==='ar' ? '✅ تم حفظ القوائم' : '✅ Checklists saved', '#2D7D3A');
     renderTaskCats(); renderTaskList(true);
   }catch(e){
-    ttMark('فشل الحفظ: ' + e.message, '#C0392B');
+    ttMark((LNG==='ar' ? 'فشل الحفظ: ' : 'Save failed: ') + e.message, '#C0392B');
   }
 }
 
@@ -5348,7 +5381,7 @@ function apGo(key){
     features: { en:'Turn parts of the system on or off for everyone', ar:'تشغيل وإيقاف أجزاء النظام لجميع المستخدمين' },
     users:    { en:'Accounts, roles, emails and zone coverage', ar:'الحسابات والرتب والإيميلات ومناطق التغطية' },
     log:      { en:'Every action, with before and after values', ar:'كل العمليات مع القيم قبل وبعد' },
-    lists:    { en:'Checklists, categories, units, cities and zones', ar:'قوائم المهام والفئات والوحدات والمدن والمناطق' },
+    lists:    { en:'Equipment types, categories, units, cities and zones', ar:'أنواع المعدات والفئات والوحدات والمدن والمناطق' },
     dash:     { en:'Choose which cards appear and in what order', ar:'اختر البطاقات الظاهرة وترتيبها' },
     tickets:  { en:'Customer links, form fields and notifications', ar:'روابط العملاء وحقول النموذج والتنبيهات' }
   };
@@ -7213,7 +7246,12 @@ function dashTopOrders(limit){
   return Object.keys(tally).map(function(k){
       var t = tally[k];
       var o = clientOrders.find(function(x){ return String(x.id) === String(t.id); });
-      return { label: (o ? (o.name || '') : ('#' + t.id)), sub: t.client || '', n: t.n, id: t.id };
+      // An order that was deleted (or not loaded yet) must not swallow its row:
+      // fall back to the PO number, then to the bare id.
+      var lbl = o ? (o.name || o.po_number || ('#' + t.id)) : ('#' + t.id);
+      var sub = t.client || '';
+      if(!o && sub) sub += (LNG==='ar' ? ' — أوردر محذوف' : ' — deleted order');
+      return { label: lbl, sub: sub, n: t.n, id: t.id };
     })
     .sort(function(a, b){ return b.n - a.n; })
     .slice(0, limit || 6);
@@ -8325,8 +8363,8 @@ function apRenderPlanned(sec){
                en:['Add and edit accounts and roles','An email field for every user','Zone-coverage checkboxes for maintenance managers','Disable an account instead of deleting it'] },
     log:     { ar:['كل العمليات من الدخول إلى الخروج','القيم قبل ← بعد','مدير النظام فقط','الحفظ لمدة شهر'],
                en:['Every action from login to logout','Before → after values','System administrator only','Kept for one month'] },
-    lists:   { ar:['قوائم المهام والفئات والوحدات','المدن والمناطق وربطها','مدد الضمان الافتراضية'],
-               en:['Checklists, categories and units','Cities, zones and their mapping','Default warranty periods'] },
+    lists:   { ar:['أنواع المعدات والفئات والوحدات','المدن والمناطق وربطها','مدد الضمان الافتراضية'],
+               en:['Equipment types, categories and units','Cities, zones and their mapping','Default warranty periods'] },
     tickets: { ar:['رابط لكل عميل مع إمكانية الإلغاء','اختيار حقول نموذج العميل','تنبيه المدير عند وصول تذكرة','حماية من التذاكر الوهمية'],
                en:['A link per client, revocable','Choose the customer form fields','Notify the manager on a new ticket','Protection against spam tickets'] }
   };
@@ -10000,6 +10038,7 @@ function applyRolePermissions(){
     var hide = false;
     if(salesOnly)  hide = (n.id !== 'nav-maint-requests');
     if(dataEntry)  hide = ['nav-clients','nav-visits','nav-maint-requests'].indexOf(n.id) === -1;
+    if(n.id === 'nav-checklists' && !canEditChecklists()) hide = true;
     n.style.display = hide ? 'none' : '';
   });
   // A section heading with nothing under it is clutter — hide any group whose
@@ -10045,8 +10084,6 @@ function applyRolePermissions(){
   // Re-render so the per-card buttons match this role
   if(typeof renderClientGrid === 'function' && document.getElementById('clientGrid')) renderClientGrid();
   // Managers don't need the submission form cluttering their review screen
-  var ttCard = document.getElementById('tasks-mgmt-card');
-  if(ttCard) ttCard.style.display = (curUserRole === 'manager') ? '' : 'none';
   var formCard = document.getElementById('mr-form-card');
   if(formCard) formCard.style.display = (curUserRole === 'manager') ? 'none' : '';
   var title = document.getElementById('mr-list-title');
