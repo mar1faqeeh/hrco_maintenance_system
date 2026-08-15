@@ -202,7 +202,7 @@ html,body{height:100%;overflow:auto;font-family:Tajawal,sans-serif;font-size:14p
     <div class="tlogo"><i class="ti ti-snowflake"></i></div>
     <div class="tbrand">
       <div class="tname" id="t-appname">Maintenance Management System</div>
-      <div class="tsub">HRCO</div>
+      <div class="tsub" id="side-brand"></div>
     </div>
     <div class="tright">
       <div class="lgsw">
@@ -966,7 +966,7 @@ html,body{height:100%;overflow:auto;font-family:Tajawal,sans-serif;font-size:14p
       <div class="mg2">
         <div class="field" style="margin-bottom:0"><label>Full Name</label><input type="text" id="m-name" placeholder="Full Name"></div>
         <div class="field" style="margin-bottom:0"><label data-en="Phone" data-ar="الجوال">Phone</label><input type="text" id="m-phone" placeholder="05xxxxxxxx"></div>
-        <div class="field" style="margin-bottom:0"><label>Email</label><input type="text" id="m-email" placeholder="email@hrco.com"></div>
+        <div class="field" style="margin-bottom:0"><label>Email</label><input type="text" id="m-email" placeholder="email@company.com"></div>
         <div class="field" style="margin-bottom:0"><label>Nationality</label><select id="m-nat"><option>Saudi</option><option>Egyptian</option><option>Pakistani</option><option>Filipino</option><option>Indian</option><option>Jordanian</option></select></div>
         <div class="field" style="margin-bottom:0"><label>Specialization</label><select id="m-spec"><option>Refrigeration & AC</option><option>Central Kitchens</option><option>Industrial Electrical</option></select></div>
         <div class="field" style="margin-bottom:0"><label>Status</label><select id="m-status"><option value="active">Active</option><option value="vacation">On Leave</option><option value="suspended">Suspended</option></select></div>
@@ -1386,7 +1386,7 @@ function setLang(l){
 // LOGIN
 // ══════════════════════════════════════
 var LG_ROLE='manager';
-var USERS={'manager':{pass:'hrco2026',role:'manager',name:'Manager',init:'M'}};
+var USERS={'manager':{pass:'admin1234',role:'manager',name:'Manager',init:'M'}};
 var curUser='', curUserLogin='', curUserRole='';
 function roleLabel(r){
   var ar = (typeof LNG !== 'undefined' && LNG === 'ar');
@@ -1422,7 +1422,7 @@ async function loadSystemUsers(){
       // No users in DB yet - insert default manager
       await _sb.from('system_users').upsert({
         username: 'manager',
-        password: USERS['manager'] ? USERS['manager'].pass : 'hrco2026',
+        password: USERS['manager'] ? USERS['manager'].pass : 'admin1234',
         role: 'manager',
         full_name: USERS['manager'] ? USERS['manager'].name : 'Manager'
       },{onConflict:'username'});
@@ -6895,9 +6895,9 @@ async function apResetList(){
 // nothing breaks before the panel is ever opened.
 // ══════════════════════════════════════
 var COMPANY_FIELDS = [
-  { key:'name_en',    en:'Company name (English)', ar:'اسم الشركة (إنجليزي)', def:'HRCO Refrigeration Co. Ltd.' },
-  { key:'name_ar',    en:'Company name (Arabic)',  ar:'اسم الشركة (عربي)',    def:'شركة هركو للتبريد المحدودة' },
-  { key:'short',      en:'Short name / brand',     ar:'الاسم المختصر',         def:'HRCO',
+  { key:'name_en',    en:'Company name (English)', ar:'اسم الشركة (إنجليزي)', def:'' },
+  { key:'name_ar',    en:'Company name (Arabic)',  ar:'اسم الشركة (عربي)',    def:'' },
+  { key:'short',      en:'Short name / brand',     ar:'الاسم المختصر',         def:'',
     enHint:'Shown beside the logo in the top bar and used in file names.',
     arHint:'يظهر بجانب الشعار في الشريط العلوي ويُستخدم في أسماء الملفات.' },
   { key:'phone',      en:'Phone',                  ar:'الهاتف',               def:'' },
@@ -6969,8 +6969,11 @@ function applyLoginBrand(){
   }
   var nm = document.getElementById('lg-company');
   if(nm && typeof company === 'function'){
-    var short = company('short') || company('name_en') || '';
-    if(short) nm.textContent = short;
+    nm.textContent = company('short') || company('name_en') || '';
+  }
+  var side = document.getElementById('side-brand');
+  if(side && typeof company === 'function'){
+    side.textContent = company('short') || company('name_en') || '';
   }
 }
 
@@ -10127,7 +10130,7 @@ async function saveTech(){
   var tc={
     name: name,
     phone: document.getElementById('m-phone').value,
-    email: document.getElementById('m-email').value || name.toLowerCase().replace(' ','.')+'@hrco.com',
+    email: document.getElementById('m-email').value || name.toLowerCase().replace(' ','.')+'@company.com',
     nationality: document.getElementById('m-nat').value,
     spec: document.getElementById('m-spec').value,
     status: document.getElementById('m-status').value,
@@ -13564,21 +13567,25 @@ async function sendByEmail(id){
       'اطيب التمنيات / Best Regards,',
       '',
       'قسم الصيانة | Maintenance Department',
-      'شركة هركو للتبريد المحدودة',
+      // The signature block used to spell out one company's branches, phone and
+      // website. It now comes from Control Panel → General, so the message says
+      // whatever the company using the system has entered — and nothing if it
+      // hasn't entered anything.
+      company('name_ar'),
       company('name_en'),
       '',
-      'جدة / Jeddah: +966 12 636 4884',
-      'جدة: المدينة الصناعية الاولى، المرحلة 5، طريق 47',
-      'Jeddah: 1st Industrial City, Phase 5, Road 47',
+      company('phone'),
+      company('address'),
       '',
-      'الرياض: مركز الفالح، الطابق الرابع، شارع العليا',
-      'Riyadh: Al-Faleh Center, 4th Floor, Olaya St.',
-      '',
-      'www.hrcoksa.com',
+      company('website'),
       '──────────────────────────',
       (reportURL ? 'الرابط مشفر وخاص بهذه الزيارة فقط.' : ''),
       (reportURL ? 'This link is encrypted and unique to this visit.' : '')
-    ].join('\n');
+    ].filter(function(line, i, all){
+      // Collapse the gaps left by any company detail that isn't filled in
+      if(String(line).trim() !== '') return true;
+      return i > 0 && String(all[i-1]).trim() !== '';
+    }).join('\n');
     var body = encodeURIComponent(bodyText);
 
   }, 100);
@@ -13643,9 +13650,10 @@ async function doSendEmail(){
     '<div style="background:#F8FAFC;padding:16px 28px;border-top:1px solid #D9E2EC;font-size:11px;color:#718096">',
     '<strong style="color:#0F2D52">قسم الصيانة | Maintenance Dept.</strong><br>',
     companyPrintFooter() + '<br>',
-    '📞 +966 12 636 4884 &nbsp;|&nbsp; 🌐 www.hrcoksa.com<br>',
-    '📍 جدة: المدينة الصناعية الأولى، المرحلة 5، طريق 47<br>',
-    '📍 الرياض: مركز الفالح، الطابق الرابع، شارع العليا',
+    // From Control Panel → General, so it belongs to whoever runs the system
+    (company('phone') ? ('📞 ' + company('phone') + (company('website') ? ' &nbsp;|&nbsp; 🌐 ' + company('website') : '') + '<br>')
+                      : (company('website') ? ('🌐 ' + company('website') + '<br>') : '')),
+    (company('address') ? ('📍 ' + company('address')) : ''),
     '</div>',
     '</div>'
   ].join('');
@@ -17426,7 +17434,7 @@ document.addEventListener('DOMContentLoaded', function() {
       n.style.pointerEvents = 'auto';
     });
 
-    console.log('HRCO System loaded successfully');
+    console.log('Maintenance system loaded successfully');
   } catch(e) {
     console.error('DOMContentLoaded error:', e);
   }
@@ -18310,7 +18318,7 @@ function _doPrintVisit(id, v, techSigImg, clientSigImg, visitDateTime, vtype, pa
   var typeEn = {'ضمان':'Warranty','مدفوعة':'Paid','عقد':'Contract','warranty':'Warranty','paid':'Paid','contract':'Contract'};
 
   // The browser's "Save as PDF" uses the document TITLE as the file name, so
-  // build it in Latin script: HRCO-MR_CLIENT-ORDER#ID
+  // build it in Latin script: BRAND-MR_CLIENT-ORDER#ID
   var _slug = function(t){
     var v = String(t == null ? '' : t);
     var latin = v.replace(/[^A-Za-z0-9]+/g, '');
@@ -18322,7 +18330,7 @@ function _doPrintVisit(id, v, techSigImg, clientSigImg, visitDateTime, vtype, pa
     return latin.slice(0, 24);
   };
   var _orderName = (typeof orderNameOf === 'function') ? orderNameOf(v.order_id) : '';
-  var _fileName = (company('short') || 'HRCO') + '-MR_'
+  var _fileName = (company('short') || 'Report') + '-MR_'
     + (_slug(v.client) || 'Client')
     + (_slug(_orderName) ? ('-' + _slug(_orderName)) : '')
     + '#' + id;
@@ -19045,7 +19053,7 @@ async function showPublicReport(token){
     <div class="mb">
       <div id="wh-status" style="display:none"></div>
       <div class="field"><label>Warehouse Email *</label>
-        <input type="email" id="wh-to" placeholder="warehouse@hrco.com">
+        <input type="email" id="wh-to" placeholder="warehouse@company.com">
       </div>
       <div class="field"><label>Subject</label>
         <input type="text" id="wh-subject">
@@ -19908,7 +19916,7 @@ async function showPublicReport(token){
       <div style="position:relative;padding:26px 20px 20px">
         <div id="lg-logo-wrap" style="width:76px;height:76px;background:#fff;border-radius:18px;display:flex;align-items:center;justify-content:center;margin:0 auto 14px;padding:10px;box-shadow:0 8px 24px rgba(0,0,0,.22);overflow:hidden"><i class="ti ti-snowflake" style="color:#1D4E89;font-size:32px"></i></div>
         <div style="color:#fff;font-size:17px;font-weight:800;line-height:1.4" id="lg-appname">Maintenance Management System</div>
-        <div style="color:#FFC9D9;font-size:12px;font-weight:700;margin-top:4px;letter-spacing:1px" id="lg-company">HRCO</div>
+        <div style="color:#FFC9D9;font-size:12px;font-weight:700;margin-top:4px;letter-spacing:1px" id="lg-company"></div>
         <div style="display:flex;justify-content:center;gap:6px;margin-top:14px">
           <button id="lg-en" onclick="lgLang('en')" style="padding:4px 13px;border-radius:99px;font-size:11px;font-weight:700;cursor:pointer;border:1px solid rgba(255,255,255,.5);background:#fff;color:#0F2D52;font-family:Tajawal,sans-serif">EN</button>
           <button id="lg-ar" onclick="lgLang('ar')" style="padding:4px 13px;border-radius:99px;font-size:11px;font-weight:700;cursor:pointer;border:1px solid rgba(255,255,255,.5);background:transparent;color:#fff;font-family:Tajawal,sans-serif">ع</button>
