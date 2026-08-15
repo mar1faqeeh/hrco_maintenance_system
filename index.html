@@ -2034,6 +2034,13 @@ function go(pg){
     alert(LNG==='ar' ? 'هذه الصفحة ليست ضمن صلاحياتك.' : 'This page is not part of your permissions.');
     pg = (curUserRole === 'salesman') ? 'maint-requests' : 'dashboard';
   }
+  // Whatever the matrix says, in code — not just by hiding the nav entry.
+  var _needs = { 'contracts':'contracts.view', 'contract-detail':'contracts.view',
+                 'quotations':'quotations.view', 'quotation-detail':'quotations.view' };
+  if(_needs[pg] && typeof can === 'function' && !can(_needs[pg])){
+    alert(LNG==='ar' ? 'هذه الصفحة ليست ضمن صلاحياتك.' : 'This page is not part of your permissions.');
+    pg = 'dashboard';
+  }
   // Hiding the nav entry is not a rule — refuse the page itself too.
   if(pg === 'checklists' && !canEditChecklists()){
     alert(LNG==='ar' ? 'هذه الصفحة لمدير الصيانة فقط.' : 'This page is for the maintenance manager only.');
@@ -4247,13 +4254,31 @@ var PERMISSIONS = [
     { key:'parts.request',    en:'Request parts',                   ar:'طلب قطع غيار' }
   ]},
   { group:'contracts', gEn:'Maintenance Contracts', gAr:'عقود الصيانة', items:[
+    { key:'contracts.view',   en:'Open the contracts page',         ar:'فتح صفحة العقود' },
     { key:'contracts.manage', en:'Create and edit contracts',       ar:'إنشاء وتعديل العقود' },
     { key:'contracts.inspect',en:'Fill inspection cards',           ar:'تعبئة بطاقات الفحص' }
+  ]},
+  { group:'quotations', gEn:'Pricing & Quotations', gAr:'التسعير وعروض الأسعار', items:[
+    { key:'quotations.view',   en:'Open the quotations page',       ar:'فتح صفحة عروض الأسعار' },
+    { key:'quotations.manage', en:'Create and edit quotations',     ar:'إنشاء وتعديل عروض الأسعار' },
+    { key:'quotations.prices', en:'See and edit part prices',       ar:'عرض وتعديل أسعار القطع' }
   ]},
   { group:'reports', gEn:'Reports', gAr:'التقارير', items:[
     { key:'reports.view',     en:'View reports and the archive',    ar:'عرض التقارير والأرشيف' },
     { key:'reports.export',   en:'Print and export',                ar:'الطباعة والتصدير' }
   ]}
+];
+
+// The keys that existed before `_keys` was recorded in a saved matrix. A matrix
+// stored without that list predates everything added since, so anything absent
+// here counts as new and falls back to the role's default.
+var LEGACY_PERMISSION_KEYS = [
+  'clients.manage','clients.delete','tickets.links',
+  'visits.create','visits.editAny','visits.delete','visits.assign',
+  'requests.create','requests.act','requests.exception',
+  'parts.manage','parts.stocktake','parts.issue','parts.request',
+  'contracts.manage','contracts.inspect',
+  'reports.view','reports.export'
 ];
 
 function allPermissionKeys(){
@@ -4268,9 +4293,10 @@ var ROLE_DEFAULTS = {
             'visits.create','visits.editAny','visits.delete','visits.assign',
             'requests.create','requests.act','requests.exception',
             'parts.manage','parts.stocktake','parts.issue','parts.request',
-            'contracts.manage','contracts.inspect',
+            'contracts.view','contracts.manage','contracts.inspect',
+            'quotations.view','quotations.manage','quotations.prices',
             'reports.view','reports.export'],
-  technician: ['visits.create','contracts.inspect','parts.request','reports.view'],
+  technician: ['visits.create','contracts.view','contracts.inspect','parts.request','reports.view'],
   salesman:   ['requests.create','reports.view'],
   data_entry: ['clients.manage','tickets.links','reports.view','reports.export']
 };
@@ -4303,13 +4329,28 @@ function loadRolesConfig(){
     };
   });
   if(saved){
+    // A matrix saved BEFORE a permission existed cannot have an opinion about
+    // it. Without this, every key added later would read as "denied" for every
+    // role that had ever been saved — a silent loss of access nobody ordered.
+    var known = Array.isArray(saved._keys) ? saved._keys : LEGACY_PERMISSION_KEYS;
+    var fresh = allPermissionKeys().filter(function(k){ return known.indexOf(k) === -1; });
     Object.keys(saved).forEach(function(k){
+      if(k === '_keys') return;
       var s = saved[k] || {};
+      var perms = Array.isArray(s.perms) ? s.perms.slice() : [];
+      // Built-in roles pick up brand-new keys at their default value; custom
+      // roles stay as configured — granting silently is never right.
+      if(BUILTIN_ROLES.indexOf(k) !== -1){
+        var def = ROLE_DEFAULTS[k] || [];
+        fresh.forEach(function(nk){
+          if(def.indexOf(nk) !== -1 && perms.indexOf(nk) === -1) perms.push(nk);
+        });
+      }
       rolesConfig[k] = {
         en: s.en || (ROLE_LABELS[k] ? ROLE_LABELS[k].en : k),
         ar: s.ar || (ROLE_LABELS[k] ? ROLE_LABELS[k].ar : k),
         custom: BUILTIN_ROLES.indexOf(k) === -1,
-        perms: Array.isArray(s.perms) ? s.perms.slice() : []
+        perms: perms
       };
     });
   }
@@ -4340,7 +4381,7 @@ function roleLabel(key){
 function allRoleKeys(){ return Object.keys(loadRolesConfig()); }
 
 async function saveRolesConfig(){
-  var payload = {};
+  var payload = { _keys: allPermissionKeys() };
   Object.keys(rolesConfig).forEach(function(k){
     if(k === 'sysadmin') return;           // never stored, always full
     payload[k] = { en: rolesConfig[k].en, ar: rolesConfig[k].ar, perms: rolesConfig[k].perms };
@@ -5139,10 +5180,14 @@ function _settingSaveFailed(key, msg){
 // A feature flag may only ever TAKE a page away. It must never hand one back:
 // this ran after applyRolePermissions() and wrote display='' unconditionally,
 // which quietly returned Contracts and Quotations to the sales role.
-function _flagNav(id, on){
+function _flagNav(id, on, perm){
   var el = document.getElementById(id);
   if(!el) return;
   if(!on){ el.style.display = 'none'; return; }
+  // The feature flag decides whether the page exists at all; the role matrix
+  // decides who may open it. A flag must never hand a page back to someone the
+  // matrix denies.
+  if(perm && typeof can === 'function' && !can(perm)){ el.style.display = 'none'; return; }
   var salesOnly  = (curUserRole === 'salesman');
   var dataEntry  = (curUserRole === 'data_entry');
   var allowed = true;
@@ -5152,8 +5197,8 @@ function _flagNav(id, on){
 }
 
 function applyFeatureFlags(){
-  _flagNav('nav-contracts',  featureOn('maintenance_contracts'));
-  _flagNav('nav-quotations', featureOn('quotations'));
+  _flagNav('nav-contracts',  featureOn('maintenance_contracts'), 'contracts.view');
+  _flagNav('nav-quotations', featureOn('quotations'),            'quotations.view');
   // A hidden feature must not leave its section heading stranded
   try{ hideEmptyNavSections(); }catch(e){}
 
