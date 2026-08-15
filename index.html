@@ -2023,10 +2023,10 @@ function go(pg){
   // Hiding a nav entry is not a rule — refuse the page itself too, or a stale
   // link, a badge, or the browser's history walks straight into it.
   var _blocked = {
-    salesman:   ['contracts','contract-detail','quotations','quotation-detail','clients','client-orders',
+    salesman:   ['clients','client-orders',
                  'parts','parts-request','parts-orders','technicians','reports','archive','settings',
                  'visits','pending','newvisit','signature','checklists'],
-    data_entry: ['contracts','contract-detail','quotations','quotation-detail','parts','parts-request',
+    data_entry: ['parts','parts-request',
                  'parts-orders','technicians','reports','archive','checklists']
   };
   var _deny = _blocked[curUserRole];
@@ -5183,17 +5183,12 @@ function _settingSaveFailed(key, msg){
 function _flagNav(id, on, perm){
   var el = document.getElementById(id);
   if(!el) return;
+  // Two questions, in order: does the feature exist at all, and does this
+  // role's matrix allow it. No hand-written role list gets a say here — one
+  // would silently override whatever the sysadmin ticked in the panel.
   if(!on){ el.style.display = 'none'; return; }
-  // The feature flag decides whether the page exists at all; the role matrix
-  // decides who may open it. A flag must never hand a page back to someone the
-  // matrix denies.
   if(perm && typeof can === 'function' && !can(perm)){ el.style.display = 'none'; return; }
-  var salesOnly  = (curUserRole === 'salesman');
-  var dataEntry  = (curUserRole === 'data_entry');
-  var allowed = true;
-  if(salesOnly) allowed = (id === 'nav-maint-requests');
-  if(dataEntry) allowed = ['nav-clients','nav-visits','nav-maint-requests'].indexOf(id) !== -1;
-  el.style.display = allowed ? '' : 'none';
+  el.style.display = '';
 }
 
 function applyFeatureFlags(){
@@ -10112,14 +10107,24 @@ function applyRolePermissions(){
   // Data entry staff only maintain the client register.
   var dataEntry = (curUserRole === 'data_entry');
 
+  // Contracts and Quotations are governed by the permission matrix alone —
+  // leaving them in the blanket hide below would override what the sysadmin
+  // ticked. applyFeatureFlags() has the final say on those two.
+  var _byMatrix = ['nav-contracts','nav-quotations'];
+
   document.querySelectorAll('.nav-item').forEach(function(n){
     if(!n.id) return;
+    if(_byMatrix.indexOf(n.id) !== -1) return;
     var hide = false;
     if(salesOnly)  hide = (n.id !== 'nav-maint-requests');
     if(dataEntry)  hide = ['nav-clients','nav-visits','nav-maint-requests'].indexOf(n.id) === -1;
     if(n.id === 'nav-checklists' && !canEditChecklists()) hide = true;
     n.style.display = hide ? 'none' : '';
   });
+  // The two matrix-governed entries are decided here, on the current role —
+  // applyFeatureFlags() otherwise only ever ran at settings-load time, before
+  // anyone had logged in, so it judged them against no role at all.
+  try{ applyFeatureFlags(); }catch(e){}
   // A section heading with nothing under it is clutter — hide any group whose
   // items are all hidden for this role, rather than naming a fixed list that
   // goes stale every time the sidebar changes.
