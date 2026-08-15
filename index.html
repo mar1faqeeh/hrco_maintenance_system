@@ -643,7 +643,6 @@ html,body{height:100%;overflow:auto;font-family:Tajawal,sans-serif;font-size:14p
 <div id="pg-parts" style="display:none">
   <div class="ph"><div><div class="pt" id="t-parts-pg">Spare Parts</div><div class="ps" id="t-parts-sub">Inventory & movement history</div></div>
     <div style="display:flex;gap:8px">
-      <button class="btn btn-o" id="parts-findimg-all" onclick="findPhotosForAll()"><i class="ti ti-photo-search"></i><span data-en="Find photos" data-ar="جلب الصور">Find photos</span></button>
       <button class="btn btn-o" id="parts-addinv-btn" onclick="resetPartForm();openMod('partModal')"><i class="ti ti-package-import"></i><span id="t-add-inv">Add Inventory</span></button>
       <button class="btn btn-p" id="parts-new-btn" onclick="resetPartForm();openMod('partModal')"><i class="ti ti-plus"></i><span id="t-new-part">New Part</span></button>
       <button class="btn btn-o" id="parts-count-btn" onclick="openStocktake()"><i class="ti ti-clipboard-check"></i> <span data-en="Stocktake" data-ar="جرد المخزون">Stocktake</span></button>
@@ -1018,6 +1017,8 @@ html,body{height:100%;overflow:auto;font-family:Tajawal,sans-serif;font-size:14p
               <input type="file" id="ap-photo-file" accept="image/*" style="display:none" onchange="onPartPhoto(this)">
               <button type="button" onclick="document.getElementById('ap-photo-file').click()" class="btn btn-o" style="padding:7px 14px;font-size:12px">
                 <i class="ti ti-camera"></i> <span data-en="Choose a photo" data-ar="اختر صورة">Choose a photo</span></button>
+              <button type="button" onclick="searchPhotoForForm()" class="btn btn-o" style="padding:7px 14px;font-size:12px;margin-inline-start:6px;color:#1D4E89;border-color:#BBD5F0">
+                <i class="ti ti-photo-search"></i> <span data-en="Search the internet" data-ar="ابحث بالإنترنت">Search the internet</span></button>
               <button type="button" id="ap-photo-clear" onclick="clearPartPhoto()" style="display:none;margin-inline-start:6px;padding:7px 12px;border-radius:8px;border:1px solid #F5C6C6;background:#fff;color:#C0392B;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit">
                 <i class="ti ti-trash"></i></button>
               <div style="font-size:11px;color:#A0AEC0;margin-top:4px" data-en="Shown beside this part on every quotation." data-ar="تظهر بجانب القطعة في كل عرض سعر.">Shown beside this part on every quotation.</div>
@@ -11252,11 +11253,12 @@ function renderInvList(q,sf){
             ? '<button class="rbtn" onclick="quickAdd(' + p.id + ')" title="' + (LNG==='ar'?'إضافة كمية':'Add stock') + '"><i class="ti ti-package-import"></i></button>'
             : '')
       +   (canManageParts()
-            ? ((!partPhoto(p)
-                  ? '<button class="rbtn" id="findimg-' + p.id + '" onclick="searchPartPhoto(' + p.id + ')" title="'
-                    + (LNG==='ar'?'ابحث عن صورة والصقها':'Search and paste a photo') + '" style="color:#1D4E89"><i class="ti ti-photo-search"></i></button>'
-                  : '')
-               + '<button class="rbtn" onclick="editPart(' + p.id + ')" title="' + (LNG==='ar'?'تعديل':'Edit') + '"><i class="ti ti-pencil"></i></button>')
+            ? '<button class="rbtn" id="findimg-' + p.id + '" onclick="searchPartPhoto(' + p.id + ')" title="'
+              + (partPhoto(p)
+                  ? (LNG==='ar'?'تغيير الصورة':'Change the photo')
+                  : (LNG==='ar'?'ابحث عن صورة والصقها':'Search and paste a photo'))
+              + '" style="color:#1D4E89"><i class="ti ti-photo-search"></i></button>'
+              + '<button class="rbtn" onclick="editPart(' + p.id + ')" title="' + (LNG==='ar'?'تعديل':'Edit') + '"><i class="ti ti-pencil"></i></button>'
             : '')
       +   '<button class="rbtn" onclick="showPH(' + p.id + ')" title="' + (LNG==='ar'?'السجل':'History') + '"><i class="ti ti-history"></i></button>'
       +   (curUserRole === 'manager'
@@ -15188,10 +15190,37 @@ function googleImageSearchFor(part){
   window.open('https://www.google.com/search?tbm=isch&q=' + q, '_blank');
 }
 
+
+// Searching from INSIDE the part form. The pasted picture goes into the form's
+// preview rather than straight to the database, so it is saved — or discarded —
+// with the rest of the edit.
+function searchPhotoForForm(){
+  var name = (document.getElementById('ap-name') || {}).value || '';
+  var code = (document.getElementById('ap-code') || {}).value || '';
+  if(!name && !code){
+    alert((LNG==='ar') ? 'اكتب اسم القطعة أو كودها أولاً.' : 'Enter the part name or code first.');
+    return;
+  }
+  googleImageSearchFor({ name: name, code: code });
+  _pastePartId = null;          // form mode
+  _pasteToForm = true;
+  var t = document.getElementById('pp-title');
+  if(t) t.textContent = (LNG==='ar') ? ('صورة: ' + (name || code)) : ('Photo for: ' + (name || code));
+  var box = document.getElementById('pp-drop');
+  if(box) box.innerHTML = pastePlaceholderHtml();
+  var sv = document.getElementById('pp-save');
+  if(sv) sv.disabled = true;
+  openMod('pastePhotoModal');
+  setTimeout(function(){ var d = document.getElementById('pp-drop'); if(d) d.focus(); }, 150);
+}
+
+var _pasteToForm = false;
+
 function searchPartPhoto(id){
   var p = partsData.find(function(x){ return String(x.id) === String(id); });
   if(!p) return;
   if(!canManageParts()){ denyParts(); return; }
+  _pasteToForm = false;
   googleImageSearchFor(p);
   openPastePhoto(id);
 }
@@ -15208,6 +15237,9 @@ function openPastePhoto(id){
   if(t) t.textContent = (ar ? 'صورة: ' : 'Photo for: ') + partName(p);
   var box = document.getElementById('pp-drop');
   if(box) box.innerHTML = pastePlaceholderHtml();
+  var sv = document.getElementById('pp-save');
+  if(sv) sv.disabled = true;
+  _pastedPhoto = '';
   openMod('pastePhotoModal');
   setTimeout(function(){
     var d = document.getElementById('pp-drop');
@@ -15281,7 +15313,20 @@ function onDropIntoBox(ev){
 
 async function savePastedPhoto(){
   var ar = (LNG === 'ar');
-  if(!_pastedPhoto || !_pastePartId) return;
+  if(!_pastedPhoto) return;
+
+  // Came from the part form: drop it into the preview and let the form's own
+  // Save decide, rather than writing behind the form's back.
+  if(_pasteToForm){
+    _partPhoto = _pastedPhoto;
+    showPartPhoto(_partPhoto);
+    _pastedPhoto = '';
+    _pasteToForm = false;
+    closeMod('pastePhotoModal');
+    return;
+  }
+
+  if(!_pastePartId) return;
   var p = partsData.find(function(x){ return String(x.id) === String(_pastePartId); });
   if(!p) return;
 
@@ -15348,89 +15393,16 @@ function shrinkDataUrl(src, max, quality){
 }
 
 // Fetch for one part, from its row in the inventory.
-async function findPhotoForPart(id){
-  var ar = (LNG === 'ar');
-  var p = partsData.find(function(x){ return String(x.id) === String(id); });
-  if(!p) return;
-  if(!canManageParts()){ denyParts(); return; }
 
-  var btn = document.getElementById('findimg-' + id);
-  if(btn){ btn.disabled = true; btn.innerHTML = '<i class="ti ti-loader" style="animation:spin 1s linear infinite;display:inline-block"></i>'; }
-
-  var data = await fetchPartImage(p);
-
-  if(btn){ btn.disabled = false; btn.innerHTML = '<i class="ti ti-photo-search"></i>'; }
-
-  if(!data || !data.found){
-    alert((ar ? 'لم يُعثر على صورة.\n\n' : 'No picture was found.\n\n')
-      + (data && data.message ? data.message : ''));
-    return;
-  }
-
-  var small = await shrinkDataUrl(data.image, 600, 0.72);
-  if(!small){ alert(ar ? 'تعذّرت معالجة الصورة.' : 'That image could not be processed.'); return; }
-
-  p.photo = small;
-  try{ await dbSave('parts', { id: p.id, photo: small }); }catch(e){}
-  renderInvList();
-}
 
 // Fetch for every part that has none. Sequential on purpose: the free search
 // quota is 100 a day, and hammering it in parallel just burns it faster.
-async function findPhotosForAll(){
-  var ar = (LNG === 'ar');
-  if(!canManageParts()){ denyParts(); return; }
-  if(_imgFetchBusy) return;
+// The bulk lookup lived here. It leaned on Google's paid Custom Search, and
+// even with billing the results were only ever "something that looks similar" —
+// which is the wrong standard for a picture a customer approves a price
+// against. Photos are searched and pasted one at a time instead, so his eye
+// checks each one before it enters the system.
 
-  var missing = partsData.filter(function(p){ return !partPhoto(p); });
-  if(!missing.length){
-    alert(ar ? 'كل القطع لها صور.' : 'Every part already has a picture.');
-    return;
-  }
-
-  var cap = Math.min(missing.length, 40);
-  if(!confirm(ar
-      ? ('البحث عن صور لـ ' + cap + ' قطعة من أصل ' + missing.length + ' بلا صورة.\n\n'
-         + 'يستغرق دقيقة تقريباً، ويستهلك من حصة البحث اليومية المجانية (100 بحث).\n\nمتابعة؟')
-      : ('Look up pictures for ' + cap + ' of the ' + missing.length + ' parts without one.\n\n'
-         + 'It takes about a minute and uses the free daily search quota (100).\n\nContinue?'))) return;
-
-  _imgFetchBusy = true;
-  var found = 0, failed = 0, stopped = '';
-  var btn = document.getElementById('parts-findimg-all');
-  if(btn) btn.disabled = true;
-
-  for(var i = 0; i < cap; i++){
-    var p = missing[i];
-    if(btn) btn.innerHTML = '<i class="ti ti-loader" style="animation:spin 1s linear infinite;display:inline-block"></i> '
-      + (i + 1) + '/' + cap;
-
-    var data = await fetchPartImage(p);
-
-    if(data && data.reason === 'not_configured'){ stopped = data.message; break; }
-    if(data && data.reason === 'quota'){ stopped = data.message; break; }
-
-    if(data && data.found){
-      var small = await shrinkDataUrl(data.image, 600, 0.72);
-      if(small){
-        p.photo = small;
-        try{ await dbSave('parts', { id: p.id, photo: small }); }catch(e){}
-        found++;
-      } else failed++;
-    } else failed++;
-
-    if(i % 5 === 4) renderInvList();
-  }
-
-  _imgFetchBusy = false;
-  if(btn){ btn.disabled = false; btn.innerHTML = '<i class="ti ti-photo-search"></i> '
-    + ((LNG==='ar') ? 'جلب الصور' : 'Find photos'); }
-  renderInvList();
-
-  alert((stopped ? (stopped + '\n\n') : '')
-    + (ar ? ('✅ عُثر على ' + found + ' صورة · تعذّر ' + failed)
-          : ('✅ ' + found + ' found · ' + failed + ' not found')));
-}
 
 // ── Close-ups cut from the exploded drawing ──────────────────────────────
 // He never wanted to upload photos by hand — the close-up should come from the
