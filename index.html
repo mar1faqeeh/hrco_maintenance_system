@@ -1796,6 +1796,7 @@ function lgSuccess(u, restoring){
     renderDashPending();
     renderPending();
     try{ applyRolePermissions(); }catch(e){}
+    try{ applyCompany(); }catch(e){}
     try{ loadMaintRequests().then(function(){
       updateMaintBadge();
       // The requests widget is built from this data — it must repaint once the
@@ -5128,6 +5129,10 @@ async function loadAppSettings(){
     applyFeatureFlags();
     try{ applyLists(); }catch(e){}
     try{ applyLoginBrand(); }catch(e){}
+    // The company name, logo and tab icon belong to the whole app, not to one
+    // page. This used to run only when the dashboard opened, so a salesman —
+    // who never lands there — saw no logo at all.
+    try{ applyCompany(); }catch(e){}
     try{ applyDashboardLayout(); }catch(e){}
   }catch(e){ console.log('loadAppSettings error:', e); }
 }
@@ -15267,7 +15272,8 @@ function renderQuotations(){
     var t = quoteTotals(x);
     var row = document.createElement('div');
     row.className = 'trow';
-    row.style.gridTemplateColumns = '130px 1.6fr 1fr 1fr 110px 110px';
+    row.style.gridTemplateColumns = 'minmax(200px,1.2fr) 1.6fr 1fr 1fr 110px 110px';
+    row.style.minWidth = '820px';
     row.style.cursor = 'pointer';
     row.onclick = function(){ openQuotation(x.id); };
     row.innerHTML =
@@ -15910,7 +15916,9 @@ function quoteUserTag(){
   if(!tag){
     tag = String(curUser || '').trim().split(/\s+/)[0].replace(/[^\u0600-\u06FF0-9]/g, '');
   }
-  return tag || 'USER';
+  // Cap it: a long name pushes the number past what any list column can show,
+  // and a truncated reference is worse than a shortened one.
+  return (tag || 'USER').slice(0, 8);
 }
 
 function nextQuoteNumber(){
@@ -19505,8 +19513,8 @@ async function showPublicReport(token){
     <button class="ftab" onclick="setQtFilter('accepted',this)" data-en="Accepted" data-ar="مقبول">Accepted</button>
     <button class="ftab" onclick="setQtFilter('rejected',this)" data-en="Rejected" data-ar="مرفوض">Rejected</button>
   </div>
-  <div class="card">
-    <div class="thd" style="grid-template-columns:130px 1.6fr 1fr 1fr 110px 110px">
+  <div class="card" style="overflow-x:auto">
+    <div class="thd" style="grid-template-columns:minmax(200px,1.2fr) 1.6fr 1fr 1fr 110px 110px;min-width:820px">
       <div data-en="Number" data-ar="الرقم">Number</div>
       <div data-en="Client" data-ar="العميل">Client</div>
       <div data-en="City" data-ar="المدينة">City</div>
