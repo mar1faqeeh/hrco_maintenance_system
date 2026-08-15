@@ -14831,8 +14831,10 @@ async function saveQuotation(){
   _qd.notes  = (document.getElementById('qd-notes')  || {}).value || '';
   _qd.city   = (document.getElementById('qd-city')   || {}).value || '';
 
-  if(!_qd.client_id){
-    alert(ar ? 'اختر العميل.' : 'Please choose a client.');
+  var _isProspect = !_qd.client_id && !!(_qd.prospect && _qd.prospect.name);
+  if(!_qd.client_id && !_isProspect){
+    alert(ar ? 'اختر العميل، أو اختر "عميل جديد" واكتب اسمه.'
+             : 'Choose a client, or pick "New client" and type the name.');
     return;
   }
   if(!_qd.city){
@@ -14847,7 +14849,8 @@ async function saveQuotation(){
   }
 
   var payload = {
-    number: _qd.number, client_id: _qd.client_id, client: _qd.client,
+    number: _qd.number, client_id: _qd.client_id || null, client: _qd.client,
+    prospect: _isProspect ? JSON.stringify(_qd.prospect) : null,
     order_id: _qd.order_id || null, city: _qd.city, centre: _qd.centre || '',
     km: Number(_qd.km) || 0, stay: Number(_qd.stay) || 0,
     items: JSON.stringify(_qd.items || []),
@@ -14906,6 +14909,11 @@ async function loadQuotations(){
       quotationsData = r.data.map(function(q){
         var out = Object.assign({}, q);
         out.items = asList(q.items);      // text column → list
+        // Supabase hands JSON columns back as text — parse it or the prospect
+        // reads as a string and the name never reappears in the form.
+        if(typeof out.prospect === 'string'){
+          try{ out.prospect = JSON.parse(out.prospect); }catch(e){ out.prospect = null; }
+        }
         return out;
       });
     }
@@ -15249,7 +15257,10 @@ function renderQuotations(){
     row.onclick = function(){ openQuotation(x.id); };
     row.innerHTML =
         '<div class="tc" style="font-weight:700;color:#1D4E89" dir="ltr">' + (x.number || '—') + '</div>'
-      + '<div class="tc"><div style="font-weight:500">' + clientOrderLabel(x.client, x.order_id) + '</div>'
+      + '<div class="tc"><div style="font-weight:500">' + clientOrderLabel(x.client, x.order_id)
+      +   (!x.client_id ? ' <span style="background:#FDF0E0;color:#C4680A;font-size:10px;font-weight:700;padding:1px 7px;border-radius:99px">'
+                        + (ar ? 'غير مسجّل' : 'Not registered') + '</span>' : '')
+      +   '</div>'
       +   '<div class="tc2">' + (x.date || '') + '</div></div>'
       + '<div class="tc2">' + (x.city || '—') + '</div>'
       + '<div class="tc" style="font-weight:700">' + money(t.total)
@@ -15291,12 +15302,24 @@ function renderQuoteDetail(){
   // client list
   var cs = document.getElementById('qd-client');
   if(cs){
+    var isProspect = !_qd.client_id && !!(_qd.prospect && _qd.prospect.name);
     cs.innerHTML = '<option value="">' + (ar ? '— اختر العميل —' : '— Select a client —') + '</option>'
       + clientsData.map(function(c){
           return '<option value="' + c.id + '"' + (String(_qd.client_id) === String(c.id) ? ' selected' : '') + '>'
             + (c.nickname || c.name) + '</option>';
-        }).join('');
+        }).join('')
+      // A quotation comes BEFORE the relationship exists — requiring a
+      // registered client first would stop the salesman at the first step.
+      + '<option value="__new__"' + (isProspect ? ' selected' : '') + '>'
+      + (ar ? '+ عميل جديد — غير مسجّل' : '+ New client — not registered') + '</option>';
   }
+  var pn = document.getElementById('qd-prospect-name');
+  var pp = document.getElementById('qd-prospect-phone');
+  var pc = document.getElementById('qd-prospect-contact');
+  if(pn) pn.value = (_qd.prospect && _qd.prospect.name)    || '';
+  if(pp) pp.value = (_qd.prospect && _qd.prospect.phone)   || '';
+  if(pc) pc.value = (_qd.prospect && _qd.prospect.contact) || '';
+  toggleProspectBox();
   fillQuoteOrders();
 
   var ci = document.getElementById('qd-city');
@@ -15323,9 +15346,92 @@ function fillQuoteOrders(){
       }).join('');
 }
 
+function toggleProspectBox(){
+  var sel = document.getElementById('qd-client');
+  var box = document.getElementById('qd-prospect-box');
+  if(sel && box) box.style.display = (sel.value === '__new__') ? '' : 'none';
+
+  // Converting writes to the client register, so it needs that permission —
+  // the salesman raises the quotation, someone else turns it into a client.
+  var btn = document.getElementById('qd-convert-btn');
+  if(btn){
+    var ready = _qd && _qd.id && !_qd.client_id && _qd.prospect && _qd.prospect.name
+                && (typeof canManageClientRecords !== 'function' || canManageClientRecords());
+    btn.style.display = ready ? '' : 'none';
+  }
+}
+
+async function convertProspectToClient(){
+  var ar = (LNG === 'ar');
+  if(!_qd || !_qd.prospect || !_qd.prospect.name) return;
+  if(typeof canManageClientRecords === 'function' && !canManageClientRecords()){ denyClientEdit(); return; }
+
+  var nm = _qd.prospect.name;
+  var existing = clientsData.find(function(c){
+    return String(c.name || '').trim().toLowerCase() === nm.trim().toLowerCase();
+  });
+  if(existing){
+    if(!confirm(ar ? ('يوجد عميل بنفس الاسم "' + nm + '". أربط العرض به؟')
+                   : ('A client named "' + nm + '" already exists. Link this quotation to it?'))) return;
+  } else if(!confirm(ar ? ('تسجيل "' + nm + '" كعميل في النظام؟')
+                        : ('Register "' + nm + '" as a client?'))) return;
+
+  var cid;
+  if(existing){
+    cid = existing.id;
+  } else {
+    // These must match what saveClient() writes — `location`, not `loc`, and a
+    // contract value the table's CHECK constraint actually allows.
+    var row = {
+      name: nm, nickname: '', type: '',
+      location: _qd.city || '', phone: _qd.prospect.phone || '', email: '',
+      contract: 'مدفوع', warranty: false,
+      total_visits: 0, completed: 0, pending: 0, needs_parts: 0,
+      warranty_visits: 0, paid_visits: 0, contract_visits: 0,
+      initials: nm.slice(0,2).toUpperCase(), color: '#1D4E89', bg: '#E6F1FB'
+    };
+    var saved = await dbSave('clients', row);
+    if(saved === null) return;
+    if(!saved || !saved.length){
+      alert(ar ? 'لم يُسجَّل العميل — لم تُكتب أي صفوف.' : 'The client was NOT registered — no row was written.');
+      return;
+    }
+    row.id = saved[0].id;
+    row.loc = row.location;      // the in-memory list uses `loc`
+    cid = row.id;
+    clientsData.unshift(row);
+    logActivity('create', 'client', nm, null, { from: _qd.number });
+  }
+
+  _qd.client_id = cid;
+  _qd.prospect = null;
+  _qd.client = nm;
+  await saveQuotation();
+}
+
+// A prospect lives on the quotation only. Nothing is written to the client
+// register until someone with the permission deliberately converts it.
+function onQuoteProspect(){
+  var v = function(id){ var e = document.getElementById(id); return e ? e.value.trim() : ''; };
+  _qd.prospect = { name: v('qd-prospect-name'), phone: v('qd-prospect-phone'), contact: v('qd-prospect-contact') };
+  _qd.client = _qd.prospect.name;
+}
+
 function onQuoteClient(){
   var v = (document.getElementById('qd-client') || {}).value || '';
+  if(v === '__new__'){
+    _qd.client_id = '';
+    _qd.order_id = '';
+    toggleProspectBox();
+    onQuoteProspect();
+    fillQuoteOrders();
+    renderQuoteRoute();
+    renderQuoteTotals();
+    return;
+  }
   _qd.client_id = v;
+  _qd.prospect = null;
+  toggleProspectBox();
   var c = clientsData.find(function(x){ return String(x.id) === String(v); });
   _qd.client = c ? (c.name || c.nickname) : '';
   _qd.order_id = '';
@@ -19403,6 +19509,7 @@ async function showPublicReport(token){
     <div style="display:flex;gap:8px;flex-wrap:wrap">
       <button class="btn btn-o" onclick="printQuotation()"><i class="ti ti-printer"></i> <span data-en="Print" data-ar="طباعة">Print</span></button>
       <button class="btn btn-p" onclick="saveQuotation()" style="background:#2D7D3A"><i class="ti ti-device-floppy"></i> <span data-en="Save" data-ar="حفظ">Save</span></button>
+      <button class="btn btn-o" id="qd-convert-btn" onclick="convertProspectToClient()" style="display:none;border-color:#2D7D3A;color:#2D7D3A"><i class="ti ti-user-plus"></i> <span data-en="Register as a client" data-ar="تسجيله كعميل">Register as a client</span></button>
       <button class="btn btn-o" onclick="go('quotations')"><i class="ti ti-arrow-left"></i> <span data-en="Back" data-ar="رجوع">Back</span></button>
     </div>
   </div>
@@ -19411,6 +19518,23 @@ async function showPublicReport(token){
     <div class="fg" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:12px">
       <div class="field" style="margin-bottom:0"><label data-en="Client *" data-ar="العميل *">Client *</label>
         <select id="qd-client" onchange="onQuoteClient()"></select></div>
+      <div class="field" id="qd-prospect-box" style="margin-bottom:0;display:none">
+        <label data-en="New client name *" data-ar="اسم العميل الجديد *">New client name *</label>
+        <input type="text" id="qd-prospect-name" oninput="onQuoteProspect()"
+               data-ph-en="Company or contact name" data-ph-ar="اسم الشركة أو جهة الاتصال"
+               placeholder="Company or contact name">
+        <div style="display:flex;gap:6px;margin-top:6px;flex-wrap:wrap">
+          <input type="text" id="qd-prospect-phone" oninput="onQuoteProspect()" dir="ltr"
+                 data-ph-en="Phone" data-ph-ar="الجوال" placeholder="Phone"
+                 style="flex:1;min-width:120px;padding:9px 12px;border:1.5px solid #D9E2EC;border-radius:8px;font-size:13px;font-family:inherit;outline:none">
+          <input type="text" id="qd-prospect-contact" oninput="onQuoteProspect()"
+                 data-ph-en="Contact person" data-ph-ar="جهة الاتصال" placeholder="Contact person"
+                 style="flex:1;min-width:120px;padding:9px 12px;border:1.5px solid #D9E2EC;border-radius:8px;font-size:13px;font-family:inherit;outline:none">
+        </div>
+        <div style="font-size:11px;color:#718096;margin-top:5px"
+             data-en="Kept on this quotation only — the client register is not touched."
+             data-ar="يُحفظ في هذا العرض فقط — سجل العملاء لا يتغيّر.">Kept on this quotation only.</div>
+      </div>
       <div class="field" style="margin-bottom:0"><label data-en="Order / Project" data-ar="الأوردر / المشروع">Order / Project</label>
         <select id="qd-order" onchange="onQuoteOrder()"></select></div>
       <div class="field" style="margin-bottom:0"><label data-en="City *" data-ar="المدينة *">City *</label>
