@@ -1792,7 +1792,12 @@ function lgSuccess(u, restoring){
     renderDashPending();
     renderPending();
     try{ applyRolePermissions(); }catch(e){}
-    try{ loadMaintRequests().then(function(){ updateMaintBadge(); }); }catch(e){}
+    try{ loadMaintRequests().then(function(){
+      updateMaintBadge();
+      // The requests widget is built from this data — it must repaint once the
+      // rows land, or it keeps whatever it drew from an empty list.
+      if(typeof applyDashboardLayout==='function' && document.getElementById('pg-dashboard')) applyDashboardLayout();
+    }); }catch(e){}
     try{ loadTaskTemplates(); }catch(e){}
     try{ loadClientOrders().then(function(){
       if(typeof renderClientGrid==='function') renderClientGrid();
@@ -7333,9 +7338,11 @@ function dashWidgetHtml(key){
     var list = (typeof maintRequests !== 'undefined' ? maintRequests : []);
     var open = list.filter(function(r){ return (r.status||'new') === 'new'; });
     var rows = open.slice(0,5).map(function(r){
+      var _on = (typeof orderNameOf === 'function') ? orderNameOf(r.order_id) : '';
       return '<div style="display:flex;align-items:center;gap:9px;padding:9px 16px;border-bottom:1px solid #F0F4F8">'
         + '<span style="background:#FCEBEB;color:#C0392B;font-size:10px;font-weight:700;padding:2px 8px;border-radius:99px">' + (ar?'جديد':'new') + '</span>'
-        + '<div style="flex:1;min-width:0"><div style="font-size:12px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + (r.client||'') + '</div>'
+        + '<div style="flex:1;min-width:0"><div style="font-size:12px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"><bdi>' + (r.client||'') + '</bdi>'
+        + (_on ? ' <span style="color:#1D4E89;font-weight:600">— <bdi>' + _on + '</bdi></span>' : '') + '</div>'
         + '<div style="font-size:11px;color:#718096;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + (r.problem||'') + '</div></div>'
         + '<span style="font-size:10px;color:#A0AEC0">' + (r.date||'') + '</span></div>';
     }).join('');
