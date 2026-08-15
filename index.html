@@ -5108,6 +5108,7 @@ var AP_SECTIONS = [
   { key:'general',  icon:'ti-building',         en:'General',         ar:'عام' },
   { key:'features', icon:'ti-toggle-right',     en:'System Features', ar:'مميزات النظام' },
   { key:'dbcheck',  icon:'ti-database-search',  en:'Database Check',  ar:'فحص قاعدة البيانات' },
+  { key:'quotes',   icon:'ti-file-dollar',      en:'Quotation Settings', ar:'إعدادات عروض الأسعار' },
   { key:'dash',     icon:'ti-layout-dashboard', en:'Dashboard',       ar:'لوحة المعلومات' },
   { key:'users',    icon:'ti-users',            en:'Users & Roles',   ar:'المستخدمون والصلاحيات' },
   { key:'roles',    icon:'ti-shield-check',     en:'Roles & Permissions', ar:'الرتب والصلاحيات' },
@@ -5364,6 +5365,7 @@ function apGo(key){
   else if(key === 'dash'){ _apDash = null; apRenderDashboard(); }
   else if(key === 'general'){ _cmpLogoPending = null; apRenderGeneral(); }
   else if(key === 'dbcheck'){ apRenderDbCheck(); }
+  else if(key === 'quotes'){ apRenderQuoteSettings(); }
   else if(key === 'roles'){ apRenderRoles(); }
   else if(key === 'tickets') apRenderTickets();
   else apRenderPlanned(sec);
@@ -7592,6 +7594,117 @@ var DB_EXPECTED = {
   system_users: ['username','password','full_name','role','email','zones','active','must_change_password'],
   app_settings: ['key','value','updated_at']
 };
+
+// ── Quotation settings ───────────────────────────────────────────────────
+function apRenderQuoteSettings(){
+  var host = document.getElementById('ap-body');
+  if(!host) return;
+  var ar = (LNG === 'ar');
+
+  var sw = function(key, en, arLbl, note){
+    var on = quoteVatOn(key);
+    return '<div style="display:flex;align-items:center;gap:12px;padding:11px 14px;background:#1E293B;'
+      + 'border:1px solid ' + (on ? '#2563EB' : '#334155') + ';border-radius:10px;margin-bottom:8px">'
+      + '<label style="position:relative;display:inline-block;width:42px;height:23px;flex-shrink:0;cursor:pointer">'
+      +   '<input type="checkbox" ' + (on ? 'checked' : '') + ' onchange="apSetVatOn(\'' + key + '\', this.checked)"'
+      +     ' style="opacity:0;width:0;height:0">'
+      +   '<span style="position:absolute;inset:0;border-radius:99px;transition:.2s;background:'
+      +     (on ? '#2563EB' : '#475569') + '"></span>'
+      +   '<span style="position:absolute;top:3px;' + (ar ? 'right' : 'left') + ':3px;width:17px;height:17px;'
+      +     'border-radius:50%;background:#fff;transition:.2s;transform:translateX(' + (on ? (ar ? '-19px' : '19px') : '0') + ')"></span>'
+      + '</label>'
+      + '<div style="flex:1;min-width:0">'
+      +   '<div style="font-size:13px;font-weight:700;color:#E2E8F0">' + (ar ? arLbl : en) + '</div>'
+      +   (note ? ('<div style="font-size:11px;color:#94A3B8;margin-top:2px">' + note + '</div>') : '')
+      + '</div></div>';
+  };
+
+  host.innerHTML =
+      '<div style="margin-bottom:18px">'
+    +   '<div style="font-size:19px;font-weight:700;color:#E2E8F0">'
+    +     (ar ? 'إعدادات عروض الأسعار' : 'Quotation settings') + '</div>'
+    +   '<div style="font-size:12px;color:#94A3B8;margin-top:4px">'
+    +     (ar ? 'تسري على العروض الجديدة فوراً. العروض المحفوظة تحتفظ بأرقامها.'
+          : 'Applies to new quotations immediately. Saved quotations keep their figures.')
+    +   '</div></div>'
+
+    + '<div style="background:#1E293B;border:1px solid #334155;border-radius:12px;padding:16px;margin-bottom:18px">'
+    +   '<div style="font-size:13px;font-weight:700;color:#E2E8F0;margin-bottom:4px">'
+    +     (ar ? 'نسبة ضريبة القيمة المضافة' : 'VAT rate') + '</div>'
+    +   '<div style="font-size:11px;color:#94A3B8;margin-bottom:11px">'
+    +     (ar ? 'النسبة النظامية اليوم 15%. غيّرها هنا إن تغيّرت مستقبلاً.'
+          : 'The statutory rate today is 15%. Change it here if it ever moves.') + '</div>'
+    +   '<div style="display:flex;align-items:center;gap:10px">'
+    +     '<input type="number" id="ap-vat-rate" min="0" max="100" step="0.5" value="' + quoteVatPct() + '"'
+    +       ' style="width:120px;padding:10px 12px;border-radius:9px;border:1px solid #334155;background:#0F172A;'
+    +       'color:#E2E8F0;font-size:16px;font-weight:700;font-family:inherit;text-align:center">'
+    +     '<span style="font-size:15px;color:#94A3B8;font-weight:700">%</span>'
+    +     '<button onclick="apSaveVatRate()" style="margin-inline-start:auto;padding:9px 18px;border:none;'
+    +       'border-radius:9px;background:#2563EB;color:#fff;font-size:13px;font-weight:700;cursor:pointer;'
+    +       'font-family:inherit"><i class="ti ti-device-floppy"></i> ' + (ar ? 'حفظ' : 'Save') + '</button>'
+    +   '</div>'
+    + '</div>'
+
+    + '<div style="font-size:13px;font-weight:700;color:#E2E8F0;margin-bottom:4px">'
+    +   (ar ? 'على ماذا تُطبّق الضريبة؟' : 'What is the tax applied to?') + '</div>'
+    + '<div style="font-size:11px;color:#94A3B8;margin-bottom:11px">'
+    +   (ar ? 'أطفئ أي بند لا تريد احتساب ضريبة عليه.' : 'Switch off anything you do not want taxed.') + '</div>'
+    + sw('visit', 'Visit fee', 'أجرة الزيارة', ar ? 'الـ575 = 500 + 75 ضريبة' : '575 = 500 + 75 VAT')
+    + sw('parts', 'Spare parts', 'قطع الغيار',
+         ar ? 'بيع سلع — خاضع للضريبة عادةً' : 'a sale of goods — normally taxable')
+    + sw('travel', 'Travel', 'المواصلات', ar ? 'مطفأة حسب قاعدتك' : 'off, per your rule')
+    + sw('stay', 'Accommodation', 'السكن', ar ? 'مطفأة حسب قاعدتك' : 'off, per your rule')
+
+    + '<div style="background:#0F172A;border:1px solid #334155;border-radius:10px;padding:13px 15px;margin-top:16px">'
+    +   '<div style="font-size:11px;color:#94A3B8;margin-bottom:7px">'
+    +     (ar ? 'مثال على عرض بـ 3,622 ر.س قبل الضريبة' : 'On a quotation of 3,622 SAR before tax') + '</div>'
+    +   '<div id="ap-vat-example" style="font-size:13px;color:#E2E8F0"></div>'
+    + '</div>'
+
+    + '<div style="font-size:11px;color:#64748B;margin-top:14px;line-height:1.7">'
+    +   (ar ? '⚠️ هذي إعدادات محاسبية — راجعها مع محاسبكم. تغييرها يؤثر على كل عرض جديد.'
+          : '⚠️ These are accounting settings — check them with your accountant. They affect every new quotation.')
+    + '</div>';
+
+  apUpdateVatExample();
+}
+
+function apUpdateVatExample(){
+  var el = document.getElementById('ap-vat-example');
+  if(!el) return;
+  var ar = (LNG === 'ar');
+  var sample = { items:[{ price:810, qty:1 }], km:2062, stay:250, city:'Tabuk' };
+  var t = quoteTotals(sample);
+  el.innerHTML = (ar ? 'الضريبة: ' : 'VAT: ') + '<b>' + money(t.vat) + '</b> · '
+    + (ar ? 'الإجمالي: ' : 'Total: ') + '<b>' + money(t.total) + '</b>'
+    + '<div style="font-size:11px;color:#94A3B8;margin-top:3px">' + vatAppliesTo() + '</div>';
+}
+
+async function apSetVatOn(key, on){
+  appSettings['quote_vat_' + key] = on ? 'true' : 'false';
+  var ok = await saveAppSetting('quote_vat_' + key, on ? 'true' : 'false');
+  if(ok === false) return;
+  logActivity('setting', 'quotation VAT', key, null, { taxed: on ? 'yes' : 'no' });
+  apRenderQuoteSettings();
+}
+
+async function apSaveVatRate(){
+  var ar = (LNG === 'ar');
+  var el = document.getElementById('ap-vat-rate');
+  if(!el) return;
+  var v = parseFloat(el.value);
+  if(isNaN(v) || v < 0 || v > 100){
+    alert(ar ? 'اكتب نسبة بين 0 و100.' : 'Enter a rate between 0 and 100.');
+    return;
+  }
+  var before = quoteVatPct();
+  appSettings.quote_vat_rate = String(v);
+  var ok = await saveAppSetting('quote_vat_rate', String(v));
+  if(ok === false) return;
+  logActivity('setting', 'VAT rate', v + '%', { rate: before + '%' }, { rate: v + '%' });
+  apRenderQuoteSettings();
+  alert(ar ? ('✅ صارت نسبة الضريبة ' + v + '%') : ('✅ VAT rate is now ' + v + '%'));
+}
 
 async function apRenderDbCheck(){
   var host = document.getElementById('ap-body');
@@ -14759,9 +14872,7 @@ function printQuotation(){
     +   (local || !t.stay ? '' : row('Accommodation / السكن', t.stay))
     +   row('Visit fee / أجرة الزيارة', t.visit)
     +   row('Subtotal / المجموع', t.sub)
-    +   row('VAT 15% / ضريبة القيمة المضافة', t.vat,
-            quoteVatOnParts() ? 'on the visit and parts / على الزيارة والقطع'
-                              : 'on the visit only / على الزيارة فقط')
+    +   row('VAT ' + quoteVatPct() + '% / ضريبة القيمة المضافة', t.vat, vatAppliesTo())
     +   '<tr class="total"><td>TOTAL / الإجمالي</td><td class="amt">' + money(t.total) + ' SAR</td></tr>'
     + '</table>'
 
@@ -14944,9 +15055,7 @@ function renderQuoteTotals(){
     + line(ar ? 'أجرة الزيارة' : 'Visit fee', t.visit)
     + '<div style="border-top:1px solid #E2E8F0;margin:6px 0"></div>'
     + line(ar ? 'المجموع قبل الضريبة' : 'Subtotal', t.sub)
-    + line(ar ? 'ضريبة القيمة المضافة 15%' : 'VAT 15%', t.vat,
-           quoteVatOnParts() ? (ar ? 'على الزيارة والقطع' : 'on the visit and parts')
-                             : (ar ? 'على الزيارة فقط' : 'on the visit only'))
+    + line((ar ? 'ضريبة القيمة المضافة ' : 'VAT ') + quoteVatPct() + '%', t.vat, vatAppliesTo())
     + '<div style="border-top:2px solid #0F2D52;margin:8px 0 0"></div>'
     + '<div style="display:flex;justify-content:space-between;gap:10px;padding:10px 0 0;font-size:17px;font-weight:800;color:#0F2D52">'
     +   '<span>' + (ar ? 'الإجمالي' : 'Total') + '</span>'
@@ -15502,16 +15611,33 @@ var _qtFilter = 'all';
 var _qd = null;          // the quotation being edited
 
 var QUOTE_VISIT_BASE = 500;      // 575 incl. VAT = 500 + 75
-var QUOTE_VAT = 0.15;
+var QUOTE_VAT_DEFAULT = 15;      // the rate the country is on today
 var QUOTE_KM_RATE = 1;           // 1 SAR per km, his figure
 var QUOTE_STAY_DEFAULT = 250;
 
-function quoteVatOnParts(){
-  // Goods sold in KSA normally carry VAT; he ruled it out only for travel and
-  // accommodation. Left as a setting so his accountant can overrule it.
-  var v = appSettings && appSettings.quote_vat_parts;
-  return (v === undefined || v === null || v === '') ? true : (v === 'true' || v === true);
+// The rate is a setting, not a constant — VAT went 5% → 15% in 2020 and could
+// move again. Everything reads it from here.
+function quoteVatRate(){
+  var v = appSettings && appSettings.quote_vat_rate;
+  var n = parseFloat(v);
+  if(isNaN(n) || n < 0 || n > 100) n = QUOTE_VAT_DEFAULT;
+  return n / 100;
 }
+
+function quoteVatPct(){ return Math.round(quoteVatRate() * 1000) / 10; }
+
+// Each line of a quotation can be taxed or not, on its own switch.
+function quoteVatOn(what){
+  var key = 'quote_vat_' + what;             // visit · parts · travel · stay
+  var v = appSettings && appSettings[key];
+  if(v === undefined || v === null || v === ''){
+    // His rule as first stated: the visit and the parts, never travel or stay
+    return (what === 'visit' || what === 'parts');
+  }
+  return (v === 'true' || v === true);
+}
+
+function quoteVatOnParts(){ return quoteVatOn('parts'); }
 
 function blankQuotation(){
   return { id:null, number:'', client_id:'', client:'', order_id:'', city:'',
@@ -15546,6 +15672,18 @@ function suggestedStay(city){
   return { amount: Number(last.stay), times: seen.length };
 }
 
+
+// Spell out what the tax was applied to, so the customer — and the auditor —
+// can see it from the document itself.
+function vatAppliesTo(){
+  var ar = (LNG === 'ar');
+  var names = { visit: ar ? 'الزيارة' : 'the visit', parts: ar ? 'القطع' : 'parts',
+                travel: ar ? 'المواصلات' : 'travel', stay: ar ? 'السكن' : 'accommodation' };
+  var on = ['visit','parts','travel','stay'].filter(quoteVatOn).map(function(k){ return names[k]; });
+  if(!on.length) return ar ? 'غير مطبقة' : 'not applied';
+  return (ar ? 'على ' : 'on ') + on.join(ar ? ' و' : ', ');
+}
+
 function quoteTotals(q){
   var parts = 0;
   (q.items || []).forEach(function(it){
@@ -15555,8 +15693,13 @@ function quoteTotals(q){
   var stay = Number(q.stay) || 0;
   var visit = QUOTE_VISIT_BASE;
 
-  // VAT on the visit always; on parts by the setting; never on travel or stay.
-  var vat = visit * QUOTE_VAT + (quoteVatOnParts() ? parts * QUOTE_VAT : 0);
+  // Every component is taxed or not on its own switch, at whatever rate the
+  // control panel currently holds.
+  var rate = quoteVatRate();
+  var vat = (quoteVatOn('visit')  ? visit  : 0) * rate
+          + (quoteVatOn('parts')  ? parts  : 0) * rate
+          + (quoteVatOn('travel') ? travel : 0) * rate
+          + (quoteVatOn('stay')   ? stay   : 0) * rate;
 
   var sub = parts + travel + stay + visit;
   return {
