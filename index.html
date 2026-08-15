@@ -643,8 +643,9 @@ html,body{height:100%;overflow:auto;font-family:Tajawal,sans-serif;font-size:14p
 <div id="pg-parts" style="display:none">
   <div class="ph"><div><div class="pt" id="t-parts-pg">Spare Parts</div><div class="ps" id="t-parts-sub">Inventory & movement history</div></div>
     <div style="display:flex;gap:8px">
-      <button class="btn btn-o" id="parts-addinv-btn" onclick="openMod('partModal')"><i class="ti ti-package-import"></i><span id="t-add-inv">Add Inventory</span></button>
-      <button class="btn btn-p" id="parts-new-btn" onclick="openMod('partModal')"><i class="ti ti-plus"></i><span id="t-new-part">New Part</span></button>
+      <button class="btn btn-o" id="parts-findimg-all" onclick="findPhotosForAll()"><i class="ti ti-photo-search"></i><span data-en="Find photos" data-ar="جلب الصور">Find photos</span></button>
+      <button class="btn btn-o" id="parts-addinv-btn" onclick="resetPartForm();openMod('partModal')"><i class="ti ti-package-import"></i><span id="t-add-inv">Add Inventory</span></button>
+      <button class="btn btn-p" id="parts-new-btn" onclick="resetPartForm();openMod('partModal')"><i class="ti ti-plus"></i><span id="t-new-part">New Part</span></button>
       <button class="btn btn-o" id="parts-count-btn" onclick="openStocktake()"><i class="ti ti-clipboard-check"></i> <span data-en="Stocktake" data-ar="جرد المخزون">Stocktake</span></button>
       <button class="btn btn-o" id="parts-export-btn" onclick="exportPartsExcel()"><i class="ti ti-file-download"></i> <span data-en="Export Excel" data-ar="تصدير إكسل">Export Excel</span></button>
       <button class="btn btn-o" id="parts-import-btn" onclick="document.getElementById('parts-import-file').click()"><i class="ti ti-file-spreadsheet"></i> <span data-en="Import Excel" data-ar="استيراد إكسل">Import Excel</span></button>
@@ -982,7 +983,7 @@ html,body{height:100%;overflow:auto;font-family:Tajawal,sans-serif;font-size:14p
 
 <div id="partModal" style="display:none" class="modal">
   <div class="mbox">
-    <div class="mh"><div class="mhtitle">Add Part</div><button class="mclose" onclick="closeMod('partModal')"><i class="ti ti-x"></i></button></div>
+    <div class="mh"><div class="mhtitle" id="partModalTitle">Add Part</div><button class="mclose" onclick="closeMod('partModal')"><i class="ti ti-x"></i></button></div>
     <div class="mb">
       <div class="mg2">
         <div class="field" style="margin-bottom:0"><label data-en="Part Name" data-ar="اسم القطعة">Part Name</label><input type="text" id="ap-name" data-ph-en="Part Name" data-ph-ar="اسم القطعة" placeholder="Part Name"></div>
@@ -11250,6 +11251,13 @@ function renderInvList(q,sf){
       +   ((canManageParts() && stockOwner !== 'all' && canEditStore(stockOwner))
             ? '<button class="rbtn" onclick="quickAdd(' + p.id + ')" title="' + (LNG==='ar'?'إضافة كمية':'Add stock') + '"><i class="ti ti-package-import"></i></button>'
             : '')
+      +   (canManageParts()
+            ? ((!partPhoto(p)
+                  ? '<button class="rbtn" id="findimg-' + p.id + '" onclick="findPhotoForPart(' + p.id + ')" title="'
+                    + (LNG==='ar'?'ابحث عن صورة':'Find a photo') + '" style="color:#1D4E89"><i class="ti ti-photo-search"></i></button>'
+                  : '')
+               + '<button class="rbtn" onclick="editPart(' + p.id + ')" title="' + (LNG==='ar'?'تعديل':'Edit') + '"><i class="ti ti-pencil"></i></button>')
+            : '')
       +   '<button class="rbtn" onclick="showPH(' + p.id + ')" title="' + (LNG==='ar'?'السجل':'History') + '"><i class="ti ti-history"></i></button>'
       +   (curUserRole === 'manager'
             ? '<button class="rbtn" onclick="deletePart(' + p.id + ')" title="' + (LNG==='ar'?'حذف':'Delete') + '" style="color:#C0392B"><i class="ti ti-trash"></i></button>'
@@ -11314,6 +11322,55 @@ function quickAdd(id){
   });
 }
 function showPH(id){switchPTab('hist',document.getElementById('ptab-hist'));renderHistList(partsData.find(function(x){return x.id===id;})||{name:''}.name,'all');}
+
+// ── Editing a part that already exists ───────────────────────────────────
+// There was no way to open a saved part at all, so the photos and costs added
+// later could never be attached to the parts imported before them — which is
+// exactly why the quotation showed no pictures.
+function editPart(id){
+  var p = partsData.find(function(x){ return String(x.id) === String(id); });
+  if(!p) return;
+  if(!canManageParts()){ denyParts(); return; }
+
+  _editingPartId = p.id;
+  var set = function(el, v){ var e = document.getElementById(el); if(e) e.value = (v == null ? '' : v); };
+  set('ap-name', p.name);
+  set('ap-code', p.code);
+  set('ap-name-ar', p.name_ar);
+  set('ap-cat', p.cat);
+  set('ap-unit', p.unit);
+  set('ap-min', p.min);
+  set('ap-sup', (p.supplier === '—' ? '' : p.supplier));
+  set('ap-cost', partCost(p) || '');
+
+  // Quantity belongs to a store and is changed by stocktake, not here
+  var q = document.getElementById('ap-qty');
+  if(q){ q.value = ''; q.disabled = true; q.placeholder = (LNG==='ar') ? 'تُعدَّل بالجرد' : 'changed by stocktake'; }
+
+  _partPhoto = partPhoto(p) || '';
+  showPartPhoto(_partPhoto);
+
+  var t = document.getElementById('partModalTitle');
+  if(t) t.textContent = (LNG==='ar') ? ('تعديل: ' + partName(p)) : ('Editing: ' + (p.name || ''));
+
+  openMod('partModal');
+}
+
+var _editingPartId = null;
+
+function resetPartForm(){
+  _editingPartId = null;
+  ['ap-name','ap-code','ap-name-ar','ap-min','ap-sup','ap-cost','ap-qty'].forEach(function(id){
+    var e = document.getElementById(id);
+    if(e){ e.value = ''; e.disabled = false; }
+  });
+  var q = document.getElementById('ap-qty');
+  if(q) q.placeholder = '0';
+  clearPartPhoto();
+  var t = document.getElementById('partModalTitle');
+  if(t) t.textContent = (LNG==='ar') ? 'إضافة قطعة' : 'Add a part';
+}
+
 async function savePart(){
   if(!canManageParts()){ denyParts(); return; }
   var name=document.getElementById('ap-name').value.trim();
@@ -11350,7 +11407,28 @@ async function savePart(){
     min: min2,
     supplier: document.getElementById('ap-sup').value||'—'
   };
-  var ex=findExistingPart(np);
+  // When editing, the target is the part being edited — not whatever
+  // findExistingPart() happens to match on a renamed part.
+  var ex = _editingPartId
+    ? partsData.find(function(x){ return String(x.id) === String(_editingPartId); })
+    : findExistingPart(np);
+  if(_editingPartId && ex){
+    // An edit replaces the fields outright, including clearing a photo
+    ex.name = np.name; ex.code = np.code; ex.name_ar = np.name_ar;
+    ex.cat = np.cat; ex.unit = np.unit; ex.min = np.min;
+    ex.supplier = np.supplier; ex.cost = np.cost; ex.photo = np.photo;
+    var full = { id: ex.id, name: np.name, code: np.code, name_ar: np.name_ar,
+                 cat: np.cat, unit: np.unit, min: np.min, supplier: np.supplier,
+                 cost: np.cost, photo: np.photo };
+    await dbSave('parts', full);
+    logActivity('update', 'part', (np.code ? np.code + ' — ' : '') + np.name, null,
+                { cost: String(np.cost), photo: np.photo ? 'yes' : 'no' });
+    closeMod('partModal');
+    resetPartForm();
+    renderInvList();
+    alert((LNG==='ar') ? '✅ حُفظت التعديلات.' : '✅ Changes saved.');
+    return;
+  }
   if(ex){
     var updP={id:ex.id};
     if(!ex.code && np.code){ ex.code=np.code; updP.code=np.code; }
@@ -11384,7 +11462,7 @@ async function savePart(){
   }
   closeMod('partModal');
   // The photo is per part — never let it carry into the next one
-  clearPartPhoto();
+  resetPartForm();
   renderInvList();
   alert('✅ Part saved!');
 }
@@ -14701,6 +14779,7 @@ function printQuotation(){
 function renderQuoteParts(){
   var host = document.getElementById('qd-parts');
   if(!host) return;
+
   var ar = (LNG === 'ar');
   var items = _qd.items || [];
 
@@ -14769,6 +14848,7 @@ function openQuotePartPicker(){
 function renderQuotePartPicker(){
   var host = document.getElementById('qp-list');
   if(!host) return;
+
   var ar = (LNG === 'ar');
   var box = document.getElementById('qp-search');
   var q = box ? box.value.trim().toLowerCase() : '';
@@ -14814,7 +14894,7 @@ function addQuotePart(id){
   } else {
     _qd.items.push({
       part_id: p.id, name: p.name, code: p.code || '',
-      photo: partPhoto(p), cost: partCost(p),
+      photo: partPhoto(p), cost: partCost(p),   // filled from the drawing if empty
       // Start from the cost so there's something to adjust, not a blank box
       price: partCost(p) || 0,
       qty: 1
@@ -15091,6 +15171,230 @@ function setQuoteKm(v){
 function setQuoteStay(v){
   _qd.stay = Math.max(0, parseMoney(v));
   renderQuoteTotals();
+}
+
+
+
+// ── Finding part photos automatically ────────────────────────────────────
+// Refrigeration parts are catalogue items sold all over the web, so the
+// picture can be looked up from the part's code and name instead of being
+// typed in one by one. Runs through /api/part-image, which needs a Google
+// search key — when that isn't set up the app says so plainly and nothing
+// else breaks.
+var _imgFetchBusy = false;
+
+async function fetchPartImage(part){
+  try{
+    var res = await fetchWithTimeout('/api/part-image', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ code: part.code || '', name: part.name || '' })
+    }, 40000);
+    var data = await res.json().catch(function(){ return {}; });
+    return data;
+  }catch(e){
+    return { found: false, reason: 'network', message: e.message };
+  }
+}
+
+// Shrink whatever comes back — a supplier's photo can be 2 MB, and these ride
+// along in every quotation, print and email.
+function shrinkDataUrl(src, max, quality){
+  return new Promise(function(resolve){
+    var img = new Image();
+    img.onload = function(){
+      try{
+        var w = img.width, h = img.height, m = max || 600;
+        if(w > h && w > m){ h = Math.round(h * m / w); w = m; }
+        else if(h > m){ w = Math.round(w * m / h); h = m; }
+        var c = document.createElement('canvas');
+        c.width = w; c.height = h;
+        var ctx = c.getContext('2d');
+        ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, w, h);
+        ctx.drawImage(img, 0, 0, w, h);
+        resolve(c.toDataURL('image/jpeg', quality || 0.72));
+      }catch(e){ resolve(src); }
+    };
+    img.onerror = function(){ resolve(''); };
+    img.src = src;
+  });
+}
+
+// Fetch for one part, from its row in the inventory.
+async function findPhotoForPart(id){
+  var ar = (LNG === 'ar');
+  var p = partsData.find(function(x){ return String(x.id) === String(id); });
+  if(!p) return;
+  if(!canManageParts()){ denyParts(); return; }
+
+  var btn = document.getElementById('findimg-' + id);
+  if(btn){ btn.disabled = true; btn.innerHTML = '<i class="ti ti-loader" style="animation:spin 1s linear infinite;display:inline-block"></i>'; }
+
+  var data = await fetchPartImage(p);
+
+  if(btn){ btn.disabled = false; btn.innerHTML = '<i class="ti ti-photo-search"></i>'; }
+
+  if(!data || !data.found){
+    alert((ar ? 'لم يُعثر على صورة.\n\n' : 'No picture was found.\n\n')
+      + (data && data.message ? data.message : ''));
+    return;
+  }
+
+  var small = await shrinkDataUrl(data.image, 600, 0.72);
+  if(!small){ alert(ar ? 'تعذّرت معالجة الصورة.' : 'That image could not be processed.'); return; }
+
+  p.photo = small;
+  try{ await dbSave('parts', { id: p.id, photo: small }); }catch(e){}
+  renderInvList();
+}
+
+// Fetch for every part that has none. Sequential on purpose: the free search
+// quota is 100 a day, and hammering it in parallel just burns it faster.
+async function findPhotosForAll(){
+  var ar = (LNG === 'ar');
+  if(!canManageParts()){ denyParts(); return; }
+  if(_imgFetchBusy) return;
+
+  var missing = partsData.filter(function(p){ return !partPhoto(p); });
+  if(!missing.length){
+    alert(ar ? 'كل القطع لها صور.' : 'Every part already has a picture.');
+    return;
+  }
+
+  var cap = Math.min(missing.length, 40);
+  if(!confirm(ar
+      ? ('البحث عن صور لـ ' + cap + ' قطعة من أصل ' + missing.length + ' بلا صورة.\n\n'
+         + 'يستغرق دقيقة تقريباً، ويستهلك من حصة البحث اليومية المجانية (100 بحث).\n\nمتابعة؟')
+      : ('Look up pictures for ' + cap + ' of the ' + missing.length + ' parts without one.\n\n'
+         + 'It takes about a minute and uses the free daily search quota (100).\n\nContinue?'))) return;
+
+  _imgFetchBusy = true;
+  var found = 0, failed = 0, stopped = '';
+  var btn = document.getElementById('parts-findimg-all');
+  if(btn) btn.disabled = true;
+
+  for(var i = 0; i < cap; i++){
+    var p = missing[i];
+    if(btn) btn.innerHTML = '<i class="ti ti-loader" style="animation:spin 1s linear infinite;display:inline-block"></i> '
+      + (i + 1) + '/' + cap;
+
+    var data = await fetchPartImage(p);
+
+    if(data && data.reason === 'not_configured'){ stopped = data.message; break; }
+    if(data && data.reason === 'quota'){ stopped = data.message; break; }
+
+    if(data && data.found){
+      var small = await shrinkDataUrl(data.image, 600, 0.72);
+      if(small){
+        p.photo = small;
+        try{ await dbSave('parts', { id: p.id, photo: small }); }catch(e){}
+        found++;
+      } else failed++;
+    } else failed++;
+
+    if(i % 5 === 4) renderInvList();
+  }
+
+  _imgFetchBusy = false;
+  if(btn){ btn.disabled = false; btn.innerHTML = '<i class="ti ti-photo-search"></i> '
+    + ((LNG==='ar') ? 'جلب الصور' : 'Find photos'); }
+  renderInvList();
+
+  alert((stopped ? (stopped + '\n\n') : '')
+    + (ar ? ('✅ عُثر على ' + found + ' صورة · تعذّر ' + failed)
+          : ('✅ ' + found + ' found · ' + failed + ' not found')));
+}
+
+// ── Close-ups cut from the exploded drawing ──────────────────────────────
+// He never wanted to upload photos by hand — the close-up should come from the
+// drawing already in the archive. Each archived part carries a marker position
+// as a percentage, so a square around that marker IS the close-up of the part.
+var _cropCache = {};
+
+// Find the archived drawing that lists this part, by CODE first then by name.
+function diagramEntryForPart(part){
+  if(typeof equipmentData === 'undefined' || !equipmentData.length) return null;
+  var code = String((part && part.code) || '').trim().toLowerCase();
+  var name = String((part && part.name) || '').trim().toLowerCase();
+  if(!code && !name) return null;
+
+  for(var i = 0; i < equipmentData.length; i++){
+    var eq = equipmentData[i];
+    if(!eq || !eq.diagramBase64 || !eq.parts) continue;
+    for(var j = 0; j < eq.parts.length; j++){
+      var dp = eq.parts[j];
+      var sp = (typeof splitDiagramPart === 'function') ? splitDiagramPart(dp) : { code:'', name: dp.name };
+      var dCode = String(sp.code || '').trim().toLowerCase();
+      var dName = String(sp.name || '').trim().toLowerCase();
+      if(code && dCode && dCode === code) return { eq: eq, part: dp };
+      if(!code && name && dName && dName === name) return { eq: eq, part: dp };
+    }
+  }
+  return null;
+}
+
+// Cut a square around the marker and return it as a data URL. Async because
+// the drawing has to decode first.
+function cropPartCloseup(part){
+  return new Promise(function(resolve){
+    var key = 'p' + ((part && part.id) || (part && part.code) || '');
+    if(_cropCache[key] !== undefined) return resolve(_cropCache[key]);
+
+    var hit = diagramEntryForPart(part);
+    if(!hit || !hit.part || !hit.part.pos){
+      // No marker placed for this part — nothing to crop, and that's fine
+      _cropCache[key] = '';
+      return resolve('');
+    }
+
+    var img = new Image();
+    img.onload = function(){
+      try{
+        var cx = (hit.part.pos[0] / 100) * img.width;
+        var cy = (hit.part.pos[1] / 100) * img.height;
+        // A window wide enough to show the part in its context, not a pixel
+        var win = Math.round(Math.min(img.width, img.height) * 0.22);
+        win = Math.max(win, 120);
+        var x = Math.max(0, Math.min(img.width  - win, Math.round(cx - win / 2)));
+        var y = Math.max(0, Math.min(img.height - win, Math.round(cy - win / 2)));
+
+        var out = 260;
+        var c = document.createElement('canvas');
+        c.width = out; c.height = out;
+        var ctx = c.getContext('2d');
+        ctx.fillStyle = '#fff';
+        ctx.fillRect(0, 0, out, out);
+        ctx.drawImage(img, x, y, win, win, 0, 0, out, out);
+        var url = c.toDataURL('image/jpeg', 0.75);
+        _cropCache[key] = url;
+        resolve(url);
+      }catch(e){
+        _cropCache[key] = '';
+        resolve('');
+      }
+    };
+    img.onerror = function(){ _cropCache[key] = ''; resolve(''); };
+    img.src = hit.eq.diagramBase64;
+  });
+}
+
+// Fill in any close-up that isn't stored yet, then repaint. Runs once per
+// screen rather than per row, so a long list doesn't decode the same drawing
+// dozens of times.
+async function fillPartCloseups(parts, onDone){
+  if(typeof equipmentData === 'undefined' || !equipmentData.length){
+    try{ await loadEquipmentData(); }catch(e){}
+  }
+  var changed = false;
+  for(var i = 0; i < parts.length; i++){
+    var p = parts[i];
+    if(!p || p.photo || p._noCrop) continue;
+    var url = await cropPartCloseup(p);
+    if(url){ p.photo = url; changed = true; }
+    else { p._noCrop = true; }   // don't retry every repaint
+  }
+  if(changed && typeof onDone === 'function') onDone();
+  return changed;
 }
 
 // ── Quotation state and maths ────────────────────────────────────────────
