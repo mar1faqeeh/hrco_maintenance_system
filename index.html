@@ -26,9 +26,6 @@ html,body{height:100%;overflow:auto;font-family:Tajawal,sans-serif;font-size:14p
 .lgsw{display:flex;background:rgba(255,255,255,.1);border-radius:99px;padding:3px;gap:2px}
 .lbtn{padding:4px 11px;border-radius:99px;font-size:11px;font-weight:700;cursor:pointer;border:none;background:transparent;color:rgba(255,255,255,.6);font-family:inherit}
 .lbtn:hover{color:#fff}
-.notif{background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.15);border-radius:99px;padding:5px 12px;color:#fff;font-size:12px;cursor:pointer;display:flex;align-items:center;gap:5px;font-family:inherit;position:relative}
-.ndot{position:absolute;top:4px;right:6px;width:8px;height:8px;border-radius:50%;background:#E74C3C;border:1.5px solid #0F2D52}
-[dir=ltr] .ndot{right:auto;left:6px}
 .uav{width:32px;height:32px;border-radius:50%;background:#2E7BC4;display:flex;align-items:center;justify-content:center;color:#fff;font-size:13px;font-weight:700;cursor:pointer}
 .ham{display:none;background:none;border:none;color:#fff;font-size:22px;cursor:pointer;padding:4px;font-family:inherit}
 /* Sidebar */
@@ -212,7 +209,6 @@ html,body{height:100%;overflow:auto;font-family:Tajawal,sans-serif;font-size:14p
       </div>
       <button id="adminPanelBtn" onclick="openAdminPanel()" title="لوحة التحكم / Control Panel" style="display:none;align-items:center;gap:6px;background:#7C3AED;color:#fff;border:none;border-radius:8px;padding:7px 12px;cursor:pointer;font-size:12px;font-weight:700;font-family:inherit"><i class="ti ti-shield-lock"></i><span class="grf-label">Control Panel</span></button>
       <button id="globalRefreshBtn" onclick="refreshAll()" title="تحديث البيانات / Refresh data" style="display:flex;align-items:center;gap:6px;background:rgba(255,255,255,.12);color:#fff;border:none;border-radius:8px;padding:7px 12px;cursor:pointer;font-size:12px;font-weight:700;font-family:inherit"><i class="ti ti-refresh" id="globalRefreshIcon"></i><span class="grf-label">Refresh</span></button>
-      <button class="notif"><div class="ndot"></div><i class="ti ti-bell"></i> 3</button>
       <div class="uav" id="uAv" onclick="logout()">M</div>
     </div>
   </div>
