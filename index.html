@@ -2020,6 +2020,20 @@ function canEditChecklists(){
 }
 
 function go(pg){
+  // Hiding a nav entry is not a rule — refuse the page itself too, or a stale
+  // link, a badge, or the browser's history walks straight into it.
+  var _blocked = {
+    salesman:   ['contracts','contract-detail','quotations','quotation-detail','clients','client-orders',
+                 'parts','parts-request','parts-orders','technicians','reports','archive','settings',
+                 'visits','pending','newvisit','signature','checklists'],
+    data_entry: ['contracts','contract-detail','quotations','quotation-detail','parts','parts-request',
+                 'parts-orders','technicians','reports','archive','checklists']
+  };
+  var _deny = _blocked[curUserRole];
+  if(_deny && _deny.indexOf(pg) !== -1){
+    alert(LNG==='ar' ? 'هذه الصفحة ليست ضمن صلاحياتك.' : 'This page is not part of your permissions.');
+    pg = (curUserRole === 'salesman') ? 'maint-requests' : 'dashboard';
+  }
   // Hiding the nav entry is not a rule — refuse the page itself too.
   if(pg === 'checklists' && !canEditChecklists()){
     alert(LNG==='ar' ? 'هذه الصفحة لمدير الصيانة فقط.' : 'This page is for the maintenance manager only.');
@@ -5122,11 +5136,24 @@ function _settingSaveFailed(key, msg){
 }
 
 // Reflect the flags in the main app.
+// A feature flag may only ever TAKE a page away. It must never hand one back:
+// this ran after applyRolePermissions() and wrote display='' unconditionally,
+// which quietly returned Contracts and Quotations to the sales role.
+function _flagNav(id, on){
+  var el = document.getElementById(id);
+  if(!el) return;
+  if(!on){ el.style.display = 'none'; return; }
+  var salesOnly  = (curUserRole === 'salesman');
+  var dataEntry  = (curUserRole === 'data_entry');
+  var allowed = true;
+  if(salesOnly) allowed = (id === 'nav-maint-requests');
+  if(dataEntry) allowed = ['nav-clients','nav-visits','nav-maint-requests'].indexOf(id) !== -1;
+  el.style.display = allowed ? '' : 'none';
+}
+
 function applyFeatureFlags(){
-  var navC = document.getElementById('nav-contracts');
-  if(navC) navC.style.display = featureOn('maintenance_contracts') ? '' : 'none';
-  var navQ = document.getElementById('nav-quotations');
-  if(navQ) navQ.style.display = featureOn('quotations') ? '' : 'none';
+  _flagNav('nav-contracts',  featureOn('maintenance_contracts'));
+  _flagNav('nav-quotations', featureOn('quotations'));
   // A hidden feature must not leave its section heading stranded
   try{ hideEmptyNavSections(); }catch(e){}
 
