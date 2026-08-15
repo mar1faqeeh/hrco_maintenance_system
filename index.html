@@ -231,6 +231,7 @@ html,body{height:100%;overflow:auto;font-family:Tajawal,sans-serif;font-size:14p
 
         <div class="sb-sec" id="sb-clients" data-en="CLIENTS &amp; CONTRACTS" data-ar="العملاء والعقود">CLIENTS &amp; CONTRACTS</div>
         <div class="nav-item" onclick="go('clients')" id="nav-clients"><i class="ti ti-building"></i><span id="t-clients">Clients</span></div>
+        <div class="nav-item" onclick="go('quotations')" id="nav-quotations"><i class="ti ti-file-dollar"></i><span data-en="Quotations" data-ar="عروض الأسعار">Quotations</span></div>
         <div class="nav-item" onclick="go('contracts')" id="nav-contracts"><i class="ti ti-file-certificate"></i><span data-en="Maintenance Contracts" data-ar="عقود الصيانة">Maintenance Contracts</span></div>
 
         <div class="sb-sec" id="sb-wh" data-en="WAREHOUSE" data-ar="المستودع">WAREHOUSE</div>
@@ -1804,6 +1805,9 @@ function lgSuccess(u, restoring){
     try{ loadAppSettings(); }catch(e){}
     try{ loadPartStock().then(function(){ if(typeof renderInvList==='function' && document.getElementById('invList')) renderInvList(); }); }catch(e){}
     try{ setTimeout(updateVisitsBadge, 1200); }catch(e){}
+    try{ loadQuotations().then(function(){
+      if(typeof renderQuotations === 'function' && document.getElementById('qtList')) renderQuotations();
+    }); }catch(e){}
     // The archive has to be in memory before anything can offer a drawing —
     // it used to load only when Parts Request was opened, so an inspection
     // card always reported an empty archive.
@@ -1989,7 +1993,7 @@ function logout(){
 // ══════════════════════════════════════
 // NAVIGATION
 // ══════════════════════════════════════
-var PAGES=['dashboard','visits','pending','newvisit','signature','technicians','parts','parts-request','parts-orders','maint-requests','clients','client-orders','contracts','contract-detail','reports','archive','settings'];
+var PAGES=['dashboard','visits','pending','newvisit','signature','technicians','parts','parts-request','parts-orders','maint-requests','clients','client-orders','contracts','contract-detail','quotations','quotation-detail','reports','archive','settings'];
 function go(pg){
   try{
   PAGES.forEach(function(p){var el=document.getElementById('pg-'+p);if(el){el.style.cssText='display:none';}});
@@ -2019,6 +2023,7 @@ function go(pg){
     if(_ovlEl){ _ovlEl.style.display='none'; _ovlEl.style.pointerEvents='none'; }
   }
   }catch(e){console.log('go() error:',e);}
+  if(pg==='quotations'){ try{ renderQuotations(); }catch(e){} }
   if(pg==='dashboard'){updateDashStats();renderDashTechs();renderDashRecent();renderDashPending();renderPending();
     try{ applyDashboardLayout(); }catch(e){}
     try{ applyCompany(); }catch(e){}}
@@ -5082,6 +5087,8 @@ function _settingSaveFailed(key, msg){
 function applyFeatureFlags(){
   var navC = document.getElementById('nav-contracts');
   if(navC) navC.style.display = featureOn('maintenance_contracts') ? '' : 'none';
+  var navQ = document.getElementById('nav-quotations');
+  if(navQ) navQ.style.display = featureOn('quotations') ? '' : 'none';
   // A hidden feature must not leave its section heading stranded
   try{ hideEmptyNavSections(); }catch(e){}
 
@@ -10183,6 +10190,104 @@ function partThumb(p, size){
     + '<i class="ti ti-photo" style="color:#CBD5E1;font-size:' + Math.round(sz*0.45) + 'px"></i></div>';
 }
 
+
+// ══════════════════════════════════════
+// QUOTATIONS
+// For INDIVIDUAL visits only — never contracts, he was explicit about that.
+// ══════════════════════════════════════
+
+// The two service centres. Work in these cities, and in the towns tied to them
+// below, is charged as local: no travel, no accommodation.
+var QUOTE_CENTRES = [
+  { key:'jeddah', en:'Jeddah', ar:'جدة',  lat:21.4858, lng:39.1925, local:['mecca','makkah','مكة','مكة المكرمة'] },
+  { key:'riyadh', en:'Riyadh', ar:'الرياض', lat:24.7136, lng:46.6753, local:['al kharj','alkharj','kharj','الخرج'] }
+];
+
+// Straight-line distance underestimates a drive, so it's scaled. 1.27 was
+// chosen because it puts Jeddah→Tabuk at ~1000 km, which is the figure he
+// used in his own worked example.
+var ROAD_FACTOR = 1.27;
+
+// Coordinates for the cities a job actually reaches. Anything not listed falls
+// back to typing the distance in by hand.
+var CITY_COORDS = {
+  'riyadh':[24.7136,46.6753], 'jeddah':[21.4858,39.1925], 'mecca':[21.3891,39.8579],
+  'makkah':[21.3891,39.8579], 'medina':[24.5247,39.5692], 'madinah':[24.5247,39.5692],
+  'dammam':[26.4207,50.0888], 'khobar':[26.2172,50.1971], 'dhahran':[26.2361,50.0393],
+  'jubail':[27.0046,49.6461], 'qatif':[26.5196,49.9962], 'hofuf':[25.3647,49.5877],
+  'ahsa':[25.3647,49.5877], 'hasa':[25.3647,49.5877], 'taif':[21.4373,40.5127],
+  'tabuk':[28.3838,36.5550], 'buraidah':[26.3260,43.9750], 'buraydah':[26.3260,43.9750],
+  'unaizah':[26.0843,43.9935], 'hail':[27.5114,41.7208], 'abha':[18.2164,42.5053],
+  'khamis mushait':[18.3060,42.7297], 'khamis':[18.3060,42.7297], 'jazan':[16.8892,42.5511],
+  'jizan':[16.8892,42.5511], 'najran':[17.4924,44.1277], 'bisha':[19.9764,42.6008],
+  'sakaka':[29.9697,40.2064], 'arar':[30.9753,41.0381], 'qurayyat':[31.3318,37.3428],
+  'yanbu':[24.0895,38.0618], 'rabigh':[22.7986,39.0349], 'kharj':[24.1483,47.3050],
+  'al kharj':[24.1483,47.3050], 'kharj ':[24.1483,47.3050], 'dawadmi':[24.5074,44.3925],
+  'zulfi':[26.2994,44.8144], 'majmaah':[25.9039,45.3450], 'shaqra':[25.2450,45.2540],
+  'afif':[23.9065,42.9170], 'wadi al dawasir':[20.4900,44.7900], 'sharurah':[17.4833,47.1167],
+  'baha':[20.0129,41.4677], 'al baha':[20.0129,41.4677], 'qunfudhah':[19.1264,41.0789],
+  'lith':[20.1500,40.2667], 'duba':[27.3493,35.6961], 'umluj':[25.0213,37.2685],
+  'wajh':[26.2465,36.4649], 'haql':[29.2833,34.9333], 'turaif':[31.6725,38.6637],
+  'rafha':[29.6202,43.4939], 'hafar al batin':[28.4326,45.9636], 'hafr albatin':[28.4326,45.9636],
+  'khafji':[28.4189,48.4917], 'nairyah':[27.4667,48.4833], 'ras tanura':[26.6558,50.1647],
+  'abqaiq':[25.9333,49.6667], 'buqayq':[25.9333,49.6667]
+};
+
+function normCityKey(name){
+  var t = String(name || '').trim().toLowerCase();
+  if(!t) return '';
+  // Match the Arabic name through the existing city list, which knows both
+  if(typeof findCity === 'function'){
+    try{
+      var hit = findCity(t);
+      if(hit && hit[1]) t = String(hit[1]).toLowerCase();
+    }catch(e){}
+  }
+  return t.replace(/^(al|el)[\s-]+/, '').replace(/[^a-z\s]/g, '').replace(/\s+/g, ' ').trim();
+}
+
+function cityCoords(name){
+  var k = normCityKey(name);
+  if(!k) return null;
+  if(CITY_COORDS[k]) return CITY_COORDS[k];
+  // A near match beats nothing: "khamis mushait" vs "khamis"
+  var keys = Object.keys(CITY_COORDS);
+  var partial = keys.find(function(x){ return x.indexOf(k) === 0 || k.indexOf(x) === 0; });
+  return partial ? CITY_COORDS[partial] : null;
+}
+
+function haversineKm(a, b){
+  var R = 6371, toRad = function(d){ return d * Math.PI / 180; };
+  var dLat = toRad(b[0] - a[0]), dLng = toRad(b[1] - a[1]);
+  var s = Math.sin(dLat/2) * Math.sin(dLat/2)
+        + Math.cos(toRad(a[0])) * Math.cos(toRad(b[0])) * Math.sin(dLng/2) * Math.sin(dLng/2);
+  return 2 * R * Math.asin(Math.sqrt(s));
+}
+
+// Which centre serves this city, and how far one way. Returns null when the
+// city isn't on the map — the form then asks for the distance directly.
+function nearestCentre(cityName){
+  var k = normCityKey(cityName);
+  if(!k) return null;
+
+  // Local towns first: Mecca is Jeddah's, Al-Kharj is Riyadh's
+  for(var i = 0; i < QUOTE_CENTRES.length; i++){
+    var c = QUOTE_CENTRES[i];
+    if(c.key === k || normCityKey(c.en) === k) return { centre: c, km: 0, local: true };
+    if(c.local.some(function(x){ return normCityKey(x) === k; })) return { centre: c, km: 0, local: true };
+  }
+
+  var co = cityCoords(cityName);
+  if(!co) return null;
+
+  var best = null;
+  QUOTE_CENTRES.forEach(function(c){
+    var km = Math.round(haversineKm([c.lat, c.lng], co) * ROAD_FACTOR);
+    if(!best || km < best.km) best = { centre: c, km: km, local: false };
+  });
+  return best;
+}
+
 var _partsImport = [];
 
 // Accept the unit however it was written — English, Arabic, or a short form.
@@ -14387,6 +14492,677 @@ function companyShortSlug(){
   return String(company('short') || 'Company').replace(/[^\w-]/g, '') || 'Company';
 }
 
+
+
+
+
+// ── Saving, loading, printing ────────────────────────────────────────────
+async function saveQuotation(){
+  var ar = (LNG === 'ar');
+  if(!_qd) return;
+
+  _qd.status = (document.getElementById('qd-status') || {}).value || 'draft';
+  _qd.notes  = (document.getElementById('qd-notes')  || {}).value || '';
+  _qd.city   = (document.getElementById('qd-city')   || {}).value || '';
+
+  if(!_qd.client_id){
+    alert(ar ? 'اختر العميل.' : 'Please choose a client.');
+    return;
+  }
+  if(!_qd.city){
+    alert(ar ? 'اكتب المدينة — منها يُحسب السفر.' : 'Please enter the city — the travel is worked out from it.');
+    return;
+  }
+
+  var missing = (_qd.items || []).filter(function(it){ return !(Number(it.price) > 0); });
+  if(missing.length){
+    if(!confirm(ar ? (missing.length + ' قطعة بلا سعر. متابعة؟')
+                   : (missing.length + ' part(s) have no price. Continue?'))) return;
+  }
+
+  var payload = {
+    number: _qd.number, client_id: _qd.client_id, client: _qd.client,
+    order_id: _qd.order_id || null, city: _qd.city, centre: _qd.centre || '',
+    km: Number(_qd.km) || 0, stay: Number(_qd.stay) || 0,
+    items: JSON.stringify(_qd.items || []),
+    notes: _qd.notes, status: _qd.status, date: _qd.date,
+    total: quoteTotals(_qd).total
+  };
+  if(_qd.id) payload.id = _qd.id;
+
+  var res;
+  try{ res = await dbSave('quotations', payload); }
+  catch(e){ alert((ar ? 'تعذّر الحفظ: ' : 'Could not save: ') + e.message); return; }
+
+  if(!res || !res.length){
+    alert(ar ? 'لم يُحفظ العرض في قاعدة البيانات.\nشغّل ملف quotations_table.sql.'
+             : 'The quotation was NOT saved.\nRun quotations_table.sql.');
+    return;
+  }
+
+  _qd.id = res[0].id;
+  var merged = Object.assign({}, _qd);
+  var existing = quotationsData.find(function(x){ return String(x.id) === String(_qd.id); });
+  if(existing) Object.assign(existing, merged);
+  else quotationsData.unshift(merged);
+
+  logActivity(payload.id ? 'update' : 'create', 'quotation', _qd.number,
+              null, { client: _qd.client, total: String(payload.total), status: _qd.status });
+
+  alert(ar ? ('✅ حُفظ العرض ' + _qd.number) : ('✅ Quotation ' + _qd.number + ' saved'));
+  go('quotations');
+  renderQuotations();
+}
+
+async function deleteQuotation(id){
+  var ar = (LNG === 'ar');
+  var q = quotationsData.find(function(x){ return String(x.id) === String(id); });
+  if(!q) return;
+  if(!confirm(ar ? ('حذف العرض ' + (q.number || '') + '؟') : ('Delete quotation ' + (q.number || '') + '?'))) return;
+
+  if(_initSb()){
+    try{
+      var r = await _sb.from('quotations').delete().eq('id', id).select();
+      if(r.error){ alert((ar ? 'فشل الحذف: ' : 'Delete failed: ') + r.error.message); return; }
+    }catch(e){ alert((ar ? 'فشل الحذف: ' : 'Delete failed: ') + e.message); return; }
+  }
+  quotationsData = quotationsData.filter(function(x){ return String(x.id) !== String(id); });
+  logActivity('delete', 'quotation', q.number, null, null);
+  renderQuotations();
+}
+
+async function loadQuotations(){
+  if(!_initSb()) return;
+  try{
+    var r = await _sb.from('quotations').select('*').order('id', { ascending:false }).limit(300);
+    if(r.error){ console.log('loadQuotations:', r.error.message); return; }
+    if(r.data){
+      quotationsData = r.data.map(function(q){
+        var out = Object.assign({}, q);
+        out.items = asList(q.items);      // text column → list
+        return out;
+      });
+    }
+  }catch(e){ console.log('loadQuotations:', e); }
+}
+
+function printQuotation(){
+  var ar = (LNG === 'ar');
+  if(!_qd || !_qd.client_id){
+    alert(ar ? 'اختر العميل أولاً.' : 'Choose a client first.');
+    return;
+  }
+  var t = quoteTotals(_qd);
+  var esc = function(v){ return String(v==null?'':v).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); };
+  var local = (Number(_qd.km) || 0) === 0;
+  var orderName = orderNameOf(_qd.order_id);
+
+  var slug = function(x){
+    var v = String(x == null ? '' : x);
+    var latin = v.replace(/[^A-Za-z0-9]+/g, '');
+    if(!latin && /[\u0600-\u06FF]/.test(v) && typeof translit === 'function'){
+      try{ latin = translit(v).replace(/[^A-Za-z0-9]+/g, ''); }catch(e){}
+    }
+    return latin.slice(0, 24);
+  };
+  var fileName = (_qd.number || 'Quotation') + '_' + (slug(_qd.client) || 'Client');
+
+  var row = function(label, val, note){
+    return '<tr><td class="lbl">' + label
+      + (note ? ('<div class="note">' + note + '</div>') : '') + '</td>'
+      + '<td class="amt">' + money(val) + '</td></tr>';
+  };
+
+  var html = '<!DOCTYPE html><html dir="ltr"><head><meta charset="UTF-8">'
+    + '<title>' + fileName + '</title><style>'
+    + '*{margin:0;padding:0;box-sizing:border-box}'
+    + 'body{font-family:Tajawal,Arial,sans-serif;color:#1a202c;background:#fff;direction:ltr;font-size:13px}'
+    + '.page{width:210mm;min-height:297mm;margin:0 auto;display:flex;flex-direction:column}'
+    + '.body{flex:1;padding:0 16mm}'
+    + 'h1{font-size:18px;font-weight:800;color:#0F2D52}'
+    + '.h-ar{font-size:13px;color:#718096;margin-top:2px}'
+    + '.meta{width:100%;border-collapse:collapse;margin:14px 0 18px}'
+    + '.meta td{border:1px solid #D9E2EC;padding:7px 10px;font-size:12px}'
+    + '.meta .k{background:#F8FAFC;color:#4A5568;font-weight:700;width:26%}'
+    + 'table.items{width:100%;border-collapse:collapse;margin-bottom:16px}'
+    + 'table.items th{background:#0F2D52;color:#fff;padding:8px 10px;font-size:11px;text-align:start}'
+    + 'table.items td{border-bottom:1px solid #E2E8F0;padding:8px 10px;font-size:12px;vertical-align:middle}'
+    + 'table.items img{width:52px;height:52px;object-fit:cover;border-radius:6px;border:1px solid #E2E8F0;display:block}'
+    + '.sum{width:62%;margin-inline-start:auto;border-collapse:collapse}'
+    + '.sum td{padding:7px 10px;font-size:13px}'
+    + '.sum .lbl{color:#4A5568}'
+    + '.sum .amt{text-align:end;font-weight:700;white-space:nowrap}'
+    + '.sum .note{font-size:10px;color:#A0AEC0;font-weight:400}'
+    + '.sum tr.total td{border-top:2px solid #0F2D52;font-size:16px;font-weight:800;color:#0F2D52;padding-top:10px}'
+    + '.notes{margin-top:18px;background:#F8FAFC;border:1px solid #E2E8F0;border-radius:8px;padding:11px 13px;font-size:12px;line-height:1.7;white-space:pre-wrap}'
+    + '.sign{display:flex;gap:40px;margin-top:30px;font-size:11px;color:#4A5568}'
+    + '.sign div{flex:1;border-top:1px solid #A0AEC0;padding-top:7px}'
+    + printHeadStyle()
+    + '@media print{body{-webkit-print-color-adjust:exact;print-color-adjust:exact}}'
+    + '</style></head><body><div class="page">'
+    + printHeaderHtml('quote')
+    + '<div class="body">'
+    + '<h1>Quotation</h1><div class="h-ar">عرض سعر</div>'
+
+    + '<table class="meta">'
+    +   '<tr><td class="k">Quotation No. / رقم العرض</td><td><b>' + esc(_qd.number) + '</b></td>'
+    +       '<td class="k">Date / التاريخ</td><td>' + esc(_qd.date) + '</td></tr>'
+    +   '<tr><td class="k">Client / العميل</td><td colspan="3"><b>' + esc(_qd.client) + '</b>'
+    +       (orderName ? (' — ' + esc(orderName)) : '') + '</td></tr>'
+    +   '<tr><td class="k">City / المدينة</td><td>' + esc(_qd.city) + '</td>'
+    +       '<td class="k">Validity / الصلاحية</td><td>30 days / يوماً</td></tr>'
+    + '</table>'
+
+    + ((_qd.items && _qd.items.length)
+        ? ('<table class="items"><thead><tr>'
+           + '<th style="width:64px"></th><th>Part / القطعة</th>'
+           + '<th style="width:70px">Qty</th><th style="width:90px">Price</th><th style="width:100px">Total</th>'
+           + '</tr></thead><tbody>'
+           + _qd.items.map(function(it){
+               var p = partsData.find(function(x){ return String(x.id) === String(it.part_id); });
+               var img = it.photo || partPhoto(p);
+               return '<tr>'
+                 + '<td>' + (img ? '<img src="' + img + '" alt="">' : '') + '</td>'
+                 + '<td><b>' + esc(it.name) + '</b>'
+                 +   (it.code ? ('<div style="font-size:10px;color:#718096">' + esc(it.code) + '</div>') : '') + '</td>'
+                 + '<td>' + (it.qty || 1) + '</td>'
+                 + '<td>' + money(it.price) + '</td>'
+                 + '<td><b>' + money((Number(it.price)||0) * (Number(it.qty)||0)) + '</b></td>'
+                 + '</tr>';
+             }).join('')
+           + '</tbody></table>')
+        : '')
+
+    + '<table class="sum">'
+    +   ((t.parts > 0) ? row('Spare parts / قطع الغيار', t.parts) : '')
+    +   (local ? '' : row('Travel / المواصلات', t.travel, (Number(_qd.km)||0) + ' km × 1 SAR'))
+    +   (local || !t.stay ? '' : row('Accommodation / السكن', t.stay))
+    +   row('Visit fee / أجرة الزيارة', t.visit)
+    +   row('Subtotal / المجموع', t.sub)
+    +   row('VAT 15% / ضريبة القيمة المضافة', t.vat,
+            quoteVatOnParts() ? 'on the visit and parts / على الزيارة والقطع'
+                              : 'on the visit only / على الزيارة فقط')
+    +   '<tr class="total"><td>TOTAL / الإجمالي</td><td class="amt">' + money(t.total) + ' SAR</td></tr>'
+    + '</table>'
+
+    + (_qd.notes ? ('<div class="notes">' + esc(_qd.notes) + '</div>') : '')
+    + '<div class="sign"><div>Prepared by / أعدّه</div><div>Customer approval / موافقة العميل</div></div>'
+    + '</div>'
+    + printFooterHtml('quote')
+    + '</div></body></html>';
+
+  var w = window.open('', '_blank');
+  if(!w){ alert(ar ? 'المتصفح منع فتح نافذة الطباعة.' : 'The browser blocked the print window.'); return; }
+  w.document.open(); w.document.write(html); w.document.close();
+  setTimeout(function(){ try{ w.focus(); w.print(); }catch(e){} }, 500);
+}
+
+// ── Parts on a quotation ─────────────────────────────────────────────────
+function renderQuoteParts(){
+  var host = document.getElementById('qd-parts');
+  if(!host) return;
+  var ar = (LNG === 'ar');
+  var items = _qd.items || [];
+
+  if(!items.length){
+    host.innerHTML = '<div style="padding:26px;text-align:center;color:#A0AEC0;font-size:13px">'
+      + (ar ? 'لا توجد قطع — أضف من الكتالوج، أو اترك العرض للزيارة فقط.'
+            : 'No parts yet — add from the catalogue, or quote the visit alone.') + '</div>';
+    return;
+  }
+
+  host.innerHTML =
+      '<div class="thd" style="grid-template-columns:52px 1.7fr 90px 110px 110px 46px">'
+    +   '<div></div><div>' + (ar ? 'القطعة' : 'Part') + '</div>'
+    +   '<div>' + (ar ? 'الكمية' : 'Qty') + '</div>'
+    +   '<div>' + (ar ? 'السعر' : 'Price') + '</div>'
+    +   '<div>' + (ar ? 'الإجمالي' : 'Total') + '</div><div></div></div>'
+    + items.map(function(it, i){
+        var p = partsData.find(function(x){ return String(x.id) === String(it.part_id); });
+        var line = (Number(it.price) || 0) * (Number(it.qty) || 0);
+        var cost = Number(it.cost) || 0;
+        var margin = (Number(it.price) || 0) - cost;
+        return '<div class="trow" style="grid-template-columns:52px 1.7fr 90px 110px 110px 46px;align-items:center">'
+          + '<div>' + partThumb(p || it, 40) + '</div>'
+          + '<div class="tc"><div style="font-weight:600"><bdi>' + (it.name || '') + '</bdi></div>'
+          +   (it.code ? '<div class="tc2" dir="ltr">' + it.code + '</div>' : '')
+          +   (cost > 0
+                ? ('<div style="font-size:10px;color:' + (margin >= 0 ? '#2D7D3A' : '#C0392B') + '">'
+                   + (ar ? 'التكلفة ' : 'cost ') + money(cost)
+                   + ' · ' + (ar ? 'الهامش ' : 'margin ') + money(margin) + '</div>')
+                : '')
+          + '</div>'
+          + '<div><input type="number" min="1" step="1" value="' + (it.qty || 1) + '" onchange="setQuoteItemQty(' + i + ',this.value)"'
+          +   ' style="width:70px;padding:6px 8px;border:1.5px solid #D9E2EC;border-radius:7px;font-size:13px;font-family:inherit"></div>'
+          + '<div><input type="number" min="0" step="0.01" value="' + (Number(it.price) || 0) + '" onchange="setQuoteItemPrice(' + i + ',this.value)"'
+          +   ' style="width:96px;padding:6px 8px;border:1.5px solid #D9E2EC;border-radius:7px;font-size:13px;font-family:inherit;font-weight:700"></div>'
+          + '<div class="tc" style="font-weight:700">' + money(line) + '</div>'
+          + '<div><button class="rbtn" onclick="removeQuoteItem(' + i + ')" style="color:#C0392B"><i class="ti ti-trash"></i></button></div>'
+          + '</div>';
+      }).join('');
+}
+
+function setQuoteItemQty(i, v){
+  if(!_qd.items[i]) return;
+  _qd.items[i].qty = Math.max(1, parseInt(v, 10) || 1);
+  renderQuoteParts(); renderQuoteTotals();
+}
+
+function setQuoteItemPrice(i, v){
+  if(!_qd.items[i]) return;
+  _qd.items[i].price = parseMoney(v);
+  renderQuoteParts(); renderQuoteTotals();
+}
+
+function removeQuoteItem(i){
+  _qd.items.splice(i, 1);
+  renderQuoteParts(); renderQuoteTotals();
+}
+
+function openQuotePartPicker(){
+  var b = document.getElementById('qp-search');
+  if(b) b.value = '';
+  renderQuotePartPicker();
+  openMod('quotePartModal');
+}
+
+function renderQuotePartPicker(){
+  var host = document.getElementById('qp-list');
+  if(!host) return;
+  var ar = (LNG === 'ar');
+  var box = document.getElementById('qp-search');
+  var q = box ? box.value.trim().toLowerCase() : '';
+
+  var rows = partsData.filter(function(p){
+    if(!q) return true;
+    var arName = partName(p);
+    return (String(p.name||'') + ' ' + String(p.code||'') + ' ' + arName).toLowerCase().indexOf(q) !== -1;
+  }).slice(0, 60);
+
+  if(!rows.length){
+    host.innerHTML = '<div style="padding:26px;text-align:center;color:#A0AEC0;font-size:12px">'
+      + (ar ? 'لا توجد نتائج' : 'Nothing found') + '</div>';
+    return;
+  }
+
+  host.innerHTML = rows.map(function(p){
+    return '<div onclick="addQuotePart(' + p.id + ')" style="display:flex;align-items:center;gap:11px;'
+      + 'padding:10px 14px;border-bottom:1px solid #F0F4F8;cursor:pointer">'
+      + partThumb(p, 42)
+      + '<div style="flex:1;min-width:0">'
+      +   '<div style="font-size:13px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"><bdi>' + partName(p) + '</bdi></div>'
+      +   (p.code ? '<div style="font-size:11px;color:#1D4E89;font-weight:600" dir="ltr">' + p.code + '</div>' : '')
+      + '</div>'
+      + '<div style="text-align:end;white-space:nowrap">'
+      +   (partCost(p) > 0
+            ? '<div style="font-size:12px;color:#718096">' + (ar ? 'التكلفة ' : 'cost ') + money(partCost(p)) + '</div>'
+            : '<div style="font-size:11px;color:#C4680A">' + (ar ? 'بلا تكلفة' : 'no cost') + '</div>')
+      + '</div>'
+      + '<i class="ti ti-plus" style="color:#1D4E89"></i>'
+      + '</div>';
+  }).join('');
+}
+
+function addQuotePart(id){
+  var p = partsData.find(function(x){ return String(x.id) === String(id); });
+  if(!p) return;
+  _qd.items = _qd.items || [];
+
+  var already = _qd.items.find(function(x){ return String(x.part_id) === String(p.id); });
+  if(already){
+    already.qty = (Number(already.qty) || 1) + 1;
+  } else {
+    _qd.items.push({
+      part_id: p.id, name: p.name, code: p.code || '',
+      photo: partPhoto(p), cost: partCost(p),
+      // Start from the cost so there's something to adjust, not a blank box
+      price: partCost(p) || 0,
+      qty: 1
+    });
+  }
+  closeMod('quotePartModal');
+  renderQuoteParts();
+  renderQuoteTotals();
+}
+
+// ── Totals ───────────────────────────────────────────────────────────────
+function renderQuoteTotals(){
+  var host = document.getElementById('qd-totals');
+  if(!host) return;
+  var ar = (LNG === 'ar');
+  var t = quoteTotals(_qd);
+  var hint = suggestedStay(_qd.city);
+  var local = (Number(_qd.km) || 0) === 0;
+
+  var line = function(label, val, note){
+    return '<div style="display:flex;justify-content:space-between;gap:10px;padding:7px 0;font-size:13px">'
+      + '<span style="color:#4A5568">' + label
+      +   (note ? ('<span style="color:#A0AEC0;font-size:11px"> ' + note + '</span>') : '') + '</span>'
+      + '<span style="font-weight:600;white-space:nowrap">' + money(val) + '</span></div>';
+  };
+
+  host.innerHTML =
+      (t.parts > 0 ? line(ar ? 'قطع الغيار' : 'Spare parts', t.parts) : '')
+    + (local
+        ? '<div style="font-size:12px;color:#2D7D3A;padding:7px 0"><i class="ti ti-map-pin-check"></i> '
+          + (ar ? 'ضمن النطاق المحلي — بلا مواصلات أو سكن' : 'Local — no travel or accommodation') + '</div>'
+        : line(ar ? 'المواصلات' : 'Travel', t.travel,
+               (Number(_qd.km) || 0) + (ar ? ' كم × 1 ر.س' : ' km × 1 SAR')))
+
+    + (local ? '' :
+        '<div style="display:flex;justify-content:space-between;gap:10px;align-items:center;padding:7px 0;font-size:13px">'
+        + '<span style="color:#4A5568">' + (ar ? 'السكن' : 'Accommodation')
+        +   (hint ? ('<span style="color:#C4680A;font-size:11px"> 💡 '
+              + (ar ? ('آخر مرة هنا: ' + money(hint.amount)) : ('last time here: ' + money(hint.amount))) + '</span>') : '')
+        + '</span>'
+        + '<input type="number" min="0" step="1" value="' + (Number(_qd.stay) || 0) + '" onchange="setQuoteStay(this.value)"'
+        +   ' style="width:100px;padding:6px 9px;border:1.5px solid #D9E2EC;border-radius:7px;font-size:13px;'
+        +   'font-family:inherit;font-weight:600;text-align:end"></div>')
+
+    + line(ar ? 'أجرة الزيارة' : 'Visit fee', t.visit)
+    + '<div style="border-top:1px solid #E2E8F0;margin:6px 0"></div>'
+    + line(ar ? 'المجموع قبل الضريبة' : 'Subtotal', t.sub)
+    + line(ar ? 'ضريبة القيمة المضافة 15%' : 'VAT 15%', t.vat,
+           quoteVatOnParts() ? (ar ? 'على الزيارة والقطع' : 'on the visit and parts')
+                             : (ar ? 'على الزيارة فقط' : 'on the visit only'))
+    + '<div style="border-top:2px solid #0F2D52;margin:8px 0 0"></div>'
+    + '<div style="display:flex;justify-content:space-between;gap:10px;padding:10px 0 0;font-size:17px;font-weight:800;color:#0F2D52">'
+    +   '<span>' + (ar ? 'الإجمالي' : 'Total') + '</span>'
+    +   '<span>' + money(t.total) + ' <span style="font-size:12px;font-weight:600;color:#718096">'
+    +     (ar ? 'ر.س' : 'SAR') + '</span></span></div>';
+}
+
+// ── Quotation screens ────────────────────────────────────────────────────
+function setQtFilter(f, btn){
+  _qtFilter = f;
+  document.querySelectorAll('#pg-quotations .ftab').forEach(function(x){
+    x.style.background = ''; x.style.color = '#718096'; x.style.borderColor = '#D9E2EC';
+  });
+  if(btn){ btn.style.background = '#1D4E89'; btn.style.color = '#fff'; btn.style.borderColor = '#1D4E89'; }
+  renderQuotations();
+}
+
+function quoteStatusChip(st){
+  var ar = (LNG === 'ar');
+  var m = {
+    draft:    { en:'Draft',    ar:'مسودة',  bg:'#F1F5F9', fg:'#64748B' },
+    sent:     { en:'Sent',     ar:'مُرسل',  bg:'#E6F1FB', fg:'#1D4E89' },
+    accepted: { en:'Accepted', ar:'مقبول',  bg:'#E7F6EC', fg:'#2D7D3A' },
+    rejected: { en:'Rejected', ar:'مرفوض',  bg:'#FCEBEB', fg:'#C0392B' }
+  }[st || 'draft'] || { en:st, ar:st, bg:'#F1F5F9', fg:'#64748B' };
+  return '<span style="background:' + m.bg + ';color:' + m.fg + ';font-size:11px;font-weight:700;'
+    + 'padding:3px 11px;border-radius:99px;white-space:nowrap">' + (ar ? m.ar : m.en) + '</span>';
+}
+
+function renderQuotations(){
+  var el = document.getElementById('qtList');
+  if(!el) return;
+  var ar = (LNG === 'ar');
+  var box = document.getElementById('qtSearch');
+  var q = box ? box.value.trim().toLowerCase() : '';
+
+  var rows = quotationsData.filter(function(x){
+    if(_qtFilter !== 'all' && (x.status || 'draft') !== _qtFilter) return false;
+    if(!q) return true;
+    return (String(x.number||'') + ' ' + String(x.client||'') + ' ' + String(x.city||'') + ' '
+            + orderNameOf(x.order_id)).toLowerCase().indexOf(q) !== -1;
+  }).sort(function(a,b){ return String(b.number||'').localeCompare(String(a.number||'')); });
+
+  if(!rows.length){
+    el.innerHTML = '<div style="padding:34px;text-align:center;color:#A0AEC0;font-size:13px">'
+      + '<i class="ti ti-file-dollar" style="font-size:30px;display:block;margin-bottom:10px;color:#CBD5E1"></i>'
+      + (ar ? 'لا توجد عروض بعد' : 'No quotations yet') + '</div>';
+    return;
+  }
+
+  el.innerHTML = '';
+  rows.forEach(function(x){
+    var t = quoteTotals(x);
+    var row = document.createElement('div');
+    row.className = 'trow';
+    row.style.gridTemplateColumns = '130px 1.6fr 1fr 1fr 110px 110px';
+    row.style.cursor = 'pointer';
+    row.onclick = function(){ openQuotation(x.id); };
+    row.innerHTML =
+        '<div class="tc" style="font-weight:700;color:#1D4E89" dir="ltr">' + (x.number || '—') + '</div>'
+      + '<div class="tc"><div style="font-weight:500">' + clientOrderLabel(x.client, x.order_id) + '</div>'
+      +   '<div class="tc2">' + (x.date || '') + '</div></div>'
+      + '<div class="tc2">' + (x.city || '—') + '</div>'
+      + '<div class="tc" style="font-weight:700">' + money(t.total)
+      +   '<span class="tc2"> ' + (ar ? 'ر.س' : 'SAR') + '</span></div>'
+      + '<div class="tc">' + quoteStatusChip(x.status) + '</div>'
+      + '<div style="display:flex;gap:4px">'
+      +   '<button class="rbtn" onclick="event.stopPropagation();openQuotation(' + x.id + ')" title="' + (ar?'فتح':'Open') + '"><i class="ti ti-eye"></i></button>'
+      +   '<button class="rbtn" onclick="event.stopPropagation();deleteQuotation(' + x.id + ')" title="' + (ar?'حذف':'Delete') + '" style="color:#C0392B"><i class="ti ti-trash"></i></button>'
+      + '</div>';
+    el.appendChild(row);
+  });
+}
+
+function newQuotation(){
+  _qd = blankQuotation();
+  _qd.number = nextQuoteNumber();
+  go('quotation-detail');
+  renderQuoteDetail();
+}
+
+function openQuotation(id){
+  var q = quotationsData.find(function(x){ return String(x.id) === String(id); });
+  if(!q) return;
+  _qd = JSON.parse(JSON.stringify(q));     // edit a copy; Save commits it
+  _qd.items = asList(_qd.items);
+  go('quotation-detail');
+  renderQuoteDetail();
+}
+
+function renderQuoteDetail(){
+  if(!_qd) return;
+  var ar = (LNG === 'ar');
+
+  var t = document.getElementById('qd-title');
+  if(t) t.textContent = _qd.number || (ar ? 'عرض سعر' : 'Quotation');
+  var sub = document.getElementById('qd-sub');
+  if(sub) sub.textContent = _qd.date || '';
+
+  // client list
+  var cs = document.getElementById('qd-client');
+  if(cs){
+    cs.innerHTML = '<option value="">' + (ar ? '— اختر العميل —' : '— Select a client —') + '</option>'
+      + clientsData.map(function(c){
+          return '<option value="' + c.id + '"' + (String(_qd.client_id) === String(c.id) ? ' selected' : '') + '>'
+            + (c.nickname || c.name) + '</option>';
+        }).join('');
+  }
+  fillQuoteOrders();
+
+  var ci = document.getElementById('qd-city');
+  if(ci) ci.value = _qd.city || '';
+  var st = document.getElementById('qd-status');
+  if(st) st.value = _qd.status || 'draft';
+  var nt = document.getElementById('qd-notes');
+  if(nt) nt.value = _qd.notes || '';
+
+  renderQuoteRoute();
+  renderQuoteParts();
+  renderQuoteTotals();
+}
+
+function fillQuoteOrders(){
+  var os = document.getElementById('qd-order');
+  if(!os) return;
+  var ar = (LNG === 'ar');
+  var mine = clientOrders.filter(function(o){ return String(o.client_id) === String(_qd.client_id); });
+  os.innerHTML = '<option value="">' + (ar ? '— بدون أوردر —' : '— No order —') + '</option>'
+    + mine.map(function(o){
+        return '<option value="' + o.id + '"' + (String(_qd.order_id) === String(o.id) ? ' selected' : '') + '>'
+          + (o.name || ('#' + o.id)) + '</option>';
+      }).join('');
+}
+
+function onQuoteClient(){
+  var v = (document.getElementById('qd-client') || {}).value || '';
+  _qd.client_id = v;
+  var c = clientsData.find(function(x){ return String(x.id) === String(v); });
+  _qd.client = c ? (c.name || c.nickname) : '';
+  _qd.order_id = '';
+  fillQuoteOrders();
+  renderQuoteRoute();
+  renderQuoteTotals();
+}
+
+function onQuoteOrder(){
+  var v = (document.getElementById('qd-order') || {}).value || '';
+  _qd.order_id = v;
+  // An order carries its city — use it rather than making him retype it
+  var o = clientOrders.find(function(x){ return String(x.id) === String(v); });
+  if(o && o.city){
+    _qd.city = o.city;
+    var ci = document.getElementById('qd-city');
+    if(ci) ci.value = o.city;
+    applyQuoteCity();
+  }
+  renderQuoteRoute();
+  renderQuoteTotals();
+}
+
+function onQuoteCity(){
+  _qd.city = (document.getElementById('qd-city') || {}).value || '';
+  applyQuoteCity();
+  renderQuoteRoute();
+  renderQuoteTotals();
+}
+
+function applyQuoteCity(){
+  var r = nearestCentre(_qd.city);
+  if(r){
+    _qd.centre = r.centre.key;
+    _qd.km = r.local ? 0 : r.km * 2;     // return trip
+    if(r.local) _qd.stay = 0;
+    else if(!Number(_qd.stay)) _qd.stay = QUOTE_STAY_DEFAULT;
+  } else {
+    _qd.centre = '';
+    // Unknown city: leave whatever distance is there for him to type
+  }
+}
+
+function renderQuoteRoute(){
+  var host = document.getElementById('qd-route');
+  if(!host) return;
+  var ar = (LNG === 'ar');
+  var r = nearestCentre(_qd.city);
+
+  if(!_qd.city){
+    host.innerHTML = '<div style="font-size:12px;color:#A0AEC0">'
+      + (ar ? 'اكتب المدينة لحساب السفر تلقائياً.' : 'Enter the city and the travel is worked out for you.') + '</div>';
+    return;
+  }
+
+  if(r && r.local){
+    host.innerHTML = '<div style="background:#E7F6EC;border:1px solid #BBE5C8;border-radius:9px;padding:11px 14px;font-size:13px;color:#2D7D3A">'
+      + '<i class="ti ti-map-pin-check"></i> <b>' + (ar ? 'ضمن نطاق ' : 'Local to ')
+      + ((LNG==='ar') ? r.centre.ar : r.centre.en) + '</b> — '
+      + (ar ? 'لا تُحتسب مواصلات ولا سكن.' : 'no travel or accommodation is charged.') + '</div>';
+    return;
+  }
+
+  var known = !!r;
+  host.innerHTML = '<div style="background:' + (known ? '#E6F1FB' : '#FDF0E0') + ';border:1px solid '
+    + (known ? '#BBD5F0' : '#FAC775') + ';border-radius:9px;padding:11px 14px">'
+    + '<div style="font-size:13px;color:' + (known ? '#1D4E89' : '#C4680A') + ';font-weight:600">'
+    +   '<i class="ti ti-route"></i> '
+    +   (known
+          ? ((ar ? 'أقرب مركز: ' : 'Nearest centre: ') + ((LNG==='ar') ? r.centre.ar : r.centre.en)
+             + ' · ' + r.km + ' ' + (ar ? 'كم ذهاباً' : 'km each way'))
+          : (ar ? 'مدينة غير معروفة — اكتب المسافة يدوياً' : 'City not on the map — type the distance yourself'))
+    + '</div>'
+    + '<div style="display:flex;align-items:center;gap:8px;margin-top:9px;flex-wrap:wrap">'
+    +   '<label style="font-size:12px;color:#4A5568">' + (ar ? 'المسافة ذهاباً وإياباً' : 'Round-trip distance') + '</label>'
+    +   '<input type="number" min="0" step="1" value="' + (Number(_qd.km) || 0) + '" onchange="setQuoteKm(this.value)"'
+    +     ' style="width:110px;padding:7px 10px;border:1.5px solid #D9E2EC;border-radius:7px;font-size:13px;font-family:inherit">'
+    +   '<span style="font-size:12px;color:#718096">' + (ar ? 'كم' : 'km') + '</span>'
+    + '</div></div>';
+}
+
+function setQuoteKm(v){
+  _qd.km = Math.max(0, parseInt(v, 10) || 0);
+  renderQuoteTotals();
+}
+
+function setQuoteStay(v){
+  _qd.stay = Math.max(0, parseMoney(v));
+  renderQuoteTotals();
+}
+
+// ── Quotation state and maths ────────────────────────────────────────────
+var quotationsData = [];
+var _qtFilter = 'all';
+var _qd = null;          // the quotation being edited
+
+var QUOTE_VISIT_BASE = 500;      // 575 incl. VAT = 500 + 75
+var QUOTE_VAT = 0.15;
+var QUOTE_KM_RATE = 1;           // 1 SAR per km, his figure
+var QUOTE_STAY_DEFAULT = 250;
+
+function quoteVatOnParts(){
+  // Goods sold in KSA normally carry VAT; he ruled it out only for travel and
+  // accommodation. Left as a setting so his accountant can overrule it.
+  var v = appSettings && appSettings.quote_vat_parts;
+  return (v === undefined || v === null || v === '') ? true : (v === 'true' || v === true);
+}
+
+function blankQuotation(){
+  return { id:null, number:'', client_id:'', client:'', order_id:'', city:'',
+           centre:'', km:0, stay:QUOTE_STAY_DEFAULT, items:[], notes:'',
+           status:'draft', date:new Date().toISOString().split('T')[0] };
+}
+
+// QT-2026-001, counting only this year's.
+function nextQuoteNumber(){
+  var year = new Date().getFullYear();
+  var mine = quotationsData.filter(function(q){
+    return String(q.number || '').indexOf('QT-' + year + '-') === 0;
+  });
+  var top = 0;
+  mine.forEach(function(q){
+    var n = parseInt(String(q.number).split('-')[2], 10);
+    if(!isNaN(n) && n > top) top = n;
+  });
+  return 'QT-' + year + '-' + String(top + 1).padStart(3, '0');
+}
+
+// What he has actually paid for a room in this city before — a better guide
+// than any published rate, because it reflects the hotels he really books.
+function suggestedStay(city){
+  var k = normCityKey(city);
+  if(!k) return null;
+  var seen = quotationsData.filter(function(q){
+    return normCityKey(q.city) === k && Number(q.stay) > 0;
+  });
+  if(!seen.length) return null;
+  var last = seen[seen.length - 1];
+  return { amount: Number(last.stay), times: seen.length };
+}
+
+function quoteTotals(q){
+  var parts = 0;
+  (q.items || []).forEach(function(it){
+    parts += (Number(it.price) || 0) * (Number(it.qty) || 0);
+  });
+  var travel = (Number(q.km) || 0) * QUOTE_KM_RATE;
+  var stay = Number(q.stay) || 0;
+  var visit = QUOTE_VISIT_BASE;
+
+  // VAT on the visit always; on parts by the setting; never on travel or stay.
+  var vat = visit * QUOTE_VAT + (quoteVatOnParts() ? parts * QUOTE_VAT : 0);
+
+  var sub = parts + travel + stay + visit;
+  return {
+    parts: parts, travel: travel, stay: stay, visit: visit,
+    sub: sub, vat: Math.round(vat * 100) / 100,
+    total: Math.round((sub + vat) * 100) / 100
+  };
+}
+
 // ── Contracts list ───────────────────────────────────────────────────────
 var CT_FILTERS = [
   { key:'all',     en:'All',      ar:'الكل' },
@@ -17898,6 +18674,96 @@ async function showPublicReport(token){
 
 <!-- ═══ CLIENT ORDERS / PROJECTS (full page) ═══ -->
 <!-- ═══ MAINTENANCE CONTRACTS ═══ -->
+<div id="pg-quotations" style="display:none">
+  <div class="ph">
+    <div><div class="pt" data-en="Quotations" data-ar="عروض الأسعار">Quotations</div>
+    <div class="ps" data-en="Price a single visit — parts, travel and the visit fee" data-ar="تسعير زيارة واحدة — القطع والسفر وأجرة الزيارة">Price a single visit</div></div>
+    <button class="btn btn-p" onclick="newQuotation()"><i class="ti ti-plus"></i><span data-en="New Quotation" data-ar="عرض سعر جديد">New Quotation</span></button>
+  </div>
+  <div class="sbox"><i class="ti ti-search"></i><input type="text" id="qtSearch" oninput="renderQuotations()" data-ph-en="Search by client, order or number…" data-ph-ar="ابحث بالعميل أو الأوردر أو الرقم…" placeholder="Search…"></div>
+  <div style="display:flex;gap:6px;flex-wrap:wrap;margin:12px 0">
+    <button class="ftab" onclick="setQtFilter('all',this)" id="qf-all">All</button>
+    <button class="ftab" onclick="setQtFilter('draft',this)" data-en="Draft" data-ar="مسودة">Draft</button>
+    <button class="ftab" onclick="setQtFilter('sent',this)" data-en="Sent" data-ar="مُرسل">Sent</button>
+    <button class="ftab" onclick="setQtFilter('accepted',this)" data-en="Accepted" data-ar="مقبول">Accepted</button>
+    <button class="ftab" onclick="setQtFilter('rejected',this)" data-en="Rejected" data-ar="مرفوض">Rejected</button>
+  </div>
+  <div class="card">
+    <div class="thd" style="grid-template-columns:130px 1.6fr 1fr 1fr 110px 110px">
+      <div data-en="Number" data-ar="الرقم">Number</div>
+      <div data-en="Client" data-ar="العميل">Client</div>
+      <div data-en="City" data-ar="المدينة">City</div>
+      <div data-en="Total" data-ar="الإجمالي">Total</div>
+      <div data-en="Status" data-ar="الحالة">Status</div>
+      <div></div>
+    </div>
+    <div id="qtList"></div>
+  </div>
+</div>
+
+<div id="pg-quotation-detail" style="display:none">
+  <div class="ph">
+    <div><div class="pt" id="qd-title">Quotation</div><div class="ps" id="qd-sub"></div></div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap">
+      <button class="btn btn-o" onclick="printQuotation()"><i class="ti ti-printer"></i> <span data-en="Print" data-ar="طباعة">Print</span></button>
+      <button class="btn btn-p" onclick="saveQuotation()" style="background:#2D7D3A"><i class="ti ti-device-floppy"></i> <span data-en="Save" data-ar="حفظ">Save</span></button>
+      <button class="btn btn-o" onclick="go('quotations')"><i class="ti ti-arrow-left"></i> <span data-en="Back" data-ar="رجوع">Back</span></button>
+    </div>
+  </div>
+
+  <div class="card" style="padding:16px;margin-bottom:14px">
+    <div class="fg" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:12px">
+      <div class="field" style="margin-bottom:0"><label data-en="Client *" data-ar="العميل *">Client *</label>
+        <select id="qd-client" onchange="onQuoteClient()"></select></div>
+      <div class="field" style="margin-bottom:0"><label data-en="Order / Project" data-ar="الأوردر / المشروع">Order / Project</label>
+        <select id="qd-order" onchange="onQuoteOrder()"></select></div>
+      <div class="field" style="margin-bottom:0"><label data-en="City *" data-ar="المدينة *">City *</label>
+        <input type="text" id="qd-city" oninput="onQuoteCity()" data-ph-en="City" data-ph-ar="المدينة" placeholder="City"></div>
+      <div class="field" style="margin-bottom:0"><label data-en="Status" data-ar="الحالة">Status</label>
+        <select id="qd-status">
+          <option value="draft" data-en="Draft" data-ar="مسودة">Draft</option>
+          <option value="sent" data-en="Sent" data-ar="مُرسل">Sent</option>
+          <option value="accepted" data-en="Accepted" data-ar="مقبول">Accepted</option>
+          <option value="rejected" data-en="Rejected" data-ar="مرفوض">Rejected</option>
+        </select></div>
+    </div>
+    <div id="qd-route" style="margin-top:12px"></div>
+  </div>
+
+  <div class="card" style="margin-bottom:14px">
+    <div class="ch"><div class="ct"><i class="ti ti-packages"></i> <span data-en="Spare Parts" data-ar="قطع الغيار">Spare Parts</span></div>
+      <button class="ca" onclick="openQuotePartPicker()"><i class="ti ti-plus"></i> <span data-en="Add a part" data-ar="إضافة قطعة">Add a part</span></button></div>
+    <div id="qd-parts"></div>
+  </div>
+
+  <div class="card" style="margin-bottom:14px">
+    <div class="ch"><div class="ct"><i class="ti ti-calculator"></i> <span data-en="Visit &amp; Travel" data-ar="الزيارة والسفر">Visit &amp; Travel</span></div></div>
+    <div id="qd-totals" style="padding:14px 16px"></div>
+  </div>
+
+  <div class="card">
+    <div class="ch"><div class="ct"><i class="ti ti-note"></i> <span data-en="Notes on the quotation" data-ar="ملاحظات على العرض">Notes</span></div></div>
+    <div style="padding:12px 16px">
+      <textarea id="qd-notes" rows="3" style="width:100%;padding:10px 12px;border:1.5px solid #D9E2EC;border-radius:8px;font-size:13px;font-family:inherit;resize:vertical;box-sizing:border-box"
+        data-ph-en="Validity, delivery time, anything the customer should read" data-ph-ar="مدة الصلاحية، وقت التنفيذ، أي شيء يهم العميل"></textarea>
+    </div>
+  </div>
+</div>
+
+<div id="quotePartModal" class="modal" style="display:none">
+  <div class="mbox" style="max-width:620px">
+    <div class="mh"><div class="mhtitle"><i class="ti ti-packages"></i> <span data-en="Add a part" data-ar="إضافة قطعة">Add a part</span></div>
+      <button class="mclose" onclick="closeMod('quotePartModal')"><i class="ti ti-x"></i></button></div>
+    <div class="mb" style="padding:0">
+      <div style="padding:12px 14px;border-bottom:1px solid #E2E8F0">
+        <div class="sbox" style="max-width:none"><i class="ti ti-search"></i>
+          <input type="text" id="qp-search" oninput="renderQuotePartPicker()" data-ph-en="Search the catalogue…" data-ph-ar="ابحث في الكتالوج…" placeholder="Search…"></div>
+      </div>
+      <div id="qp-list" style="max-height:400px;overflow-y:auto"></div>
+    </div>
+  </div>
+</div>
+
 <div id="pg-contracts" style="display:none">
   <div class="ph">
     <div>
