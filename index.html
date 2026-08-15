@@ -674,7 +674,7 @@ html,body{height:100%;overflow:auto;font-family:Tajawal,sans-serif;font-size:14p
     <div id="stock-zone-picker" style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-bottom:8px"></div>
     <div id="stock-zone-notice" style="display:none;font-size:11px;color:#718096;background:#F8FAFC;border-radius:7px;padding:7px 11px;margin-bottom:10px"></div>
     <div id="parts-cat-filter" style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px"></div>
-    <div class="tbl"><div class="thd" style="grid-template-columns:110px 2fr 1.1fr 0.9fr 0.9fr 1fr 118px"><div data-en="Code" data-ar="الكود">Code</div><div data-en="Part Name" data-ar="اسم القطعة">Part Name</div><div data-en="Category" data-ar="الفئة">Category</div><div data-en="Qty" data-ar="الكمية">Qty</div><div data-en="Min" data-ar="الحد الأدنى">Min</div><div data-en="Status" data-ar="الحالة">Status</div><div></div></div><div id="invList"></div></div>
+    <div class="tbl"><div class="thd" style="grid-template-columns:110px 1.8fr 1fr 0.8fr 1fr 0.8fr 1fr 118px"><div data-en="Code" data-ar="الكود">Code</div><div data-en="Part Name" data-ar="اسم القطعة">Part Name</div><div data-en="Category" data-ar="الفئة">Category</div><div data-en="Qty" data-ar="الكمية">Qty</div><div data-en="Cost" data-ar="التكلفة">Cost</div><div data-en="Min" data-ar="الحد الأدنى">Min</div><div data-en="Status" data-ar="الحالة">Status</div><div></div></div><div id="invList"></div></div>
   </div>
   <div id="tab-hist" style="display:none">
     <div class="vtbar"><div class="sbox" style="max-width:300px"><i class="ti ti-search"></i><input type="text" placeholder="Search history..." oninput="filterHist(this.value)"></div></div>
@@ -1006,6 +1006,25 @@ html,body{height:100%;overflow:auto;font-family:Tajawal,sans-serif;font-size:14p
         <div class="field" style="margin-bottom:0"><label>Quantity</label><input type="number" id="ap-qty" placeholder="0" min="0"></div>
         <div class="field" style="margin-bottom:0"><label>Min Alert Level</label><input type="number" id="ap-min" placeholder="2" min="0"></div>
         <div class="field" style="margin-bottom:0"><label>Supplier</label><input type="text" id="ap-sup" placeholder="Supplier"></div>
+        <div class="field" style="margin-bottom:0;grid-column:1/-1">
+          <label data-en="Photo of the part" data-ar="صورة القطعة">Photo of the part</label>
+          <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+            <div id="ap-photo-box" style="width:74px;height:74px;border:1.5px dashed #D9E2EC;border-radius:10px;display:flex;align-items:center;justify-content:center;overflow:hidden;background:#F8FAFC;flex-shrink:0">
+              <i class="ti ti-photo" style="color:#CBD5E1;font-size:24px"></i>
+            </div>
+            <div style="flex:1;min-width:150px">
+              <input type="file" id="ap-photo-file" accept="image/*" style="display:none" onchange="onPartPhoto(this)">
+              <button type="button" onclick="document.getElementById('ap-photo-file').click()" class="btn btn-o" style="padding:7px 14px;font-size:12px">
+                <i class="ti ti-camera"></i> <span data-en="Choose a photo" data-ar="اختر صورة">Choose a photo</span></button>
+              <button type="button" id="ap-photo-clear" onclick="clearPartPhoto()" style="display:none;margin-inline-start:6px;padding:7px 12px;border-radius:8px;border:1px solid #F5C6C6;background:#fff;color:#C0392B;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit">
+                <i class="ti ti-trash"></i></button>
+              <div style="font-size:11px;color:#A0AEC0;margin-top:4px" data-en="Shown beside this part on every quotation." data-ar="تظهر بجانب القطعة في كل عرض سعر.">Shown beside this part on every quotation.</div>
+            </div>
+          </div>
+        </div>
+        <div class="field" style="margin-bottom:0"><label data-en="Cost Price (SAR) *" data-ar="سعر التكلفة (ر.س) *">Cost Price (SAR) *</label><input type="number" id="ap-cost" placeholder="0.00" min="0" step="0.01">
+          <div style="font-size:11px;color:#A0AEC0;margin-top:3px" data-en="What this part cost to land in the store. The quoted price is typed per job." data-ar="تكلفة القطعة حتى وصولها للمستودع. سعر العرض يُكتب مع كل تسعيرة.">What this part cost to land in the store.</div>
+        </div>
       </div>
       <div style="display:flex;gap:8px;margin-top:16px">
         <button class="btn btn-o" onclick="closeMod('partModal')" style="flex:1">Cancel</button>
@@ -4965,6 +4984,10 @@ var FEATURE_FLAGS = [
     en:'Customer Ticket Portal', ar:'بوابة تذاكر العملاء',
     enDesc:'Customers raise tickets from a private link. Create the links in the Ticket Portal section.',
     arDesc:'العميل يفتح تذكرة من رابط خاص به. أنشئ الروابط من قسم "بوابة التذاكر".' },
+  { key:'quotations', def:false, built:true,
+    en:'Quotations', ar:'عروض الأسعار',
+    enDesc:'Price a job from parts that are actually in the store, and send the customer a quotation.',
+    arDesc:'تسعير العمل من القطع المتوفرة فعلاً بالمستودع، وإرسال عرض سعر للعميل.' },
   { key:'ticket_notify',  def:true, built:true,
     en:'Email the manager on a new ticket', ar:'تنبيه المدير عند وصول تذكرة',
     enDesc:'Emails the manager covering that zone as soon as a customer raises a ticket.',
@@ -10067,6 +10090,99 @@ function stk(p){
 // ── Deleting spare parts ─────────────────────────────────────────────────
 
 // ── Importing spare parts from a spreadsheet ─────────────────────────────
+
+// Money arrives from spreadsheets as "1,250.00", "SAR 90", "٩٠" or blank.
+function parseMoney(v){
+  if(v == null) return 0;
+  var t = String(v).replace(/[\u0660-\u0669]/g, function(d){ return String(d.charCodeAt(0) - 0x0660); });
+  t = t.replace(/[^\d.\-]/g, '');
+  var n = parseFloat(t);
+  return (isNaN(n) || n < 0) ? 0 : Math.round(n * 100) / 100;
+}
+
+// One place decides how money is shown, so every screen agrees.
+function money(v){
+  var n = Number(v || 0);
+  return n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
+function partPrice(p){ return Number((p && p.price) || 0); }
+function partCost(p){  return Number((p && p.cost)  || 0); }
+
+
+// ── Part photos ──────────────────────────────────────────────────────────
+// A close-up beside each quotation line, because refrigeration parts look
+// alike and a customer approving 650 SAR should see what he is buying.
+// Compressed hard: these ride along in every quote, print and email.
+var _partPhoto = '';
+
+function onPartPhoto(input){
+  var f = input && input.files && input.files[0];
+  if(!f) return;
+  var ar = (LNG === 'ar');
+  if(!/^image\//.test(f.type)){
+    alert(ar ? 'اختر ملف صورة.' : 'Please choose an image file.');
+    input.value = '';
+    return;
+  }
+  var reader = new FileReader();
+  reader.onload = function(e){
+    var img = new Image();
+    img.onload = function(){
+      // 600px is plenty for a thumbnail beside a line item, and keeps a whole
+      // quotation's worth of photos small enough to email.
+      var max = 600, w = img.width, h = img.height;
+      if(w > h && w > max){ h = Math.round(h * max / w); w = max; }
+      else if(h > max){ w = Math.round(w * max / h); h = max; }
+      var c = document.createElement('canvas');
+      c.width = w; c.height = h;
+      c.getContext('2d').drawImage(img, 0, 0, w, h);
+      _partPhoto = c.toDataURL('image/jpeg', 0.72);
+      showPartPhoto(_partPhoto);
+    };
+    img.onerror = function(){ alert(ar ? 'تعذّرت قراءة الصورة.' : 'That image could not be read.'); };
+    img.src = e.target.result;
+  };
+  reader.readAsDataURL(f);
+  input.value = '';
+}
+
+function showPartPhoto(src){
+  var box = document.getElementById('ap-photo-box');
+  var clr = document.getElementById('ap-photo-clear');
+  if(!box) return;
+  if(src){
+    box.innerHTML = '<img src="' + src + '" style="width:100%;height:100%;object-fit:cover">';
+    box.style.border = '1.5px solid #D9E2EC';
+    // The button carries an inline display:none, so an empty string won't undo it
+    if(clr) clr.style.display = 'inline-block';
+  } else {
+    box.innerHTML = '<i class="ti ti-photo" style="color:#CBD5E1;font-size:24px"></i>';
+    box.style.border = '1.5px dashed #D9E2EC';
+    if(clr) clr.style.display = 'none';
+  }
+}
+
+function clearPartPhoto(){
+  _partPhoto = '';
+  showPartPhoto('');
+}
+
+function partPhoto(p){ return (p && p.photo) || ''; }
+
+// A thumbnail, or a neutral placeholder so rows stay aligned.
+function partThumb(p, size){
+  var sz = size || 34;
+  var src = partPhoto(p);
+  if(src){
+    return '<img src="' + src + '" style="width:' + sz + 'px;height:' + sz + 'px;object-fit:cover;'
+      + 'border-radius:7px;border:1px solid #E2E8F0;flex-shrink:0" alt="">';
+  }
+  return '<div style="width:' + sz + 'px;height:' + sz + 'px;border-radius:7px;background:#F1F5F9;'
+    + 'border:1px solid #E2E8F0;display:flex;align-items:center;justify-content:center;flex-shrink:0">'
+    + '<i class="ti ti-photo" style="color:#CBD5E1;font-size:' + Math.round(sz*0.45) + 'px"></i></div>';
+}
+
 var _partsImport = [];
 
 // Accept the unit however it was written — English, Arabic, or a short form.
@@ -10179,7 +10295,8 @@ function exportPartsExcel(){
               'الوحدة / Unit',
               'الكمية / Qty — ' + _storeLabel,
               'الحد الأدنى / Min','المورّد / Supplier',
-              'الاسم بالعربية (اختياري) / Arabic Name (optional)'];
+              'الاسم بالعربية (اختياري) / Arabic Name (optional)',
+              'سعر التكلفة / Cost Price'];
 
   var xml = '<?xml version="1.0" encoding="UTF-8"?>'
     + '<?mso-application progid="Excel.Sheet"?>'
@@ -10212,6 +10329,7 @@ function exportPartsExcel(){
       + cell(partMin(p, _expStore), 'Number')
       + cell(p.supplier && p.supplier !== '—' ? p.supplier : '')
       + cell(p.name_ar || '')
+      + cell(partCost(p) || 0, 'Number')
       + '</Row>';
   });
 
@@ -10270,7 +10388,10 @@ async function onPartsFileChosen(input){
         qty: parseInt(String(r[4]).replace(/[^\d-]/g,''), 10) || 0,
         min: parseInt(String(r[5]).replace(/[^\d-]/g,''), 10) || 2,
         supplier: String(r[6]==null?'':r[6]).trim() || '—',
-        name_ar: String(r[7]==null?'':r[7]).trim()
+        name_ar: String(r[7]==null?'':r[7]).trim(),
+        // Column 9 is the landed cost; anything in column 10 is ignored.
+        cost:  parseMoney(r[8]),
+        price: 0
       });
     });
 
@@ -10361,12 +10482,18 @@ async function confirmPartsImport(){
     try{
       var pid;
       if(ex){
-        // The catalogue entry is shared; only the code may need filling in
-        if(!ex.code && it.code){ ex.code = it.code; await dbSave('parts', { id: ex.id, code: it.code }); }
+        // The catalogue entry is shared; refresh the code and the prices from
+        // the sheet, since a price list is exactly what gets re-imported.
+        var patch = { id: ex.id };
+        if(!ex.code && it.code){ ex.code = it.code; patch.code = it.code; }
+        if(it.price > 0 && it.price !== ex.price){ ex.price = it.price; patch.price = it.price; }
+        if(it.cost  > 0 && it.cost  !== ex.cost ){ ex.cost  = it.cost;  patch.cost  = it.cost;  }
+        if(Object.keys(patch).length > 1) await dbSave('parts', patch);
         pid = ex.id;
         topped++;
       } else {
-        var np = { name: it.name, code: it.code||'', name_ar: it.name_ar||'', cat: it.cat, unit: it.unit, min: it.min, supplier: it.supplier };
+        var np = { name: it.name, code: it.code||'', name_ar: it.name_ar||'', cat: it.cat, unit: it.unit,
+                   min: it.min, supplier: it.supplier, price: it.price || 0, cost: it.cost || 0 };
         var saved = await dbSave('parts', np);
         np.id = (saved && saved[0] && saved[0].id != null) ? saved[0].id : Date.now() + i;
         partsData.push(np);
@@ -10990,17 +11117,28 @@ function renderInvList(q,sf){
     var st = stk(p);
     var r = document.createElement('div');
     r.className = 'trow';
-    r.style.gridTemplateColumns = '110px 2fr 1.1fr 0.9fr 0.9fr 1fr 118px';
+    r.style.gridTemplateColumns = '110px 1.8fr 1fr 0.8fr 1fr 0.8fr 1fr 118px';
     r.innerHTML =
         '<div class="tc" style="font-weight:700;color:#1D4E89;padding-inline-end:10px"><bdi dir="ltr">' + (p.code || '—') + '</bdi></div>'
-      + '<div class="tc" style="min-width:0;padding-inline-end:14px" title="' + String(p.name||'').replace(/"/g,'&quot;') + '">'
+      + '<div class="tc" style="min-width:0;padding-inline-end:14px;display:flex;align-items:center;gap:9px" title="' + String(p.name||'').replace(/"/g,'&quot;') + '">'
+      +   partThumb(p, 34)
+      +   '<div style="min-width:0;flex:1">'
       +   '<div style="font-weight:500;unicode-bidi:plaintext;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"><bdi>' + partName(p) + '</bdi></div>'
       +   ((p.supplier && p.supplier !== '—')
             ? '<div class="tc2" style="unicode-bidi:plaintext;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"><bdi>' + p.supplier + '</bdi></div>'
             : '')
       +   '</div>'
+      + '</div>'
       + '<div class="tc2" style="padding-inline-end:10px;white-space:nowrap"><bdi>' + catLabel(p.cat) + '</bdi></div>'
       + '<div class="tc" style="font-weight:700">' + partQty(p) + ' <span class="tc2">' + unitLabel(p.unit) + '</span></div>'
+      + '<div class="tc" style="white-space:nowrap">'
+      +   (partCost(p) > 0
+            ? ('<span style="font-weight:700;color:#1a202c">' + money(partCost(p)) + '</span>'
+               + '<span class="tc2"> ' + ((LNG==='ar')?'ر.س':'SAR') + '</span>')
+            : '<span style="color:#C4680A;font-size:11px;font-weight:700" title="'
+              + ((LNG==='ar')?'بلا تكلفة مسجّلة':'No cost recorded')
+              + '"><i class="ti ti-alert-triangle"></i> ' + ((LNG==='ar')?'بلا تكلفة':'no cost') + '</span>')
+      + '</div>'
       + '<div class="tc2">' + p.min + ' ' + unitLabel(p.unit) + '</div>'
       + '<div><span class="bdg ' + st.c + '">' + st.l + '</span></div>'
       + '<div style="display:flex;gap:2px;justify-content:flex-end">'
@@ -11078,12 +11216,31 @@ async function savePart(){
   var qty=parseInt(document.getElementById('ap-qty').value)||0;
   var _seedStore = (typeof activeStore === 'function') ? activeStore() : curUserLogin;
   var min2=parseInt(document.getElementById('ap-min').value)||2;
+
+  // A part with no selling price is useless in a quotation, which is the whole
+  // point of holding prices — so refuse it here rather than discovering the
+  // gap while pricing a job in front of a customer.
+  // The catalogue records what the part COST to reach the store. The price a
+  // customer is quoted is typed per job — the spare parts desk was clear that a
+  // fixed selling price can't hold, since shipping on one order can outweigh
+  // the part itself.
+  var _cost  = parseMoney((document.getElementById('ap-cost') ||{}).value);
+  var _price = 0;
+  if(!(_cost > 0)){
+    alert((LNG==='ar') ? 'اكتب سعر التكلفة — تُحتسب منه الأسعار عند التسعير.'
+                       : 'Please enter the cost price — quotes are worked out from it.');
+    var pe = document.getElementById('ap-cost'); if(pe) pe.focus();
+    return;
+  }
   var np={
     name: name,
     code: (document.getElementById('ap-code')||{}).value.trim() || '',
     name_ar: (document.getElementById('ap-name-ar')||{}).value.trim() || '',
     cat: document.getElementById('ap-cat').value,
     unit: document.getElementById('ap-unit').value,
+    price: _price,
+    cost: _cost,
+    photo: _partPhoto || '',
     qty: qty,
     min: min2,
     supplier: document.getElementById('ap-sup').value||'—'
@@ -11092,6 +11249,10 @@ async function savePart(){
   if(ex){
     var updP={id:ex.id};
     if(!ex.code && np.code){ ex.code=np.code; updP.code=np.code; }
+    // Prices change; adding the same part again is how they get corrected.
+    if(np.price > 0 && np.price !== ex.price){ ex.price = np.price; updP.price = np.price; }
+    if(np.cost  > 0 && np.cost  !== ex.cost ){ ex.cost  = np.cost;  updP.cost  = np.cost;  }
+    if(np.photo && np.photo !== ex.photo){ ex.photo = np.photo; updP.photo = np.photo; }
     if(Object.keys(updP).length>1) await dbSave('parts',updP);
   } else {
     var saved=await dbSave('parts',np);
@@ -11117,6 +11278,8 @@ async function savePart(){
     histData.unshift(Object.assign({id:Date.now(),partId:_pid},nh));
   }
   closeMod('partModal');
+  // The photo is per part — never let it carry into the next one
+  clearPartPhoto();
   renderInvList();
   alert('✅ Part saved!');
 }
