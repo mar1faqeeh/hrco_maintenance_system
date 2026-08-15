@@ -11253,8 +11253,8 @@ function renderInvList(q,sf){
             : '')
       +   (canManageParts()
             ? ((!partPhoto(p)
-                  ? '<button class="rbtn" id="findimg-' + p.id + '" onclick="findPhotoForPart(' + p.id + ')" title="'
-                    + (LNG==='ar'?'ابحث عن صورة':'Find a photo') + '" style="color:#1D4E89"><i class="ti ti-photo-search"></i></button>'
+                  ? '<button class="rbtn" id="findimg-' + p.id + '" onclick="searchPartPhoto(' + p.id + ')" title="'
+                    + (LNG==='ar'?'ابحث عن صورة والصقها':'Search and paste a photo') + '" style="color:#1D4E89"><i class="ti ti-photo-search"></i></button>'
                   : '')
                + '<button class="rbtn" onclick="editPart(' + p.id + ')" title="' + (LNG==='ar'?'تعديل':'Edit') + '"><i class="ti ti-pencil"></i></button>')
             : '')
@@ -15174,6 +15174,133 @@ function setQuoteStay(v){
 }
 
 
+
+
+// ── Finding a photo without any API key ──────────────────────────────────
+// Google's image API needs billing enabled on the project, which is the same
+// wall that stopped the diagram search. This route needs nothing: open the
+// search, copy the picture, paste it in. Crucially it stores the IMAGE, not a
+// link — a link would break the day the supplier reorganises their site.
+function googleImageSearchFor(part){
+  var terms = [part.code || '', part.name || ''].filter(Boolean).join(' ');
+  if(!terms) return;
+  var q = encodeURIComponent(terms + ' refrigeration spare part');
+  window.open('https://www.google.com/search?tbm=isch&q=' + q, '_blank');
+}
+
+function searchPartPhoto(id){
+  var p = partsData.find(function(x){ return String(x.id) === String(id); });
+  if(!p) return;
+  if(!canManageParts()){ denyParts(); return; }
+  googleImageSearchFor(p);
+  openPastePhoto(id);
+}
+
+var _pastePartId = null;
+
+function openPastePhoto(id){
+  var p = partsData.find(function(x){ return String(x.id) === String(id); });
+  if(!p) return;
+  _pastePartId = id;
+  var ar = (LNG === 'ar');
+
+  var t = document.getElementById('pp-title');
+  if(t) t.textContent = (ar ? 'صورة: ' : 'Photo for: ') + partName(p);
+  var box = document.getElementById('pp-drop');
+  if(box) box.innerHTML = pastePlaceholderHtml();
+  openMod('pastePhotoModal');
+  setTimeout(function(){
+    var d = document.getElementById('pp-drop');
+    if(d) d.focus();
+  }, 150);
+}
+
+function pastePlaceholderHtml(){
+  var ar = (LNG === 'ar');
+  return '<i class="ti ti-clipboard" style="font-size:34px;color:#CBD5E1"></i>'
+    + '<div style="font-size:13px;color:#4A5568;margin-top:10px;font-weight:600">'
+    +   (ar ? 'الصق الصورة هنا  (Ctrl + V)' : 'Paste the picture here  (Ctrl + V)') + '</div>'
+    + '<div style="font-size:11px;color:#A0AEC0;margin-top:5px">'
+    +   (ar ? 'أو اسحب ملف صورة وأفلته' : 'or drag an image file and drop it') + '</div>';
+}
+
+// Anything that arrives — clipboard or dropped file — goes through the same
+// shrink so a catalogue of photos stays small enough to email.
+function acceptPastedImage(blob){
+  var ar = (LNG === 'ar');
+  if(!blob){ return; }
+  var reader = new FileReader();
+  reader.onload = function(e){
+    shrinkDataUrl(e.target.result, 600, 0.72).then(function(small){
+      if(!small){
+        alert(ar ? 'تعذّرت معالجة الصورة.' : 'That image could not be processed.');
+        return;
+      }
+      var box = document.getElementById('pp-drop');
+      if(box){
+        box.innerHTML = '<img src="' + small + '" style="max-width:100%;max-height:210px;border-radius:10px">'
+          + '<div style="font-size:12px;color:#2D7D3A;font-weight:700;margin-top:8px">'
+          + '<i class="ti ti-check"></i> ' + (ar ? 'جاهزة — اضغط حفظ' : 'Ready — press Save') + '</div>';
+      }
+      _pastedPhoto = small;
+      var sv = document.getElementById('pp-save');
+      if(sv) sv.disabled = false;
+    });
+  };
+  reader.readAsDataURL(blob);
+}
+
+var _pastedPhoto = '';
+
+function onPasteIntoBox(ev){
+  var items = (ev.clipboardData || window.clipboardData || {}).items || [];
+  for(var i = 0; i < items.length; i++){
+    if(items[i].type && items[i].type.indexOf('image') === 0){
+      ev.preventDefault();
+      acceptPastedImage(items[i].getAsFile());
+      return;
+    }
+  }
+  // A copied LINK is the common mistake — say what to do instead of failing
+  var text = (ev.clipboardData || window.clipboardData || {}).getData
+    ? (ev.clipboardData || window.clipboardData).getData('text') : '';
+  if(text && /^https?:\/\//.test(text)){
+    ev.preventDefault();
+    alert((LNG==='ar')
+      ? 'هذا رابط وليس صورة.\n\nاضغط يميناً على الصورة واختر "نسخ الصورة" — لا "نسخ عنوان الصورة".\nنحفظ الصورة نفسها حتى تبقى عندك للأبد.'
+      : 'That is a link, not a picture.\n\nRight-click the image and choose "Copy image" — not "Copy image address".\nWe store the picture itself so it stays with you for good.');
+  }
+}
+
+function onDropIntoBox(ev){
+  ev.preventDefault();
+  var f = ev.dataTransfer && ev.dataTransfer.files && ev.dataTransfer.files[0];
+  if(f && /^image\//.test(f.type)) acceptPastedImage(f);
+  else alert((LNG==='ar') ? 'أفلت ملف صورة.' : 'Drop an image file.');
+}
+
+async function savePastedPhoto(){
+  var ar = (LNG === 'ar');
+  if(!_pastedPhoto || !_pastePartId) return;
+  var p = partsData.find(function(x){ return String(x.id) === String(_pastePartId); });
+  if(!p) return;
+
+  p.photo = _pastedPhoto;
+  try{
+    var r = await dbSave('parts', { id: p.id, photo: _pastedPhoto });
+    if(!r || !r.length){
+      alert(ar ? 'لم تُحفظ الصورة في قاعدة البيانات — تحقّق من عمود photo.'
+               : 'The photo was NOT saved — check the photo column on parts.');
+    }
+  }catch(e){
+    alert((ar ? 'تعذّر الحفظ: ' : 'Could not save: ') + e.message);
+  }
+
+  _pastedPhoto = '';
+  _pastePartId = null;
+  closeMod('pastePhotoModal');
+  renderInvList();
+}
 
 // ── Finding part photos automatically ────────────────────────────────────
 // Refrigeration parts are catalogue items sold all over the web, so the
@@ -19632,6 +19759,29 @@ async function showPublicReport(token){
       <button class="mclose" onclick="closeMod('ticketLinkModal')"><i class="ti ti-x"></i></button>
     </div>
     <div class="mb"><div id="tl-body"></div></div>
+  </div>
+</div>
+
+
+<!-- PASTE A PART PHOTO -->
+<div id="pastePhotoModal" class="modal" style="display:none">
+  <div class="mbox" style="max-width:460px">
+    <div class="mh">
+      <div class="mhtitle"><i class="ti ti-photo-plus"></i> <span id="pp-title">Photo</span></div>
+      <button class="mclose" onclick="closeMod('pastePhotoModal')"><i class="ti ti-x"></i></button>
+    </div>
+    <div class="mb">
+      <div style="background:#E6F1FB;border:1px solid #BBD5F0;border-radius:9px;padding:10px 13px;font-size:12px;color:#1D4E89;margin-bottom:12px">
+        <b data-en="On the search tab that opened:" data-ar="في صفحة البحث التي فُتحت:">On the search tab that opened:</b>
+        <div style="margin-top:5px" data-en="right-click the picture → Copy image  (not Copy image address), then paste below." data-ar="اضغط يميناً على الصورة ← نسخ الصورة (لا نسخ العنوان)، ثم الصقها بالأسفل.">right-click the picture → Copy image, then paste below.</div>
+      </div>
+      <div id="pp-drop" tabindex="0" onpaste="onPasteIntoBox(event)" ondrop="onDropIntoBox(event)" ondragover="event.preventDefault()"
+           style="border:2px dashed #BBD5F0;border-radius:12px;min-height:190px;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:18px;outline:none;background:#F8FAFC;cursor:text"></div>
+    </div>
+    <div class="mf">
+      <button onclick="closeMod('pastePhotoModal')" class="btn btn-o" style="flex:1" data-en="Cancel" data-ar="إلغاء">Cancel</button>
+      <button id="pp-save" onclick="savePastedPhoto()" class="btn btn-p" style="flex:2" disabled><i class="ti ti-device-floppy"></i> <span data-en="Save photo" data-ar="حفظ الصورة">Save photo</span></button>
+    </div>
   </div>
 </div>
 
