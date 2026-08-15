@@ -4,6 +4,10 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Maintenance System</title>
+<!-- The tab icon. This is the built-in default; applyCompany() replaces it
+     with the uploaded company logo as soon as the settings load. -->
+<link id="favicon" rel="icon" type="image/svg+xml"
+      href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%231D4E89'/%3E%3Cg stroke='%23fff' stroke-width='4' stroke-linecap='round'%3E%3Cpath d='M32 12v40M14.5 22l35 20M14.5 42l35-20'/%3E%3Cpath d='M32 20l-6-6M32 20l6-6M32 44l-6 6M32 44l6 6'/%3E%3C/g%3E%3C/svg%3E">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@2.44.0/tabler-icons.min.css">
 <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700&display=swap" rel="stylesheet">
 <style>
@@ -7110,6 +7114,13 @@ function applyCompany(){
 
   var lgc = document.getElementById('lg-company');
   if(lgc) lgc.textContent = companyName();
+
+  // The tab icon follows the uploaded logo. Left alone it keeps the built-in
+  // default from <head>, so the tab is never blank.
+  try{
+    var fav = document.getElementById('favicon');
+    if(fav && logo){ fav.type = ''; fav.href = logo; }
+  }catch(e){}
 
   // Warehouse email default on the send form
   var wh = document.getElementById('wh-to');
@@ -14922,8 +14933,12 @@ async function loadQuotations(){
 
 function printQuotation(){
   var ar = (LNG === 'ar');
-  if(!_qd || !_qd.client_id){
-    alert(ar ? 'اختر العميل أولاً.' : 'Choose a client first.');
+  // A prospect is a valid client for printing — the sheet needs a NAME, which
+  // it has. Asking for client_id here re-imposed the very requirement the
+  // "new client" option exists to remove.
+  var named = _qd && (_qd.client_id || (_qd.prospect && _qd.prospect.name) || _qd.client);
+  if(!named){
+    alert(ar ? 'اكتب اسم العميل أولاً.' : 'Enter the client name first.');
     return;
   }
   var t = quoteTotals(_qd);
