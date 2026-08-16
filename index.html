@@ -268,6 +268,7 @@ html,body{height:100%;overflow:auto;font-family:Tajawal,sans-serif;font-size:14p
     <button class="btn btn-p" onclick="go('newvisit')"><i class="ti ti-plus"></i><span id="t-new-visit-btn">New Visit</span></button>
   </div>
   <div id="dw-action" style="margin-bottom:14px"></div>
+  <div id="dash-period" style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px"></div>
   <div class="sg sg-4" id="dw-stats">
     <div class="sc" onclick="go('visits')" style="cursor:pointer"><div class="si" style="background:#E6F1FB"><i class="ti ti-calendar-check" style="color:#1D4E89"></i></div><div class="sv" id="dash-total-visits">0</div><div class="sl" id="t-stat-today">Today's Visits</div><div class="sch cup"><i class="ti ti-trending-up"></i><span id="t-from-yest">+3 from yesterday</span></div></div>
     <div class="sc" onclick="go('visits')" style="cursor:pointer"><div class="si" style="background:#EAF3DE"><i class="ti ti-circle-check" style="color:#2D7D3A"></i></div><div class="sv" id="dash-completed">0</div><div class="sl" id="t-stat-done">Completed</div><div class="sch cup"><i class="ti ti-trending-up"></i> <span id="dash-comp-pct">72%</span></div></div>
@@ -17881,47 +17882,127 @@ function renderDashPending(){
   });
 }
 
+// ── Dashboard period ─────────────────────────────────────────────────────
+// The cards used to count TODAY only, so a day without visits made the whole
+// dashboard read zero; then they were fixed to the month. Neither suits
+// everyone, so the period is now his to choose and it is remembered.
+var DASH_PERIODS = [
+  { key:'day',   en:'Today',      ar:'اليوم',        ur:'آج',        sub:{en:'today',          ar:'اليوم',         ur:'آج'} },
+  { key:'week',  en:'This week',  ar:'هذا الأسبوع',  ur:'اس ہفتے',   sub:{en:'this week',      ar:'هذا الأسبوع',   ur:'اس ہفتے'} },
+  { key:'month', en:'This month', ar:'هذا الشهر',    ur:'اس مہینے',  sub:{en:'this month',     ar:'هذا الشهر',     ur:'اس مہینے'} },
+  { key:'year',  en:'This year',  ar:'هذه السنة',    ur:'اس سال',    sub:{en:'this year',      ar:'هذه السنة',     ur:'اس سال'} },
+  { key:'all',   en:'All time',   ar:'الكل',         ur:'سب',        sub:{en:'all time',       ar:'الإجمالي',      ur:'مجموعی'} }
+];
+var dashPeriod = 'month';
+// Restored on load, so his choice survives a refresh. It is a personal view
+// preference, not a company setting — the panel decides which cards show, this
+// decides only the span of time HE is looking at.
+(function(){
+  try{
+    var v = window.localStorage.getItem('hrco_dash_period');
+    if(v && DASH_PERIODS.some(function(p){ return p.key === v; })) dashPeriod = v;
+  }catch(e){}
+})();
+
+function periodLabel(p, sub){
+  var e = DASH_PERIODS.find(function(x){ return x.key === p; }) || DASH_PERIODS[2];
+  var o = sub ? e.sub : e;
+  if(LNG === 'ar') return o.ar;
+  if(LNG === 'ur') return o.ur || o.en;
+  return o.en;
+}
+
+// The first day included in the chosen period, as YYYY-MM-DD. 'all' has none.
+function periodStart(p){
+  var d = new Date(); d.setHours(0,0,0,0);
+  if(p === 'day')  return iso(d);
+  if(p === 'week'){
+    // Saturday starts the week here, not Sunday or Monday.
+    var back = (d.getDay() + 1) % 7;
+    d.setDate(d.getDate() - back);
+    return iso(d);
+  }
+  if(p === 'month') return iso(d).slice(0,8) + '01';
+  if(p === 'year')  return iso(d).slice(0,4) + '-01-01';
+  return null;
+  function iso(x){
+    return x.getFullYear() + '-' + String(x.getMonth()+1).padStart(2,'0')
+         + '-' + String(x.getDate()).padStart(2,'0');
+  }
+}
+
+function inPeriod(dateStr, p){
+  if(p === 'all') return true;
+  var s = periodStart(p);
+  var d = String(dateStr || '').slice(0,10);
+  return !!d && d >= s;
+}
+
+function setDashPeriod(p){
+  dashPeriod = p;
+  try{ localStorage.setItem('hrco_dash_period', p); }catch(e){}
+  renderDashPeriod();
+  updateDashStats();
+}
+
+function renderDashPeriod(){
+  var host = document.getElementById('dash-period');
+  if(!host) return;
+  host.innerHTML = '';
+  DASH_PERIODS.forEach(function(p){
+    var b = document.createElement('button');
+    var on = (p.key === dashPeriod);
+    b.className = 'btn';
+    b.style.cssText = 'padding:6px 14px;font-size:12px;border-radius:99px;cursor:pointer;'
+      + 'font-family:inherit;border:1.5px solid ' + (on ? '#1D4E89' : '#D9E2EC') + ';'
+      + 'background:' + (on ? '#1D4E89' : '#fff') + ';color:' + (on ? '#fff' : '#4A5568') + ';'
+      + 'font-weight:' + (on ? '700' : '500');
+    b.textContent = periodLabel(p.key);
+    b.onclick = function(){ setDashPeriod(p.key); };
+    host.appendChild(b);
+  });
+}
+
 function updateDashStats(){
   updatePendingBadge();
   try{ renderDashAttention(); }catch(e){}
+  try{ renderDashPeriod(); }catch(e){}
   var today = new Date().toISOString().split('T')[0];
-  var total = visData.length;
+  var P = dashPeriod;
+
+  var inRange = visData.filter(function(v){ return inPeriod(v.date, P); });
+  var isDone = function(v){ return v.status==='مكتملة'||v.status==='Completed'; };
+  var isPend = function(v){ return v.status==='معلقة'||v.status==='Pending'; };
+
+  var periodVisits    = inRange.length;
+  var completedPeriod = inRange.filter(isDone).length;
+
+  // Pending and missing parts are a BACKLOG, not an activity count — something
+  // still open from two months ago is still open today. They stay unfiltered.
+  var pending      = visData.filter(isPend).length;
+  var missingParts = visData.filter(function(v){ return v.parts && v.parts.length>0 && isPend(v); }).length;
+
   var todayVisits = visData.filter(function(v){ return v.date===today; }).length;
-  var completed = visData.filter(function(v){ return v.status==='مكتملة'||v.status==='Completed'; }).length;
-  var pending = visData.filter(function(v){ return v.status==='معلقة'||v.status==='Pending'; }).length;
-  var missingParts = visData.filter(function(v){ return v.parts && v.parts.length>0 && (v.status==='معلقة'||v.status==='Pending'); }).length;
-  var pct = total>0 ? Math.round(completed/total*100) : 0;
 
-  // The cards used to count TODAY only, so a day without visits made the whole
-  // dashboard read as zero. Show the month, and put today in the sub-line.
-  var monthPrefix = today.slice(0, 7);
-  var monthVisits = visData.filter(function(v){ return String(v.date||'').indexOf(monthPrefix) === 0; }).length;
-  var completedMonth = visData.filter(function(v){
-    return (v.status==='مكتملة'||v.status==='Completed') && String(v.date||'').indexOf(monthPrefix) === 0;
-  }).length;
-  var completedToday = visData.filter(function(v){ return (v.status==='مكتملة'||v.status==='Completed') && v.date===today; }).length;
+  var e1=document.getElementById('dash-total-visits'); if(e1) e1.textContent=periodVisits;
+  var e2=document.getElementById('dash-completed'); if(e2) e2.textContent=completedPeriod;
 
-  var e1=document.getElementById('dash-total-visits'); if(e1) e1.textContent=monthVisits;
-  var e2=document.getElementById('dash-completed'); if(e2) e2.textContent=completedMonth;
-
-  // Relabel the two cards, since they no longer mean "today"
+  // The labels follow the chosen period, so a number can never be read against
+  // the wrong span of time.
   var ar_ = (LNG === 'ar');
+  var span = periodLabel(P, true);
   var l1 = document.getElementById('t-stat-today');
-  if(l1) l1.textContent = ar_ ? 'زيارات هذا الشهر' : 'Visits this month';
+  if(l1) l1.textContent = ar_ ? ('زيارات ' + span) : (LNG==='ur' ? ('وزٹس — ' + span) : ('Visits ' + span));
   var l2 = document.getElementById('t-stat-done');
-  if(l2) l2.textContent = ar_ ? 'مكتملة هذا الشهر' : 'Completed this month';
-  // Pending (all)
+  if(l2) l2.textContent = ar_ ? ('مكتملة ' + span) : (LNG==='ur' ? ('مکمل — ' + span) : ('Completed ' + span));
+
   var e3=document.getElementById('dash-pending'); if(e3) e3.textContent=pending;
-  // Missing parts (pending with parts)
   var e4=document.getElementById('dash-missing-parts'); if(e4) e4.textContent=missingParts;
-  // Completion %
-  var monthPct = monthVisits>0 ? Math.round(completedMonth/monthVisits*100) : 0;
-  var e5=document.getElementById('dash-comp-pct'); if(e5) e5.textContent=monthPct+'%';
+
+  var periodPct = periodVisits>0 ? Math.round(completedPeriod/periodVisits*100) : 0;
+  var e5=document.getElementById('dash-comp-pct'); if(e5) e5.textContent=periodPct+'%';
 
   // Sub-labels
-  var yesterday = new Date(Date.now()-86400000).toISOString().split('T')[0];
-  var yestVisits = visData.filter(function(v){ return v.date===yesterday; }).length;
-  var diff = todayVisits - yestVisits;
   var subEl = document.getElementById('dash-sub-today');
   if(subEl){
     subEl.innerHTML = '<span style="color:#718096">'
@@ -17930,7 +18011,7 @@ function updateDashStats(){
   var fy = document.getElementById('t-from-yest');
   if(fy) fy.textContent = ar_ ? ('اليوم: ' + todayVisits) : ('Today: ' + todayVisits);
   var subComp = document.getElementById('dash-sub-completed');
-  if(subComp) subComp.innerHTML='<span style="color:#2D7D3A">&#8599; '+todayPct+'%</span>';
+  if(subComp) subComp.innerHTML='<span style="color:#2D7D3A">&#8599; '+periodPct+'%</span>';
 
   var subPend = document.getElementById('dash-sub-pending');
   if(subPend) subPend.innerHTML = pending>0
