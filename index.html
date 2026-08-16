@@ -1443,17 +1443,6 @@ function setLang(l){
 var LG_ROLE='manager';
 var USERS={'manager':{pass:'admin1234',role:'manager',name:'Manager',init:'M'}};
 var curUser='', curUserLogin='', curUserRole='';
-function roleLabel(r){
-  var L = (typeof LNG !== 'undefined') ? LNG : 'en';
-  var N = {
-    manager:    { en:'Maintenance Manager', ar:'مدير الصيانة', ur:'مینٹیننس مینیجر' },
-    salesman:   { en:'Sales',               ar:'مبيعات',       ur:'سیلز' },
-    data_entry: { en:'Data Entry',          ar:'مدخل بيانات',  ur:'ڈیٹا انٹری' },
-    technician: { en:'Technician',          ar:'فني',          ur:'ٹیکنیشن' }
-  };
-  var e = N[r] || N.technician;
-  return e[L] || e.en;
-}
 
 async function loadSystemUsers(){
   if(!_sb) return;
@@ -2928,7 +2917,10 @@ var TASK_CATEGORIES = [
   { key:'washing',  icon:'ti-wash-machine',    en:'Dishwashing & Laundry',ar:'غسيل الأطباق والملابس',  ur:'برتن اور کپڑے دھلائی' }
 ];
 // One language at a time — the label used to carry both at once.
-function catLabel(c){
+// NOT named catLabel(): that name was already taken by the spare-parts
+// category helper below, and the later definition wins — which silently
+// turned every checklist tab into "[object Object]".
+function taskCatLabel(c){
   if(!c) return '';
   if(LNG === 'ar') return c.ar;
   if(LNG === 'ur') return c.ur || c.en;
@@ -3026,8 +3018,8 @@ function renderTaskCats(){
     b.style.cssText = 'display:flex;align-items:center;gap:6px;padding:7px 12px;border-radius:8px;font-size:11px;font-weight:700;cursor:pointer;font-family:inherit;'
       + (active ? 'background:#1D4E89;color:#fff;border:1.5px solid #1D4E89'
                 : 'background:#fff;color:#718096;border:1.5px solid #D9E2EC');
-    b.innerHTML = '<i class="ti ' + c.icon + '"></i> ' + catLabel(c);
-    b.title = catLabel(c);
+    b.innerHTML = '<i class="ti ' + c.icon + '"></i> ' + taskCatLabel(c);
+    b.title = taskCatLabel(c);
     b.onclick = function(){ selectTaskCat(c.key); };
     el.appendChild(b);
   });
@@ -3092,7 +3084,7 @@ function renderTaskEditor(){
     b.style.cssText = 'display:flex;align-items:center;gap:6px;padding:7px 12px;border-radius:8px;font-size:11px;font-weight:700;cursor:pointer;font-family:inherit;'
       + (active ? 'background:#1D4E89;color:#fff;border:1.5px solid #1D4E89'
                 : 'background:#fff;color:#718096;border:1.5px solid #D9E2EC');
-    b.innerHTML = '<i class="ti '+c.icon+'"></i> '+catLabel(c)
+    b.innerHTML = '<i class="ti '+c.icon+'"></i> '+taskCatLabel(c)
                 + ' <span style="opacity:.75">('+((taskTemplates[c.key]||[]).length)+')</span>';
     b.onclick = function(){ ttCat = c.key; renderTaskEditor(); };
     cats.appendChild(b);
@@ -3897,14 +3889,6 @@ function covLabel(k){
   if(LNG === 'ar') return c.label.ar;
   if(LNG === 'ur') return c.label.ur || c.label.en;
   return c.label.en;
-}
-
-function addMonths(dateStr, months){
-  if(!dateStr) return null;
-  var d = new Date(dateStr);
-  if(isNaN(d)) return null;
-  d.setMonth(d.getMonth() + (parseInt(months,10) || 0));
-  return d;
 }
 
 // Works out where an order stands TODAY: still covered, or expired.
@@ -6102,22 +6086,6 @@ var _tpOpenedAt = 0;
 var _tpFiles = [];
 
 // "Other" reveals a free-text branch box; a listed order fills the city.
-function tpOrderChanged(){
-  var sel = document.getElementById('tp-order');
-  var branch = document.getElementById('tp-branch');
-  var city = document.getElementById('tp-city');
-  if(!sel) return;
-  var other = (sel.value === '__other__');
-  if(branch){
-    branch.style.display = other ? 'block' : 'none';
-    if(other) branch.focus(); else branch.value = '';
-  }
-  if(city && !other){
-    var opt = sel.options[sel.selectedIndex];
-    var c = opt ? opt.getAttribute('data-city') : '';
-    if(c) city.value = c;
-  }
-}
 
 function tpGrabLocation(){
   var out = document.getElementById('tp-loc-status');
@@ -6171,36 +6139,6 @@ function tpShrinkImage(file){
   });
 }
 
-function tpReadFile(file){
-  return new Promise(function(resolve){
-    var rd = new FileReader();
-    rd.onload = function(){ resolve(rd.result); };
-    rd.onerror = function(){ resolve(null); };
-    rd.readAsDataURL(file);
-  });
-}
-
-async function tpFilesChosen(input){
-  var files = Array.prototype.slice.call((input && input.files) || []);
-  for(var i = 0; i < files.length; i++){
-    if(_tpFiles.length >= 4){ alert('Up to 4 files, please.'); break; }
-    var f = files[i];
-    var isVideo = /^video\//.test(f.type);
-    if(isVideo && f.size > 8 * 1024 * 1024){
-      alert('"' + f.name + '" is larger than 8 MB. Please send a shorter clip or share it on WhatsApp.');
-      continue;
-    }
-    if(!isVideo && !/^image\//.test(f.type)){
-      alert('"' + f.name + '" is not a photo or video.');
-      continue;
-    }
-    var data = isVideo ? await tpReadFile(f) : await tpShrinkImage(f);
-    if(data) _tpFiles.push({ name: f.name, type: isVideo ? 'video' : 'image', data: data });
-  }
-  if(input) input.value = '';
-  tpDrawFiles();
-}
-
 function tpDrawFiles(){
   var list = document.getElementById('tp-files-list');
   if(!list) return;
@@ -6213,12 +6151,6 @@ function tpDrawFiles(){
       + '</div>';
   }).join('');
 }
-
-function tpRemoveFile(i){
-  _tpFiles.splice(i, 1);
-  tpDrawFiles();
-}
-
 
 // ── Telling the manager a ticket arrived ─────────────────────────────────
 // The portal works, but a ticket that nobody sees is worse than no portal.
@@ -13995,11 +13927,16 @@ function conditionColour(c){
 // ── Schedule ─────────────────────────────────────────────────────────────
 // Due dates are COMPUTED, never auto-created as visits — he was explicit that
 // the system only flags what's due and the manager schedules it himself.
+// The only addMonths in the file. A duplicate without the month-end clamp used
+// to sit above it; this one always won, so warranty dates were already clamped.
+// It keeps the guard and the parseInt the deleted copy had — warranty_months
+// arrives from the database and can be a string.
 function addMonths(dateStr, n){
+  if(!dateStr) return null;
   var d = new Date(dateStr);
   if(isNaN(d)) return null;
   var day = d.getDate();
-  d.setMonth(d.getMonth() + n);
+  d.setMonth(d.getMonth() + (parseInt(n, 10) || 0));
   if(d.getDate() < day) d.setDate(0);   // clamp 31 Jan + 1 month → 28/29 Feb
   return d;
 }
