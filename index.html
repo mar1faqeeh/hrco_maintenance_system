@@ -309,7 +309,7 @@ html,body{height:100%;overflow:auto;font-family:Tajawal,sans-serif;font-size:14p
 <div id="pg-visits" style="display:none">
   <div class="ph"><div><div class="pt" id="t-visits-pg">Visits</div><div class="ps" id="t-visits-sub">All visits and reports</div></div><button class="btn btn-p" onclick="go('newvisit')"><i class="ti ti-plus"></i></button></div>
   <div class="vtbar">
-    <div class="sbox"><i class="ti ti-search"></i><input type="text" id="visSearch" placeholder="Search..." oninput="filterVis(this.value)"></div>
+    <div class="sbox"><i class="ti ti-search"></i><input type="text" id="visSearch" placeholder="Visit no., client or technician…" data-ph-en="Visit no., client or technician…" data-ph-ar="رقم الزيارة أو العميل أو الفني…" data-ph-ur="وزٹ نمبر، کلائنٹ یا ٹیکنیشن…" oninput="filterVis(this.value)"></div>
     <div class="ftabs">
       <button class="ftab" onclick="setVF('all',this)" id="vf-all" style="background:#1D4E89;color:#fff">All</button>
       <button class="ftab" onclick="setVF('Completed',this)" id="vf-done">Done</button>
@@ -318,8 +318,9 @@ html,body{height:100%;overflow:auto;font-family:Tajawal,sans-serif;font-size:14p
       <button class="ftab" onclick="setVF('mine',this)" id="vf-mine" data-en="My visits" data-ar="زياراتي" data-ur="میری وزٹس">My visits</button>
     </div>
   </div>
-  <div class="tbl">
-    <div class="thd" style="grid-template-columns:2fr 1.2fr 1fr 1fr 0.8fr 120px">
+  <div class="tbl" style="overflow-x:auto">
+    <div class="thd" style="grid-template-columns:minmax(160px,1fr) 2fr 1.2fr 1fr 1fr 0.8fr 120px;min-width:940px">
+      <div data-en="Visit No." data-ar="رقم الزيارة" data-ur="وزٹ نمبر">Visit No.</div>
       <div>Client</div><div>Technician</div><div>Type</div><div>Date</div><div>Status</div><div></div>
     </div>
     <div id="visBody"></div>
@@ -2252,7 +2253,16 @@ function renderVisits(f,q){
   updateVisitsBadge();
   var body=document.getElementById('visBody');if(!body)return;body.innerHTML='';
   var fl=visData.filter(function(r){
-    var mq=!q||r.client.toLowerCase().includes(q.toLowerCase())||r.tech.toLowerCase().includes(q.toLowerCase());
+    // Search matches the reference as well — that is the number a customer
+    // quotes down the phone. Typing just the digits ("0241") finds it, and so
+    // does an old visit's plain id.
+    var _ql = String(q||'').toLowerCase().replace(/^#/, '');
+    var _ref = String(visitRef(r) || '').toLowerCase();
+    var mq = !q
+      || String(r.client||'').toLowerCase().includes(_ql)
+      || String(r.tech||'').toLowerCase().includes(_ql)
+      || _ref.includes(_ql)
+      || String(r.id||'') === _ql;
     // A contract round is a visit that produced inspection cards — that's what
     // separates it from an ordinary call-out, whatever its visit type says.
     var mf = (visFil==='all') ? true
@@ -2265,7 +2275,9 @@ function renderVisits(f,q){
   var typeLabel={'warranty':t('typeWarranty'),'paid':t('typePaid'),'contract':t('typeContract')};
   var stBadge={'Completed':'b-s','Pending':'b-w'};
   fl.forEach(function(r){
-    var row=document.createElement('div');row.className='trow';row.style.gridTemplateColumns='2fr 1.2fr 1fr 1fr 0.8fr 120px';
+    var row=document.createElement('div');row.className='trow';
+    row.style.gridTemplateColumns='minmax(160px,1fr) 2fr 1.2fr 1fr 1fr 0.8fr 120px';
+    row.style.minWidth='940px';
     var rid = r.id||'';
     var stb = stBadge[r.status]||'b-g';
     var tlbl = typeLabel[r.visit_type]||typeLabel[r.type]||r.visit_type||r.type||'—';
@@ -2279,7 +2291,8 @@ function renderVisits(f,q){
       row.style.borderInlineStart = '3px solid #6D28D9';
       row.style.background = '#FBFAFF';
     }
-    row.innerHTML='<div class="tc"><div style="font-weight:500">'+(r.client||'—')
+    row.innerHTML='<div class="tc" style="font-weight:700;color:#1D4E89" dir="ltr"><bdi>'+visitRef(r)+'</bdi></div>'
+      +'<div class="tc"><div style="font-weight:500">'+(r.client||'—')
       + (_on ? ' <span style="color:#1D4E89">— '+_on+'</span>' : '')
       + '</div><div class="tc2">'+(r.equipment||r.equip||'—')
       + (_cc ? ' <span onclick="event.stopPropagation();openContractOfVisit(' + r.id + ')" title="'
@@ -2489,7 +2502,7 @@ async function deductVisitParts(visitId){
     await saveStock(r.part.id, store, Math.max(0, before - 1), null);
     var mv = { part_id: r.part.id, type: 'out', qty: 1, owner: store,
                dest: (v.client || ''), tech: (v.tech || curUser || ''),
-               note: (ar ? ('صرف في الزيارة رقم ' + v.id) : ('Fitted on visit #' + v.id)),
+               note: (ar ? ('صرف في الزيارة ' + visitRef(v)) : ('Fitted on visit ' + visitRef(v))),
                date: v.date || today };
     try{ await dbSave('parts_history', mv); }catch(e){}
     histData.unshift(Object.assign({ id: Date.now() + i, partId: r.part.id }, mv));
@@ -2514,7 +2527,7 @@ async function deductVisitParts(visitId){
 
 function _showVisitModal(v){
   currentViewId = v.id;
-  document.getElementById('vm-title').textContent = 'Visit #' + v.id + ' — ' + (v.client||'');
+  document.getElementById('vm-title').textContent = visitRef(v) + ' — ' + (v.client||'');
   document.getElementById('vm-client').textContent = v.client || '—';
   var _vmTech = document.getElementById('vm-tech');
   if(_vmTech){
@@ -7694,7 +7707,7 @@ async function apDashSave(){
 // database doesn't have. Rather than guessing which one, ask it directly.
 // ══════════════════════════════════════
 var DB_EXPECTED = {
-  visits: ['client','location','map_url','task_category','order_id','is_exception','exception_reason',
+  visits: ['client','visit_no','location','map_url','task_category','order_id','is_exception','exception_reason',
            'items','equipment','serial_number','model','parts','parts_used','helpers','stock_deducted',
            'tech','visit_type','status','fault','notes','date','time','sig_tech','sig_client','photos'],
   maintenance_requests: ['client','client_id','order_id','city','zone','location','map_url','contact_person',
@@ -14327,6 +14340,7 @@ async function saveScheduledRound(){
   if(!tech){ alert(TR('اختر الفني.', 'Please choose a technician.')); return; }
 
   var visit = {
+    visit_no:   nextVisitNumber(),
     client:     cl ? (cl.name || cl.nickname) : '',
     tech:       tech,
     visit_type: 'عقد',
@@ -14349,8 +14363,8 @@ async function saveScheduledRound(){
   closeMod('scheduleRoundModal');
   updateVisitsBadge();
   renderContractDetail();
-  alert(ar ? ('✅ جُدولت الزيارة رقم ' + visit.id + ' لـ ' + tech + ' بتاريخ ' + date + '.\n\nستظهر في "زياراتي" عنده.')
-           : ('✅ Visit #' + visit.id + ' scheduled for ' + tech + ' on ' + date + '.\n\nIt will appear under his "My visits".'));
+  alert(ar ? ('✅ جُدولت الزيارة ' + visitRef(visit) + ' لـ ' + tech + ' بتاريخ ' + date + '.\n\nستظهر في "زياراتي" عنده.')
+           : ('✅ Visit ' + visitRef(visit) + ' scheduled for ' + tech + ' on ' + date + '.\n\nIt will appear under his "My visits".'));
 }
 
 // Any visit already booked for this contract's client that hasn't happened yet.
@@ -14454,6 +14468,7 @@ async function startContractRound(){
   if(!confirm(ar ? ('إنشاء زيارة جديدة لعقد "' + (c.name||'') + '"؟') : ('Create a visit for "' + (c.name||'') + '"?'))) return;
 
   var visit = {
+    visit_no:   nextVisitNumber(),
     client:     clientName,
     tech:       curUser || curUserLogin || '',
     visit_type: 'عقد',
@@ -18229,10 +18244,26 @@ async function saveVisitEdits(){
   }catch(e){}
 }
 
+// Stamp a reference number on a NEW visit only. Editing must never renumber a
+// visit — the number may already be printed on a sheet the customer is holding.
+function stampVisitNumber(visit, existingId){
+  if(existingId){
+    // Carry the number it already has, so the in-memory copy stays complete.
+    // A visit created before numbering existed keeps none, and goes on showing
+    // its id rather than being handed a number out of sequence.
+    var prior = visData.find(function(x){ return String(x.id) === String(existingId); });
+    if(prior && prior.visit_no) visit.visit_no = prior.visit_no;
+    return visit;
+  }
+  if(!visit.visit_no) visit.visit_no = nextVisitNumber();
+  return visit;
+}
+
 async function saveVisitDraft() {
   var visit = collectVisitData();
   visit.status = statusForDb(visit.status);
   if(currentVisitId) visit.id = currentVisitId;
+  stampVisitNumber(visit, currentVisitId);
   logActivity(currentVisitId ? 'update' : 'create', 'visit',
               (visit.client || '') + ' — ' + (visit.equipment || ''),
               null, logSnapshot(visit, ['client','equipment','visit_type','tech','status','date']));
@@ -18276,6 +18307,7 @@ async function saveAndSign() {
   }
 
   if(currentVisitId) visit.id = currentVisitId;
+  stampVisitNumber(visit, currentVisitId);
   var result = await dbSave('visits', visit);
   if(result && result[0]){
     var savedId = result[0].id;
@@ -18386,6 +18418,35 @@ async function saveAndSign() {
   }
 
   go('signature');
+}
+
+// ── Visit reference number ───────────────────────────────────────────────
+// HRCO-MR-2026-0241. The database id stays underneath as the real key — this
+// is the number a customer, an accountant or a technician actually quotes, so
+// it restarts each year and carries the brand.
+// The counter reads the highest number ALREADY ISSUED this year, so deleting a
+// visit leaves a gap rather than handing the same number out twice.
+function nextVisitNumber(){
+  var year = new Date().getFullYear();
+  var re = new RegExp('-' + year + '-(\\d+)$');
+  var top = 0;
+  visData.forEach(function(v){
+    var m = String(v.visit_no || '').match(re);
+    if(!m) return;
+    var n = parseInt(m[1], 10);
+    if(!isNaN(n) && n > top) top = n;
+  });
+  var brand = (typeof companyShortSlug === 'function') ? companyShortSlug() : '';
+  if(brand === 'Company') brand = '';   // the placeholder is not a brand
+  return [brand, 'MR', year, String(top + 1).padStart(4, '0')].filter(Boolean).join('-');
+}
+
+// What to SHOW for a visit. One saved before this existed has no number of its
+// own, so it keeps showing its id rather than a blank or an invented number.
+function visitRef(v){
+  if(!v) return '';
+  if(v.visit_no) return String(v.visit_no);
+  return '#' + v.id;
 }
 
 function collectVisitData() {
@@ -18637,7 +18698,7 @@ function _doPrintVisit(id, v, techSigImg, clientSigImg, visitDateTime, vtype, pa
   var _fileName = (company('short') || 'Report') + '-MR_'
     + (_slug(v.client) || 'Client')
     + (_slug(_orderName) ? ('-' + _slug(_orderName)) : '')
-    + '#' + id;
+    + '#' + ((v && v.visit_no) ? String(v.visit_no).split('-').pop() : id);
 
   var html = '<!DOCTYPE html><html dir="ltr"><head><meta charset="UTF-8">'
     + '<title>' + _fileName + '</title>'
@@ -18679,7 +18740,7 @@ function _doPrintVisit(id, v, techSigImg, clientSigImg, visitDateTime, vtype, pa
     + '<div class="content">'
     + '<div class="report-title">'
     + '<div><div class="title-en">Maintenance Visit Report</div><div class="title-ar">كشف زيارة صيانة</div></div>'
-    + '<div class="report-num"><div class="num">#' + id + '</div><div class="dt">' + visitDateTime + '</div></div>'
+    + '<div class="report-num"><div class="num">' + ((typeof visitRef==='function') ? visitRef(v) : ('#' + id)) + '</div><div class="dt">' + visitDateTime + '</div></div>'
     + '</div>'
     + '<table>'
     + '<tr>'
