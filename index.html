@@ -15,7 +15,7 @@
 html,body{height:100%;overflow:auto;font-family:Tajawal,sans-serif;font-size:14px;background:#F0F4F8;color:#1a202c}
 /* Layout */
 #app{display:flex;flex-direction:column;height:100vh}
-#topbar{height:56px;background:#0F2D52;display:flex;align-items:center;gap:12px;padding:0 20px;flex-shrink:0;z-index:10;box-shadow:0 2px 8px rgba(0,0,0,.25)}
+#topbar{height:56px;background:#0F2D52;display:flex;align-items:center;gap:12px;padding:0 20px;flex-shrink:0;z-index:10;box-shadow:0 2px 8px rgba(0,0,0,.25);overflow:hidden}
 #body{display:flex;flex:1;min-height:0}
 #sidebar{width:220px;background:#fff;border-left:1px solid #D9E2EC;display:flex;flex-direction:column;overflow-y:auto;flex-shrink:0;z-index:5;pointer-events:auto}
 [dir=ltr] #sidebar{border-left:none;border-right:1px solid #D9E2EC}
@@ -23,8 +23,11 @@ html,body{height:100%;overflow:auto;font-family:Tajawal,sans-serif;font-size:14p
 /* Topbar */
 .tlogo{width:36px;height:36px;background:rgba(255,255,255,.12);border-radius:8px;display:flex;align-items:center;justify-content:center;flex-shrink:0}
 .tlogo i{color:#7EC8E3;font-size:20px}
-.tbrand{flex:1;min-width:0}
-.tname{color:#fff;font-size:15px;font-weight:700}
+.tbrand{flex:1;min-width:0;overflow:hidden}
+.tname{color:#fff;font-size:15px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+/* A narrow phone cannot hold the full registered name — clipping it to
+   "شركة…" tells nobody anything, so the short name takes over there. */
+#side-brand-short{display:none}
 .tsub{color:#7EC8E3;font-size:11px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .tright{display:flex;align-items:center;gap:10px;flex-shrink:0}
 .lgsw{display:flex;background:rgba(255,255,255,.1);border-radius:99px;padding:3px;gap:2px}
@@ -175,6 +178,13 @@ html,body{height:100%;overflow:auto;font-family:Tajawal,sans-serif;font-size:14p
 @media(max-width:520px){
   #main{padding:12px}
   .grf-label{display:none}
+  #topbar{padding:0 12px;gap:8px}
+  .tname{font-size:14px}
+  #side-brand{display:none}
+  #side-brand-short{display:inline}
+  /* The strapline is the same on every screen — the company name is not, so
+     it keeps the space on a narrow phone. */
+  .tsub{display:none}
   .sg-4{gap:8px}
   .sg-5{grid-template-columns:repeat(2,1fr)}
   .tcgrid{grid-template-columns:1fr}
@@ -202,7 +212,7 @@ html,body{height:100%;overflow:auto;font-family:Tajawal,sans-serif;font-size:14p
     <button class="ham" onclick="toggleSb()"><i class="ti ti-menu-2"></i></button>
     <div class="tlogo"><i class="ti ti-snowflake"></i></div>
     <div class="tbrand">
-      <div class="tname" id="side-brand" style="white-space:normal;line-height:1.3;word-break:break-word"></div>
+      <div class="tname"><span id="side-brand"></span><span id="side-brand-short"></span></div>
       <div class="tsub" id="t-appname">Maintenance Management System</div>
     </div>
     <div class="tright">
@@ -5159,10 +5169,6 @@ var FEATURE_FLAGS = [
     en:'Maintenance Contracts', ar:'عقود الصيانة',
     enDesc:'Periodic contracts with a fixed item list and a card per item on every visit.',
     arDesc:'عقود دورية بقائمة أصناف محددة وبطاقة لكل صنف في كل زيارة.' },
-  { key:'ai_diagram_search', def:false, built:true,
-    en:'AI Diagram Search', ar:'البحث عن الرسومات بالذكاء الاصطناعي',
-    enDesc:'Search the web for exploded-view drawings. Needs the search keys configured.',
-    arDesc:'البحث عن رسومات القطع على الإنترنت. يحتاج ضبط مفاتيح البحث.' },
   { key:'warehouse_email',   def:true,  built:true,
     en:'Send Parts Orders to the Warehouse by Email', ar:'إرسال طلبات القطع للمستودع بالإيميل',
     enDesc:'Shows the "Send to Warehouse" button on approved parts requests.',
@@ -5266,8 +5272,10 @@ function applyFeatureFlags(){
   // A hidden feature must not leave its section heading stranded
   try{ hideEmptyNavSections(); }catch(e){}
 
-  var aiCard = document.getElementById('ai-search-card');
-  if(aiCard) aiCard.style.display = featureOn('ai_diagram_search') ? '' : 'none';
+  // The old card was an AI search that never worked; this one needs no key and
+  // no billing, so it is always available — the flag no longer gates it.
+  var fdCard = document.getElementById('find-diagram-card');
+  if(fdCard) fdCard.style.display = '';
   // the warehouse button is drawn per request, so just repaint that list
   if(typeof renderPartsRequests === 'function' && document.getElementById('po-list')){
     try{ renderPartsRequests(); }catch(e){}
@@ -7100,8 +7108,13 @@ function applyCompany(){
   // The sidebar carries the FULL registered name, following the language.
   // (applyLoginBrand sets this too; keeping both in step avoids one of them
   // quietly overwriting the other.)
+  var full = companyName() || short || '';
   var sub = document.getElementById('side-brand') || document.querySelector('.tsub');
-  if(sub) sub.textContent = companyName() || short || '';
+  if(sub){ sub.textContent = full; sub.title = full; }
+  // The phone shows the short name instead; CSS decides which one is visible,
+  // so there is no resize listener to get wrong.
+  var subS = document.getElementById('side-brand-short');
+  if(subS){ subS.textContent = short || full; subS.title = full; }
 
   try{ document.title = (short || companyName() || '') + ' — ' + ((LNG==='ar') ? 'نظام إدارة الصيانة' : 'Maintenance System'); }catch(e){}
 
@@ -13165,6 +13178,10 @@ function resetEquipForm(){
   var pf = document.getElementById('ue-parts-field'); if(pf) pf.style.display = 'none';
   var hf = document.getElementById('ue-hotspot-field'); if(hf) hf.style.display = 'none';
   uePages = []; uePositions = {}; ueParsedParts = [];
+  // The paste box belongs to the search flow only — hide it again so a manual
+  // upload does not show a target nobody asked for.
+  var ph = document.getElementById('ue-paste-hint'); if(ph) ph.style.display = 'none';
+  _fdPending = null;
   setEquipModalMode(false);
 }
 
@@ -13440,57 +13457,107 @@ function clearVisitPhotos(){
 }
 
 // ══════════════════════════════════════
-// AI DIAGRAM SEARCH
+// FINDING A PARTS DRAWING — no API, no key, no billing
 // ══════════════════════════════════════
-async function aiSearchDiagram(){
-  var brand=(document.getElementById('ai-brand')||{}).value.trim();
-  var model=(document.getElementById('ai-model')||{}).value.trim();
-  if(!brand||!model){ alert('Please enter both brand and model number'); return; }
-  var results=document.getElementById('ai-search-results');
-  var thinking=document.getElementById('ai-thinking');
-  var content=document.getElementById('ai-results-content');
-  var btn=document.getElementById('ai-search-btn');
-  if(results) results.style.display='block';
-  if(thinking) thinking.style.display='block';
-  if(content) content.innerHTML='';
-  if(btn){ btn.disabled=true; btn.innerHTML='<i class="ti ti-loader" style="animation:spin 1s linear infinite"></i> Searching...'; }
-  try{
-    var response=await fetchWithTimeout('/api/search-diagram',{
-      method:'POST',
-      headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({ brand:brand, model:model })
-    }, 70000);
-    var data=await response.json();
-    if(!response.ok){
-      if(thinking) thinking.style.display='none';
-      var errMsg = data.error || ('HTTP '+response.status);
-      if(content) content.innerHTML='<div style="padding:12px;background:#FCEBEB;border-radius:8px;color:#C0392B;font-size:13px">Search failed: '+errMsg+'</div>';
-      if(btn){ btn.disabled=false; btn.innerHTML='<i class="ti ti-search"></i> Search'; }
+// The automated route died twice: Google's image API needs billing, and the
+// Custom Search API is now closed to new customers and shuts down entirely on
+// 1 Jan 2027. This route depends on none of it — and it builds a library of
+// YOUR machines rather than returning "something similar".
+function findDiagram(){
+  var brand = ((document.getElementById('fd-brand')||{}).value||'').trim();
+  var model = ((document.getElementById('fd-model')||{}).value||'').trim();
+  if(!brand || !model){
+    alert(TR('اكتب الماركة والموديل أولاً.', 'Enter the brand and the model first.'));
+    return;
+  }
+
+  // Already archived? Say so instead of sending him hunting for it again.
+  var have = (typeof equipmentForModel === 'function') ? equipmentForModel(model, brand + ' ' + model) : null;
+  var box = document.getElementById('fd-known');
+  if(have){
+    if(box){
+      box.innerHTML = '<div style="padding:11px 14px;background:#E7F6EC;border:1px solid #BFE0C8;border-radius:10px;font-size:13px;color:#2D7D3A">'
+        + '<i class="ti ti-check"></i> ' + TR('هذا الموديل عندك بالفعل: ', 'You already have this model: ')
+        + '<b>' + String(have.name || model).replace(/</g,'&lt;') + '</b>'
+        + ' <span onclick="openDiagramFor(' + have.id + ')" style="cursor:pointer;text-decoration:underline">'
+        + TR('افتحه', 'Open it') + '</span></div>';
+    }
+    return;
+  }
+  if(box) box.innerHTML = '';
+
+  // "exploded view" and "parts diagram" are the terms manufacturers actually
+  // print on these sheets — plain "diagram" returns wiring schematics.
+  var q = encodeURIComponent(brand + ' ' + model + ' exploded view parts diagram');
+  window.open('https://www.google.com/search?tbm=isch&q=' + q, '_blank');
+
+  // Open the archive form pre-filled, ready for the paste.
+  _fdPending = { brand: brand, model: model };
+  resetEquipForm();
+  openMod('uploadEquipModal');
+  var nm = document.getElementById('ue-name');
+  var br = document.getElementById('ue-brand');
+  var md = document.getElementById('ue-model');
+  if(nm) nm.value = brand + ' ' + model;
+  if(br) br.value = brand;
+  if(md) md.value = model;
+  var st = document.getElementById('ue-paste-hint');
+  if(st) st.style.display = 'block';
+}
+
+var _fdPending = null;
+
+// The pasted drawing becomes page 1 — exactly what an uploaded file becomes,
+// so everything downstream (hotspots, parts list, model linking) is unchanged.
+function ueAcceptPastedDiagram(blob){
+  if(!blob) return;
+  var reader = new FileReader();
+  reader.onload = function(e){
+    shrinkDataUrl(e.target.result, 1400, 0.8).then(function(small){
+      if(!small){
+        alert(TR('تعذّرت معالجة الصورة.', 'That image could not be processed.'));
+        return;
+      }
+      uePages.unshift({ dataUrl: small, label: 'Drawing' });
+      uePositions = {};
+      ueRenderPagesStrip();
+      ueSyncMainPreview();
+      var pf = document.getElementById('ue-parts-field');
+      if(pf) pf.style.display = 'block';
+      try{ ueRebuildHotspotList(); }catch(err){}
+      var st = document.getElementById('ue-files-status');
+      if(st) st.textContent = TR('لُصق المخطط — أضف صفحات جدول القطع إن وُجدت، ثم احفظ.',
+                                 'Drawing pasted — add parts-list pages if you have them, then save.');
+    });
+  };
+  reader.readAsDataURL(blob);
+}
+
+function ueOnPaste(ev){
+  var items = (ev.clipboardData || window.clipboardData || {}).items || [];
+  for(var i = 0; i < items.length; i++){
+    if(items[i].type && items[i].type.indexOf('image') === 0){
+      ev.preventDefault();
+      ueAcceptPastedDiagram(items[i].getAsFile());
       return;
     }
-    if(thinking) thinking.style.display='none';
-    // The endpoint now returns the parsed result object directly.
-    // (Older Anthropic-style {content:[{type:'text',...}]} replies are still
-    //  handled below, so an outdated deployment doesn't break the page.)
-    var parsed = null;
-    if(data && (data.results || data.found !== undefined)){
-      parsed = data;
-    } else if(data && data.content){
-      var text='';
-      data.content.forEach(function(b){ if(b.type==='text') text+=b.text; });
-      try{ var m=text.match(/\{[\s\S]*\}/); if(m) parsed=JSON.parse(m[0]); }catch(e){}
-    }
-    if(parsed) renderAIResults(brand,model,parsed);
-    else if(content) content.innerHTML='<div style="padding:12px;background:#FDF0E0;border-radius:8px;font-size:13px;color:#C4680A">Could not read the search response.</div>';
-  }catch(e){
-    if(thinking) thinking.style.display='none';
-    var msg = (e && e.name === 'AbortError')
-      ? 'The search took too long and was stopped. Please try again — if it keeps happening, use "Upload Manually" instead.'
-      : ('Search failed: ' + e.message);
-    if(content) content.innerHTML='<div style="padding:12px;background:#FCEBEB;border-radius:8px;color:#C0392B;font-size:13px">'+msg+'</div>';
   }
-  if(btn){ btn.disabled=false; btn.innerHTML='<i class="ti ti-search"></i> Search'; }
+  var text = (ev.clipboardData || window.clipboardData || {}).getData
+    ? (ev.clipboardData || window.clipboardData).getData('text') : '';
+  if(text && /^https?:\/\//.test(text)){
+    ev.preventDefault();
+    alert(TR('هذا رابط وليس صورة.\n\nاضغط يميناً على المخطط واختر "نسخ الصورة" — لا "نسخ عنوان الصورة".',
+             'That is a link, not a picture.\n\nRight-click the drawing and choose "Copy image" — not "Copy image address".'));
+  }
 }
+
+function ueOnDrop(ev){
+  ev.preventDefault();
+  var f = ev.dataTransfer && ev.dataTransfer.files && ev.dataTransfer.files[0];
+  if(f && /^image\//.test(f.type)) ueAcceptPastedDiagram(f);
+  else alert(TR('أفلت ملف صورة.', 'Drop an image file.'));
+}
+
 
 function renderAIResults(brand,model,data){
   var content=document.getElementById('ai-results-content'); if(!content) return;
@@ -19329,31 +19396,34 @@ async function showPublicReport(token){
   </div>
 
   <!-- AI Search Section -->
-  <div class="card" id="ai-search-card" style="margin-bottom:16px">
-    <div class="ch"><div class="ct"><i class="ti ti-robot" style="color:#7C3AED"></i> AI Diagram Search</div></div>
+  <div class="card" id="find-diagram-card" style="margin-bottom:16px">
+    <div class="ch"><div class="ct"><i class="ti ti-search" style="color:#1D4E89"></i>
+      <span data-en="Find a parts drawing" data-ar="ابحث عن مخطط قطع" data-ur="پارٹس ڈرائنگ تلاش کریں">Find a parts drawing</span></div></div>
     <div style="padding:16px">
-      <div style="display:grid;grid-template-columns:1fr 1fr auto;gap:10px;align-items:end;margin-bottom:12px">
+      <div style="font-size:12px;color:#718096;margin-bottom:12px"
+           data-en="Open the search, copy the drawing, then paste it below. The picture is stored here — not a link, so it stays yours even if the supplier reorganises their site."
+           data-ar="افتح البحث، انسخ المخطط، ثم الصقه بالأسفل. تُحفظ الصورة نفسها عندك — لا رابطها، فتبقى معك حتى لو غيّر المورّد موقعه."
+           data-ur="سرچ کھولیں، ڈرائنگ کاپی کریں، پھر نیچے پیسٹ کریں۔ تصویر خود محفوظ ہوتی ہے — لنک نہیں۔">Open the search, copy the drawing, then paste it below.</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr auto;gap:10px;align-items:end">
         <div>
-          <label style="font-size:11px;font-weight:700;color:#718096;display:block;margin-bottom:4px">Brand / Manufacturer *</label>
-          <input id="ai-brand" type="text" placeholder="e.g. Manitowoc, Hoshizaki, Rational" style="width:100%;padding:9px 12px;border:1.5px solid #D9E2EC;border-radius:8px;font-size:13px;font-family:inherit;outline:none">
+          <label style="font-size:11px;font-weight:700;color:#718096;display:block;margin-bottom:4px"
+                 data-en="Brand *" data-ar="الماركة *" data-ur="برانڈ *">Brand *</label>
+          <input id="fd-brand" type="text" placeholder="Rational, Hoshizaki, Manitowoc"
+                 style="width:100%;padding:9px 12px;border:1.5px solid #D9E2EC;border-radius:8px;font-size:13px;font-family:inherit;outline:none">
         </div>
         <div>
-          <label style="font-size:11px;font-weight:700;color:#718096;display:block;margin-bottom:4px">Model Number *</label>
-          <input id="ai-model" type="text" placeholder="e.g. IM-200, F-801MRJ3-C" style="width:100%;padding:9px 12px;border:1.5px solid #D9E2EC;border-radius:8px;font-size:13px;font-family:inherit;outline:none" onkeydown="if(event.key==='Enter') aiSearchDiagram()">
+          <label style="font-size:11px;font-weight:700;color:#718096;display:block;margin-bottom:4px"
+                 data-en="Model *" data-ar="الموديل *" data-ur="ماڈل *">Model *</label>
+          <input id="fd-model" type="text" placeholder="SCC-61, IM-200, F-801MRJ3-C"
+                 onkeydown="if(event.key==='Enter') findDiagram()"
+                 style="width:100%;padding:9px 12px;border:1.5px solid #D9E2EC;border-radius:8px;font-size:13px;font-family:inherit;outline:none">
         </div>
-        <button onclick="aiSearchDiagram()" id="ai-search-btn" style="padding:9px 20px;border-radius:8px;border:none;background:#7C3AED;color:#fff;cursor:pointer;font-size:13px;font-weight:700;font-family:inherit;white-space:nowrap;display:flex;align-items:center;gap:6px">
-          <i class="ti ti-search"></i> Search
+        <button onclick="findDiagram()" class="btn btn-p" style="white-space:nowrap">
+          <i class="ti ti-external-link"></i>
+          <span data-en="Search the web" data-ar="ابحث في الإنترنت" data-ur="انٹرنیٹ پر تلاش کریں">Search the web</span>
         </button>
       </div>
-      <!-- AI Results -->
-      <div id="ai-search-results" style="display:none">
-        <div id="ai-thinking" style="display:none;padding:16px;text-align:center;color:#7C3AED">
-          <i class="ti ti-loader" style="animation:spin 1s linear infinite;font-size:24px;display:block;margin-bottom:8px"></i>
-          <div style="font-size:13px;font-weight:600">AI is searching for diagrams...</div>
-          <div style="font-size:11px;color:#A0AEC0;margin-top:4px">Searching manufacturer databases, parts portals & documentation sites</div>
-        </div>
-        <div id="ai-results-content"></div>
-      </div>
+      <div id="fd-known" style="margin-top:12px"></div>
     </div>
   </div>
 
@@ -19464,6 +19534,26 @@ async function showPublicReport(token){
         <label><span style="display:inline-flex;align-items:center;justify-content:center;width:18px;height:18px;border-radius:50%;background:#1D4E89;color:#fff;font-size:10px;font-weight:700;margin-left:4px">2</span> Upload Files (2–4 pages)</label>
         <div style="font-size:11px;color:#718096;margin-bottom:6px">Select all pages together — images and/or a PDF. <strong>The first page should be a photo/diagram of the machine</strong>; the rest should be the parts-list pages. A PDF is automatically split into one image per page.</div>
         <input type="file" id="ue-files" accept="image/*,application/pdf" multiple onchange="ueOnFilesChange()" style="width:100%;padding:8px;border:1.5px solid #D9E2EC;border-radius:8px;font-family:inherit;font-size:13px">
+
+        <!-- Paste target: the drawing copied out of the search tab lands here
+             and becomes page 1, exactly as an uploaded file would. -->
+        <div id="ue-paste-hint" style="display:none;margin-top:10px">
+          <div style="font-size:11px;color:#718096;margin-bottom:6px"
+               data-en="Or paste the drawing you just copied:" data-ar="أو الصق المخطط الذي نسخته:"
+               data-ur="یا وہ ڈرائنگ پیسٹ کریں جو ابھی کاپی کی:">Or paste the drawing you just copied:</div>
+          <div id="ue-paste-box" tabindex="0" onpaste="ueOnPaste(event)" ondrop="ueOnDrop(event)" ondragover="event.preventDefault()"
+               style="border:2px dashed #B9C7D8;border-radius:10px;padding:20px;text-align:center;background:#F8FAFC;cursor:text;outline:none">
+            <i class="ti ti-clipboard" style="font-size:28px;color:#CBD5E1"></i>
+            <div style="font-size:12.5px;color:#4A5568;margin-top:8px;font-weight:600"
+                 data-en="Paste the drawing here  (Ctrl + V)" data-ar="الصق المخطط هنا  (Ctrl + V)"
+                 data-ur="ڈرائنگ یہاں پیسٹ کریں  (Ctrl + V)">Paste the drawing here  (Ctrl + V)</div>
+            <div style="font-size:11px;color:#A0AEC0;margin-top:4px"
+                 data-en="Right-click the picture → Copy image (not Copy image address)"
+                 data-ar="اضغط يميناً على الصورة ← نسخ الصورة (لا نسخ عنوان الصورة)"
+                 data-ur="تصویر پر رائٹ کلک ← Copy image (نہ کہ Copy image address)">Right-click the picture → Copy image</div>
+          </div>
+        </div>
+
         <div id="ue-files-status" style="font-size:11px;color:#718096;margin-top:6px"></div>
         <div id="ue-pages-strip" style="display:flex;flex-wrap:wrap;gap:8px;margin-top:10px"></div>
       </div>
