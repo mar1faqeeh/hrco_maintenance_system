@@ -1472,6 +1472,7 @@ async function loadSystemUsers(){
           name: u.full_name || u.username,
           init: (u.full_name||u.username)[0].toUpperCase(),
           email: u.email || '',
+          phone: u.phone || '',
           zones: u.zones || [],
           active: (u.active === false) ? false : true,
           must_change_password: (u.must_change_password === true || u.must_change_password === 'true')
@@ -1492,20 +1493,42 @@ async function loadSystemUsers(){
 }
 
 async function saveUserToDB(username, userData){
-  if(!_sb) return;
-  try{
-    var r = await _sb.from('system_users').upsert({
-      username: username,
-      password: userData.pass,
-      role: userData.role,
-      full_name: userData.name,
-      email: userData.email || '',
-      zones: JSON.stringify(userData.zones || []),
-      active: (userData.active === false) ? false : true
-    },{onConflict:'username'});
-    if(r.error) console.error('saveUser error:',r.error.message);
-    else console.log('✅ Saved user to DB:', username);
-  }catch(e){console.log('saveUserToDB error:',e);}
+  if(!_sb) throw new Error('No database connection.');
+  var row = {
+    username: username,
+    password: userData.pass,
+    role: userData.role,
+    full_name: userData.name,
+    email: userData.email || '',
+    phone: userData.phone || '',
+    zones: JSON.stringify(userData.zones || []),
+    active: (userData.active === false) ? false : true
+  };
+  // A missing column used to fail the WHOLE save and only whisper it to the
+  // console — the user looked saved on screen and was gone after a refresh.
+  // Drop the unknown column, keep going, and say plainly what was lost.
+  var dropped = [];
+  for(var attempt = 0; attempt < 6; attempt++){
+    var r = await _sb.from('system_users').upsert(row, { onConflict: 'username' }).select();
+    if(!r.error){
+      if(!r.data || !r.data.length) throw new Error('No row was written — check the policy on system_users.');
+      if(dropped.length){
+        alert(TR('حُفظ المستخدم، لكن لم تُحفظ هذه الحقول: ', 'The user was saved, but these fields were NOT: ')
+              + dropped.join(', ')
+              + (LNG === 'ar' ? '\n\nشغّل user_phone_column.sql' : '\n\nRun user_phone_column.sql'));
+      }
+      return r.data[0];
+    }
+    var m = String(r.error.message || '').match(/column [\"']?([a-z_]+)[\"']?|'([a-z_]+)' column/i);
+    var col = m && (m[1] || m[2]);
+    if(col && col in row && col !== 'username'){
+      delete row[col];
+      dropped.push(col);
+      continue;
+    }
+    throw new Error(r.error.message);
+  }
+  throw new Error('Could not save the user.');
 }
 function lgLang(l){
   var texts={en:{app:'Maintenance Management System',mgr:'Manager',tech:'Technician',email:'Username',pass:'Password',btn:'Sign In',hint:''},ar:{app:'نظام إدارة الصيانة',mgr:'مدير',tech:'فني',email:'اسم المستخدم',pass:'كلمة المرور',btn:'تسجيل الدخول',hint:''},ur:{app:'مینٹیننس مینجمنٹ سسٹم',mgr:'مینیجر',tech:'ٹیکنیشن',email:'یوزر نیم',pass:'پاس ورڈ',btn:'سائن ان',hint:''}};
@@ -1527,35 +1550,18 @@ function lgLang(l){
 function lgRole(r){
   LG_ROLE=r;
   var mb=document.getElementById('lg-role-mgr'),tb=document.getElementById('lg-role-tech');
-  if(r==='manager'){mb.style.background='#1D4E89';mb.style.color='#fff';mb.style.border='none';tb.style.background='#fff';tb.style.color='#4A5568';tb.style.border='1px solid #D9E2EC';document.getElementById('lg-email').value='manager';document.getElementById('lg-pass').value='';}
-  else{tb.style.background='#1D4E89';tb.style.color='#fff';tb.style.border='none';mb.style.background='#fff';mb.style.color='#4A5568';mb.style.border='1px solid #D9E2EC';document.getElementById('lg-email').value='ahmed';document.getElementById('lg-pass').value='';}
+  // The two buttons only style the form now. They used to fill in a real
+  // username, which handed a visitor a working account name.
+  if(r==='manager'){mb.style.background='#1D4E89';mb.style.color='#fff';mb.style.border='none';tb.style.background='#fff';tb.style.color='#4A5568';tb.style.border='1px solid #D9E2EC';}
+  else{tb.style.background='#1D4E89';tb.style.color='#fff';tb.style.border='none';mb.style.background='#fff';mb.style.color='#4A5568';mb.style.border='1px solid #D9E2EC';}
+  document.getElementById('lg-pass').value='';
 }
+// The login screen no longer publishes who works here: the username is typed.
+// Listing accounts told any visitor the staff roster and half of every
+// credential, which is a poor trade for saving one field of typing.
 function populateLoginDropdown(){
-  // Disabled accounts are hidden from the picker as well as blocked at login.
-  var sel = document.getElementById('lg-email');
-  // Never carry a password across a user change — whoever is picked next must
-  // type their own.
-  if(sel && !sel._clearsPass){
-    sel._clearsPass = true;
-    sel.addEventListener('change', function(){
-      var pw = document.getElementById('lg-pass');
-      if(pw) pw.value = '';
-    });
-  }
-  if(!sel) return;
-  var current = sel.value;
-  sel.innerHTML = '';
-  Object.keys(USERS).forEach(function(ukey){
-    var u = USERS[ukey];
-    if(u && (u.active === false || u.active === 'false')) return;
-    var opt = document.createElement('option');
-    opt.value = ukey;
-    opt.textContent = ukey + ' — ' + (u.name||ukey) + ' (' + (typeof roleLabel==='function' ? roleLabel(u.role) : u.role) + ')';
-    sel.appendChild(opt);
-  });
-  // Restore selection
-  if(current && sel.querySelector('option[value="'+current+'"]')) sel.value = current;
-  else if(sel.options.length) sel.value = sel.options[0].value;
+  var el = document.getElementById('lg-email');
+  if(el && el.tagName === 'SELECT') return;   // nothing to fill any more
 }
 
 function lgUpdateUserLabel(sel){
@@ -1613,7 +1619,9 @@ async function requestPasswordReset(){
   }
 
   try{
-    var r = await _sb.from('system_users').select('*').eq('login', login).limit(1);
+    // The column is `username` — not `login`. Querying the wrong name made
+    // every reset fail silently behind the deliberately vague reply.
+    var r = await _sb.from('system_users').select('*').eq('username', login).limit(1);
     var u = (r.data && r.data.length) ? r.data[0] : null;
 
     // Don't reveal whether an account exists, or whether it has an email —
@@ -1632,11 +1640,11 @@ async function requestPasswordReset(){
 
     var upd = await _sb.from('system_users')
       .update({ password: temp, must_change_password: true })
-      .eq('login', login).select();
+      .eq('username', login).select();
     if(upd.error){
       // must_change_password may not exist yet — reset the password anyway
       if(/column|schema cache/i.test(upd.error.message || '')){
-        upd = await _sb.from('system_users').update({ password: temp }).eq('login', login).select();
+        upd = await _sb.from('system_users').update({ password: temp }).eq('username', login).select();
       }
       if(upd.error) throw new Error(upd.error.message);
     }
@@ -1698,30 +1706,38 @@ async function requestPasswordReset(){
 }
 
 async function lgLogin(){
-  var email=document.getElementById('lg-email').value.trim();
-  var pass=document.getElementById('lg-pass').value;
-  var err=document.getElementById('lg-err');
-  err.style.display='none';
-  
-  // First load users from DB to get latest passwords
+  var typed = document.getElementById('lg-email').value.trim();
+  var pass = document.getElementById('lg-pass').value;
+  var err = document.getElementById('lg-err');
+  err.style.display = 'none';
+
+  if(!typed){ err.textContent = t('err'); err.style.display = 'block'; return; }
+
+  // Load the users so the newest passwords are in hand before checking.
   await loadSystemUsers();
-  populateLoginDropdown();
-  
-  // Re-read email after dropdown update
-  email = document.getElementById('lg-email').value;
-  
-  // Then check credentials
-  var u=USERS[email];
-  if(u && (u.active === false || u.active === 'false')){
-    alert('هذا الحساب معطّل. راجع مدير النظام.\nThis account is disabled. Please contact the system administrator.');
-    return;
-  }
-  if(u && u.pass===pass){
+
+  // Usernames are matched without regard to case — nobody should be locked out
+  // by a capital letter on a phone keyboard.
+  var email = Object.keys(USERS).find(function(k){
+    return k.toLowerCase() === typed.toLowerCase();
+  }) || typed;
+
+  var u = USERS[email];
+
+  // The password is checked FIRST. Announcing "this account is disabled" to
+  // anyone who merely guesses a username tells a stranger the account exists;
+  // only someone holding the right password is told why he cannot get in.
+  if(u && u.pass === pass){
+    if(u.active === false || u.active === 'false'){
+      alert(TR('هذا الحساب معطّل. راجع مدير النظام.',
+               'This account is disabled. Please contact the system administrator.'));
+      return;
+    }
     lgSuccess(u);
     try{ logActivity('login', 'session', (u.name||email)); }catch(e){}
     return;
   }
-  
+
   err.textContent=t('err'); err.style.display='block';
 }
 
@@ -1756,7 +1772,7 @@ async function promptPasswordChange(u){
   try{
     var r = await _sb.from('system_users')
       .update({ password: pass, must_change_password: false })
-      .eq('login', login).select();
+      .eq('username', login).select();
     if(r.error) throw new Error(r.error.message);
     if(!r.data || !r.data.length) throw new Error('No row updated');
     // The login check compares u.pass — writing u.password would leave the old
@@ -5723,7 +5739,10 @@ function apRenderUsers(){
       +     (isSelf ? ' <span style="font-size:10px;color:#7E93B5;font-weight:400">' + (TR('(أنت)', '(you)')) + '</span>' : '')
       +     (disabled ? ' <span style="font-size:9px;background:#3F1D1D;color:#FCA5A5;padding:2px 7px;border-radius:99px">' + (TR('معطّل', 'disabled')) + '</span>' : '')
       +   '</div>'
-      +   '<div style="font-size:11px;color:#7E93B5" dir="ltr">@' + login + (u.email ? ' · ' + u.email : '') + '</div>'
+      +   '<div style="font-size:11px;color:#7E93B5" dir="ltr">@' + login
+      +     (u.email ? ' · ' + u.email : '')
+      +     (u.phone ? ' · ' + u.phone : '')
+      +   '</div>'
       +   (u.role === 'manager'
           ? '<div style="font-size:10px;color:#9FB4D4;margin-top:4px">'
             + (zones.length
@@ -5735,6 +5754,8 @@ function apRenderUsers(){
       + '<span style="font-size:10px;font-weight:700;padding:4px 11px;border-radius:99px;background:' + info.colour + '22;color:' + info.colour + '">'
       +   (ar ? info.ar : info.en) + '</span>'
       + '<div style="display:flex;gap:6px">'
+      +   '<button onclick="apSendCredentials(\'' + login + '\')" title="' + (TR('إرسال بيانات الدخول للبريد', 'Email the login details')) + '" style="padding:7px 12px;border-radius:8px;border:1px solid ' + (u.email ? '#1E4E7A' : '#3A3A3A') + ';background:transparent;color:' + (u.email ? '#7EC8E3' : '#5A6675') + ';cursor:pointer;font-size:11px;font-weight:700;font-family:inherit"><i class="ti ti-mail-forward"></i> ' + (TR('إرسال البيانات', 'Send details')) + '</button>'
+      +   (u.phone ? '<button onclick="apWhatsAppUser(\'' + login + '\')" title="' + (TR('مراسلة على واتساب', 'Message on WhatsApp')) + '" style="padding:7px 12px;border-radius:8px;border:1px solid #1E5B36;background:transparent;color:#34D399;cursor:pointer;font-size:11px;font-weight:700;font-family:inherit"><i class="ti ti-brand-whatsapp"></i></button>' : '')
       +   '<button onclick="apEditUser(\'' + login + '\')" style="padding:7px 12px;border-radius:8px;border:1px solid #24406e;background:transparent;color:#9FB4D4;cursor:pointer;font-size:11px;font-weight:700;font-family:inherit"><i class="ti ti-pencil"></i> ' + (TR('تعديل', 'Edit')) + '</button>'
       +   (isSelf ? '' : '<button onclick="apToggleUserActive(\'' + login + '\')" style="padding:7px 12px;border-radius:8px;border:1px solid ' + (disabled ? '#1E5B36' : '#5B2E2E') + ';background:transparent;color:' + (disabled ? '#34D399' : '#FCA5A5') + ';cursor:pointer;font-size:11px;font-weight:700;font-family:inherit">' + (disabled ? (TR('تفعيل', 'Enable')) : (TR('تعطيل', 'Disable'))) + '</button>')
       + '</div>'
@@ -5776,6 +5797,8 @@ function apEditUser(login){
     +   fld(TR('الاسم', 'Full name'),  '<input id="apu-name" style="' + inputStyle + '" value="' + String(u.name||'').replace(/"/g,'&quot;') + '">')
     +   fld(TR('اسم المستخدم', 'Username'), '<input id="apu-login" dir="ltr" ' + (login ? 'disabled' : '') + ' style="' + inputStyle + (login ? ';opacity:.6' : '') + '" value="' + (login||'') + '">')
     +   fld(TR('البريد الإلكتروني', 'Email'), '<input id="apu-email" type="email" dir="ltr" style="' + inputStyle + '" value="' + String(u.email||'').replace(/"/g,'&quot;') + '">')
+    +   fld(TR('الجوال (للتنبيه على واتساب)', 'Mobile (for WhatsApp alerts)'),
+          '<input id="apu-phone" type="tel" dir="ltr" placeholder="05xxxxxxxx" style="' + inputStyle + '" value="' + String(u.phone||'').replace(/"/g,'&quot;') + '">')
     +   fld(TR('الرتبة', 'Role'),
           '<select id="apu-role" onchange="apOnRoleChange()" style="' + inputStyle + '">'
           + allRoleKeys().map(function(k){
@@ -5833,6 +5856,7 @@ async function apSaveUser(){
   var login = apEditingUser || val('apu-login').toLowerCase().replace(/\s+/g,'');
   var name  = val('apu-name');
   var email = val('apu-email');
+  var phone = val('apu-phone');
   var role  = val('apu-role');
   var pass  = val('apu-pass');
 
@@ -5843,6 +5867,11 @@ async function apSaveUser(){
   }
   if(email && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)){
     alert(TR('صيغة البريد الإلكتروني غير صحيحة', 'That email address is not valid')); return;
+  }
+  // Saudi mobiles, however they are written: 05xxxxxxxx · 9665xxxxxxxx · +9665…
+  if(phone && !/^(\+?966|0)?5\d{8}$/.test(phone.replace(/[\s-]/g,''))){
+    alert(TR('رقم الجوال غير صحيح — مثال: 0512345678', 'That mobile number is not valid — e.g. 0512345678'));
+    return;
   }
 
   var zones = Array.prototype.slice.call(document.querySelectorAll('.apu-zone:checked')).map(function(c){ return c.value; });
@@ -5857,6 +5886,7 @@ async function apSaveUser(){
     name: name || login,
     init: String(name || login).charAt(0).toUpperCase(),
     email: email,
+    phone: phone,
     zones: (role === 'manager') ? zones : [],
     active: (existing.active === false || existing.active === 'false') ? false : true
   };
@@ -5877,6 +5907,109 @@ async function apSaveUser(){
 
   apCancelUser();
   apRenderUsers();
+}
+
+// ── Send a user his login details ────────────────────────────────────────
+// It issues a NEW temporary password rather than mailing the existing one.
+// Two reasons: the old password is what he may already be using elsewhere, and
+// a password sitting in an inbox should be one that dies on first use. The
+// account is flagged to force a change at sign-in, exactly like a reset.
+async function apSendCredentials(login){
+  var u = USERS[login];
+  if(!u) return;
+  if(!isSysAdmin()){ alert(TR('هذا الإجراء لمدير النظام فقط.', 'This is for the system administrator only.')); return; }
+  if(!u.email){
+    alert(TR('لا يوجد بريد إلكتروني لهذا المستخدم — أضفه أولاً من زر تعديل.',
+             'This user has no email address — add one first with Edit.'));
+    return;
+  }
+  if(!_sb){ alert(TR('لا يوجد اتصال بقاعدة البيانات.', 'No database connection.')); return; }
+
+  if(!confirm(TR('سيتم إنشاء كلمة مرور مؤقتة جديدة لـ @' + login + ' وإرسالها إلى ' + u.email +
+                 '.\n\nكلمة المرور الحالية لن تعمل بعدها. المتابعة؟',
+                 'A NEW temporary password will be created for @' + login + ' and sent to ' + u.email +
+                 '.\n\nHis current password will stop working. Continue?'))) return;
+
+  var temp = makeTempPassword();
+  try{
+    var upd = await _sb.from('system_users')
+      .update({ password: temp, must_change_password: true })
+      .eq('username', login).select();
+    if(upd.error){
+      if(/column|schema cache/i.test(upd.error.message || '')){
+        upd = await _sb.from('system_users').update({ password: temp }).eq('username', login).select();
+      }
+      if(upd.error) throw new Error(upd.error.message);
+    }
+    if(!upd.data || !upd.data.length) throw new Error('No row was updated — check the UPDATE policy on system_users.');
+
+    var subject = (company('short') || '') + ' — ' + TR('بيانات الدخول', 'Your login details');
+    var appUrl = (location.origin + location.pathname);
+    var html =
+        '<div style="font-family:Tajawal,Arial,sans-serif;max-width:520px;margin:0 auto;border:1px solid #E2E8F0;border-radius:12px;overflow:hidden">'
+      + '<div style="background:#0F2D52;color:#fff;padding:18px 22px">'
+      +   (companyLogo() ? '<img src="' + companyLogo() + '" style="width:40px;height:40px;object-fit:contain;background:#fff;border-radius:8px;padding:3px;vertical-align:middle;margin-inline-end:10px">' : '')
+      +   '<span style="font-size:16px;font-weight:700;vertical-align:middle">' + companyName() + '</span>'
+      + '</div>'
+      + '<div style="padding:22px">'
+      +   '<p style="font-size:14px;margin:0 0 14px">' + TR('مرحباً ', 'Hello ') + (u.name || login) + ',</p>'
+      +   '<p style="font-size:13px;color:#4A5568;margin:0 0 16px">'
+      +     TR('هذه بيانات دخولك إلى نظام إدارة الصيانة:', 'Here are your login details for the maintenance system:') + '</p>'
+      +   '<div style="background:#F8FAFC;border:1.5px dashed #1D4E89;border-radius:10px;padding:16px;text-align:center;margin-bottom:16px">'
+      +     '<div style="font-size:11px;color:#718096">' + TR('اسم المستخدم', 'Username') + '</div>'
+      +     '<div style="font-size:16px;font-weight:700;margin-bottom:10px" dir="ltr">' + login + '</div>'
+      +     '<div style="font-size:11px;color:#718096">' + TR('كلمة المرور المؤقتة', 'Temporary password') + '</div>'
+      +     '<div style="font-size:24px;font-weight:800;color:#1D4E89;letter-spacing:3px" dir="ltr">' + temp + '</div>'
+      +   '</div>'
+      +   '<div style="text-align:center;margin-bottom:16px">'
+      +     '<a href="' + appUrl + '" style="display:inline-block;background:#1D4E89;color:#fff;text-decoration:none;padding:11px 26px;border-radius:8px;font-size:14px;font-weight:700">'
+      +     TR('افتح النظام', 'Open the system') + '</a></div>'
+      +   '<p style="font-size:12px;color:#C4680A;margin:0 0 6px">'
+      +     TR('⚠ سيُطلب منك تغيير كلمة المرور فور دخولك.',
+                '⚠ You will be asked to change this password as soon as you sign in.') + '</p>'
+      +   '<p style="font-size:12px;color:#718096;margin:0">'
+      +     TR('لا تشارك هذه البيانات مع أحد.', 'Do not share these details with anyone.') + '</p>'
+      + '</div>'
+      + '<div style="background:#F8FAFC;padding:12px;text-align:center;font-size:11px;color:#718096">' + companyPrintFooter() + '</div>'
+      + '</div>';
+
+    var res = await fetchWithTimeout('https://luuvvbevhdtpzywlrtux.supabase.co/functions/v1/send-email', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + SKEY },
+      body: JSON.stringify({ to: u.email, subject: subject, html: html })
+    }, 60000);
+    var data = await res.json().catch(function(){ return {}; });
+    if(!res.ok || !(data.id || data.success)){
+      // The password HAS already changed, so never report this as a success.
+      throw new Error(data.message || data.error || ('Send failed (HTTP ' + res.status + ')'));
+    }
+
+    if(USERS[login]) USERS[login].pass = temp;
+    logActivity('update', 'login details sent', '@' + login, null, { to: u.email });
+    alert(TR('✅ أُرسلت بيانات الدخول إلى ' + u.email, '✅ The login details were sent to ' + u.email));
+
+  }catch(e){
+    alert(TR('كلمة المرور تغيّرت لكن الإرسال فشل: ', 'The password WAS changed but the email failed: ')
+          + (e.message || e)
+          + TR('\n\nأبلغ المستخدم بكلمة المرور: ', '\n\nGive the user this password: ') + temp);
+  }
+}
+
+// WhatsApp needs the number in international form, without a plus or zeros.
+function waNumber(phone){
+  var d = String(phone || '').replace(/[^0-9]/g, '');
+  if(d.indexOf('00') === 0) d = d.slice(2);
+  if(d.indexOf('0') === 0) d = '966' + d.slice(1);
+  else if(d.indexOf('966') !== 0 && d.length === 9) d = '966' + d;
+  return d;
+}
+
+function apWhatsAppUser(login){
+  var u = USERS[login];
+  if(!u || !u.phone){ alert(TR('لا يوجد رقم جوال لهذا المستخدم.', 'This user has no mobile number.')); return; }
+  var msg = TR('مرحباً ' + (u.name || login) + ' — بخصوص نظام إدارة الصيانة: ',
+               'Hello ' + (u.name || login) + ' — regarding the maintenance system: ');
+  window.open('https://wa.me/' + waNumber(u.phone) + '?text=' + encodeURIComponent(msg), '_blank');
 }
 
 async function apToggleUserActive(login){
@@ -7738,7 +7871,7 @@ var DB_EXPECTED = {
   contract_items: ['contract_id','order_id','name','model','serial','location'],
   contract_cards: ['contract_id','item_id','visit_id','visit_date','condition','notes','parts_needed','inspector'],
   equipment_diagrams: ['name','brand','model','diagram_data','parts_list','extra_files'],
-  system_users: ['username','password','full_name','role','email','zones','active','must_change_password'],
+  system_users: ['username','password','full_name','role','email','phone','zones','active','must_change_password'],
   app_settings: ['key','value','updated_at']
 };
 
@@ -20404,9 +20537,12 @@ async function showPublicReport(token){
       </div>
       <div style="margin-bottom:12px">
         <label id="lg-email-lbl" style="display:block;font-size:12px;font-weight:700;color:#4A5568;margin-bottom:5px">Username</label>
-        <select id="lg-email" onchange="lgUpdateUserLabel(this)" style="width:100%;padding:10px 12px;border:1px solid #D9E2EC;border-radius:8px;font-size:14px;font-family:Tajawal,sans-serif;outline:none;color:#1a202c;box-sizing:border-box;background:#fff;cursor:pointer">
-          <option value="manager">manager — Manager</option>
-        </select>
+        <!-- autocomplete is off deliberately: the browser's saved-username list
+             pops up looking like a dropdown of everyone's accounts. Each person
+             types his own name. -->
+        <input type="text" id="lg-email" autocomplete="off" autocapitalize="none"
+               spellcheck="false" placeholder="username" onkeydown="if(event.key==='Enter')lgLogin()"
+               style="width:100%;padding:10px 12px;border:1px solid #D9E2EC;border-radius:8px;font-size:14px;font-family:Tajawal,sans-serif;outline:none;color:#1a202c;box-sizing:border-box;background:#fff">
       </div>
       <div style="margin-bottom:16px">
         <label id="lg-pass-lbl" style="display:block;font-size:12px;font-weight:700;color:#4A5568;margin-bottom:5px">Password</label>
