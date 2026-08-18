@@ -7871,6 +7871,8 @@ var DB_EXPECTED = {
   contract_items: ['contract_id','order_id','name','model','serial','location'],
   contract_cards: ['contract_id','item_id','visit_id','visit_date','condition','notes','parts_needed','inspector'],
   equipment_diagrams: ['name','brand','model','diagram_data','parts_list','extra_files'],
+  quotations: ['number','client_id','client','prospect','order_id','city','centre','km','stay',
+           'visit_base','items','notes','status','date'],
   system_users: ['username','password','full_name','role','email','phone','zones','active','must_change_password'],
   app_settings: ['key','value','updated_at']
 };
@@ -7907,6 +7909,24 @@ function apRenderQuoteSettings(){
     +     (TR('تسري على العروض الجديدة فوراً. العروض المحفوظة تحتفظ بأرقامها.', 'Applies to new quotations immediately. Saved quotations keep their figures.'))
     +   '</div></div>'
 
+    + '<div style="background:#1E293B;border:1px solid #334155;border-radius:12px;padding:16px;margin-bottom:14px">'
+    +   '<div style="font-size:13px;font-weight:700;color:#E2E8F0;margin-bottom:4px">'
+    +     (TR('أجرة الزيارة (قبل الضريبة)', 'Visit fee (before VAT)')) + '</div>'
+    +   '<div style="font-size:11px;color:#94A3B8;margin-bottom:11px">'
+    +     (TR('الأساس الحالي 500 ريال، أي 575 شاملة الضريبة. غيّره هنا متى تغيّر التسعير.',
+              'The base today is 500 SAR — 575 including VAT. Change it here whenever the pricing moves.')) + '</div>'
+    +   '<div style="display:flex;align-items:center;gap:10px">'
+    +     '<input type="number" id="ap-visit-base" min="0" step="5" value="' + quoteVisitBase() + '"'
+    +       ' style="width:140px;padding:10px 12px;border-radius:9px;border:1px solid #334155;background:#0F172A;'
+    +       'color:#E2E8F0;font-size:16px;font-weight:700;font-family:inherit;text-align:center">'
+    +     '<span style="font-size:13px;color:#94A3B8">' + (TR('ريال', 'SAR')) + '</span>'
+    +     '<span id="ap-visit-incl" style="font-size:12px;color:#7EC8E3;margin-inline-start:6px"></span>'
+    +     '<button onclick="apSaveVisitBase()" style="margin-inline-start:auto;padding:9px 18px;border:none;'
+    +       'border-radius:9px;background:#2563EB;color:#fff;font-size:13px;font-weight:700;cursor:pointer;'
+    +       'font-family:inherit"><i class="ti ti-device-floppy"></i> ' + (TR('حفظ', 'Save')) + '</button>'
+    +   '</div>'
+    + '</div>'
+
     + '<div style="background:#1E293B;border:1px solid #334155;border-radius:12px;padding:16px;margin-bottom:18px">'
     +   '<div style="font-size:13px;font-weight:700;color:#E2E8F0;margin-bottom:4px">'
     +     (TR('نسبة ضريبة القيمة المضافة', 'VAT rate')) + '</div>'
@@ -7927,7 +7947,7 @@ function apRenderQuoteSettings(){
     +   (TR('على ماذا تُطبّق الضريبة؟', 'What is the tax applied to?')) + '</div>'
     + '<div style="font-size:11px;color:#94A3B8;margin-bottom:11px">'
     +   (TR('أطفئ أي بند لا تريد احتساب ضريبة عليه.', 'Switch off anything you do not want taxed.')) + '</div>'
-    + sw('visit', 'Visit fee', 'أجرة الزيارة', TR('الـ575 = 500 + 75 ضريبة', '575 = 500 + 75 VAT'))
+    + sw('visit', 'Visit fee', 'أجرة الزيارة', quoteVisitCaption())
     + sw('parts', 'Spare parts', 'قطع الغيار',
          TR('بيع سلع — خاضع للضريبة عادةً', 'a sale of goods — normally taxable'))
     + sw('travel', 'Travel', 'المواصلات', TR('مطفأة حسب قاعدتك', 'off, per your rule'))
@@ -7947,6 +7967,23 @@ function apRenderQuoteSettings(){
 }
 
 function apUpdateVatExample(){
+  // Live "including VAT" beside the fee box, so he sees the customer-facing
+  // number while typing rather than doing the arithmetic himself.
+  var inc = document.getElementById('ap-visit-incl');
+  if(inc){
+    var box = document.getElementById('ap-visit-base');
+    var upd = function(){
+      var b = parseFloat((box || {}).value);
+      if(!isFinite(b) || b < 0){ inc.textContent = ''; return; }
+      var t = Math.round(b * (1 + quoteVatRate()) * 100) / 100;
+      inc.textContent = quoteVatOn('visit')
+        ? (TR('= ', '= ') + t + TR(' شاملة الضريبة', ' incl. VAT'))
+        : TR('(بلا ضريبة)', '(no VAT)');
+    };
+    if(box && !box._wired){ box._wired = true; box.addEventListener('input', upd); }
+    upd();
+  }
+
   var el = document.getElementById('ap-vat-example');
   if(!el) return;
   var ar = (LNG === 'ar');
@@ -7963,6 +8000,42 @@ async function apSetVatOn(key, on){
   if(ok === false) return;
   logActivity('setting', 'quotation VAT', key, null, { taxed: on ? 'yes' : 'no' });
   apRenderQuoteSettings();
+}
+
+// The caption under the "Visit fee" tax switch has to follow the setting —
+// it used to read "575 = 500 + 75" forever, which would be a lie the moment
+// the fee moved.
+function quoteVisitCaption(){
+  var base = quoteVisitBase();
+  var incl = Math.round(base * (1 + quoteVatRate()) * 100) / 100;
+  return quoteVatOn('visit')
+    ? (incl + ' = ' + base + ' + ' + (Math.round((incl - base) * 100) / 100) + (LNG==='ar' ? ' ضريبة' : ' VAT'))
+    : (base + (LNG==='ar' ? ' بلا ضريبة' : ' — no VAT'));
+}
+
+async function apSaveVisitBase(){
+  var el = document.getElementById('ap-visit-base');
+  if(!el) return;
+  var v = parseFloat(el.value);
+  if(isNaN(v) || v < 0){
+    alert(TR('اكتب مبلغاً صحيحاً.', 'Enter a valid amount.'));
+    return;
+  }
+  var before = quoteVisitBase();
+  if(v === before){ alert(TR('لم يتغيّر شيء.', 'Nothing changed.')); return; }
+  var incl = Math.round(v * (1 + quoteVatRate()) * 100) / 100;
+  if(!confirm(TR('تغيير أجرة الزيارة من ' + before + ' إلى ' + v + ' ريال؟\n\nستصبح ' + incl +
+                 ' شاملة الضريبة، وتسري على العروض الجديدة فقط.',
+                 'Change the visit fee from ' + before + ' to ' + v + ' SAR?\n\nThat is ' + incl +
+                 ' including VAT, and it applies to NEW quotations only.'))) return;
+
+  appSettings.quote_visit_base = String(v);
+  var ok = await saveAppSetting('quote_visit_base', String(v));
+  if(ok === false) return;
+  logActivity('setting', 'visit fee', v + ' SAR', { fee: before }, { fee: v });
+  apRenderQuoteSettings();
+  alert(TR('✅ صارت أجرة الزيارة ' + v + ' ريال (' + incl + ' شاملة الضريبة)',
+           '✅ The visit fee is now ' + v + ' SAR (' + incl + ' incl. VAT)'));
 }
 
 async function apSaveVatRate(){
@@ -15052,6 +15125,7 @@ async function saveQuotation(){
     prospect: _isProspect ? JSON.stringify(_qd.prospect) : null,
     order_id: _qd.order_id || null, city: _qd.city, centre: _qd.centre || '',
     km: Number(_qd.km) || 0, stay: Number(_qd.stay) || 0,
+    visit_base: (isFinite(parseFloat(_qd.visit_base)) ? parseFloat(_qd.visit_base) : quoteVisitBase()),
     items: JSON.stringify(_qd.items || []),
     notes: _qd.notes, status: _qd.status, date: _qd.date,
     total: quoteTotals(_qd).total
@@ -16050,7 +16124,15 @@ var quotationsData = [];
 var _qtFilter = 'all';
 var _qd = null;          // the quotation being edited
 
-var QUOTE_VISIT_BASE = 500;      // 575 incl. VAT = 500 + 75
+var QUOTE_VISIT_BASE = 500;      // the built-in default: 575 incl. VAT
+// The visit fee is a commercial decision, not a constant — it is read from the
+// control panel so it can move without touching the code. Saved quotations keep
+// the figures they were saved with.
+function quoteVisitBase(){
+  var v = appSettings && appSettings.quote_visit_base;
+  var n = parseFloat(v);
+  return (isFinite(n) && n >= 0) ? n : QUOTE_VISIT_BASE;
+}
 var QUOTE_VAT_DEFAULT = 15;      // the rate the country is on today
 var QUOTE_KM_RATE = 1;           // 1 SAR per km, his figure
 var QUOTE_STAY_DEFAULT = 250;
@@ -16080,8 +16162,14 @@ function quoteVatOn(what){
 function quoteVatOnParts(){ return quoteVatOn('parts'); }
 
 function blankQuotation(){
+  // Accommodation starts at ZERO. It used to open at 250, so a brand-new
+  // quotation read 825 before anything had been priced — and the 250 never
+  // appeared as a line, because a local job prints "no travel or
+  // accommodation". A charge nobody can see is a charge nobody can check.
+  // The suggestion from past quotations still fills it in once a city is
+  // chosen that actually needs a room.
   return { id:null, number:'', client_id:'', client:'', order_id:'', city:'',
-           centre:'', km:0, stay:QUOTE_STAY_DEFAULT, items:[], notes:'',
+           centre:'', km:0, stay:0, items:[], notes:'', visit_base:null,
            status:'draft', date:new Date().toISOString().split('T')[0] };
 }
 
@@ -16149,7 +16237,11 @@ function quoteTotals(q){
   });
   var travel = (Number(q.km) || 0) * QUOTE_KM_RATE;
   var stay = Number(q.stay) || 0;
-  var visit = QUOTE_VISIT_BASE;
+  // A saved quotation keeps the fee it was PRICED with. Without this, changing
+  // the fee in the panel would silently re-price every quotation already sent
+  // to a customer — the figure on his copy and the figure on ours would differ.
+  var qb = parseFloat(q.visit_base);
+  var visit = (isFinite(qb) && qb >= 0) ? qb : quoteVisitBase();
 
   // Every component is taxed or not on its own switch, at whatever rate the
   // control panel currently holds.
