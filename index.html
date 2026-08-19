@@ -248,6 +248,83 @@ html.touch-ui #visBody .vrow .v-acts .rbtn{
   }
 html.touch-ui #visBody .vrow .v-acts .rbtn:first-child{background:#1D4E89;border-color:#1D4E89;color:#fff;flex:1.6}
 
+/* ── Quotations ─────────────────────────────────────────────────────── */
+html.touch-ui #pg-quotations .thd{display:none}
+html.touch-ui #pg-quotations .card{overflow-x:visible}
+html.touch-ui #qtList .qrow{
+  display:grid !important;
+  grid-template-columns:1fr auto !important;
+  grid-template-areas:
+    "no    st"
+    "cl    cl"
+    "city  city"
+    "total acts";
+  gap:2px 10px;
+  min-width:0 !important;
+  background:#fff;border:1px solid #E2E8F0;border-radius:12px;
+  margin-bottom:9px;padding:12px 13px;
+}
+html.touch-ui #qtList .qrow .q-no{grid-area:no;font-size:12.5px;white-space:nowrap;overflow:visible}
+html.touch-ui #qtList .qrow .q-st{grid-area:st;justify-self:end}
+html.touch-ui #qtList .qrow .q-cl{grid-area:cl;margin-top:5px;white-space:normal;overflow:visible}
+html.touch-ui #qtList .qrow .q-cl > div:first-child{font-size:15px;font-weight:700;line-height:1.35}
+html.touch-ui #qtList .qrow .q-city{grid-area:city;font-size:12.5px;margin-top:2px}
+/* the total is why the page is open, so it is the biggest thing on the card */
+html.touch-ui #qtList .qrow .q-total{
+  grid-area:total;font-size:21px !important;align-self:center;margin-top:10px;
+  padding-top:10px;border-top:1px dashed #E2E8F0;white-space:nowrap;
+}
+html.touch-ui #qtList .qrow .q-acts{
+  grid-area:acts;display:flex !important;gap:7px;margin-top:10px;padding-top:10px;
+  border-top:1px dashed #E2E8F0;
+}
+html.touch-ui #qtList .qrow .q-acts .rbtn{
+  min-width:58px;min-height:44px;border:1px solid #D9E2EC;background:#F8FAFC;
+  border-radius:9px;font-size:17px !important;display:flex;align-items:center;justify-content:center;
+}
+html.touch-ui #qtList .qrow .q-acts .rbtn:first-child{background:#1D4E89;border-color:#1D4E89;color:#fff}
+
+/* ── Spare parts ────────────────────────────────────────────────────── */
+html.touch-ui #pg-parts .thd{display:none}
+html.touch-ui #invList .prow{
+  display:grid !important;
+  grid-template-columns:1fr auto !important;
+  grid-template-areas:
+    "code qty"
+    "name qty"
+    "cat  qty"
+    "cost st"
+    "acts acts";
+  gap:1px 12px;
+  min-width:0 !important;
+  background:#fff;border:1px solid #E2E8F0;border-radius:12px;
+  margin-bottom:9px;padding:12px 13px;align-items:center;
+}
+html.touch-ui #invList .prow .p-code{grid-area:code;font-size:12.5px}
+html.touch-ui #invList .prow .p-name{grid-area:name;padding-inline-end:0 !important}
+html.touch-ui #invList .prow .p-name > div{white-space:normal !important}
+html.touch-ui #invList .prow .p-cat{grid-area:cat;font-size:11.5px}
+/* quantity is the decision on this page — big enough to read at arm's length */
+html.touch-ui #invList .prow .p-qty{grid-area:qty;font-size:24px !important;text-align:center;justify-self:end}
+html.touch-ui #invList .prow .p-qty .tc2{display:block;font-size:10px}
+html.touch-ui #invList .prow .p-cost{grid-area:cost;margin-top:9px;padding-top:9px;border-top:1px solid #EDF2F7}
+html.touch-ui #invList .prow .p-st{grid-area:st;justify-self:end;margin-top:9px;padding-top:9px;border-top:1px solid #EDF2F7}
+html.touch-ui #invList .prow .p-min{display:none}
+html.touch-ui #invList .prow .p-acts{
+  grid-area:acts;display:flex !important;gap:7px;justify-content:stretch !important;
+  margin-top:10px;padding-top:10px;border-top:1px solid #EDF2F7;
+}
+html.touch-ui #invList .prow .p-acts .rbtn{
+  flex:1;min-height:44px;border:1px solid #D9E2EC;background:#F8FAFC;border-radius:9px;
+  font-size:17px !important;display:flex;align-items:center;justify-content:center;
+}
+
+/* ── Cards that already stack: only the touch targets need growing ──── */
+html.touch-ui #mr-list .btn,
+html.touch-ui #clientGrid .btn{min-height:44px;font-size:13px}
+html.touch-ui #mr-list .rbtn,
+html.touch-ui #clientGrid .rbtn{min-height:44px;min-width:44px;font-size:16px}
+
 @media print{
   #topbar,#sidebar,#bnav,.btn,.rbtn{display:none!important}
   #main{padding:0!important}
@@ -1918,6 +1995,9 @@ function lgSuccess(u, restoring){
     renderPending();
     try{ applyRolePermissions(); }catch(e){}
     try{ applyCompany(); }catch(e){}
+    // A technician has no dashboard, so land him on his own visits instead of
+    // leaving him staring at a page he is not allowed to open.
+    try{ if(curUserRole === 'technician') go('visits'); }catch(e){}
     try{ loadMaintRequests().then(function(){
       updateMaintBadge();
       // The requests widget is built from this data — it must repaint once the
@@ -2188,6 +2268,11 @@ function go(pg){
     data_entry: ['parts','parts-request',
                  'parts-orders','technicians','reports','archive','checklists']
   };
+  // Hiding the nav entry is never the rule: a stale link, the back button or a
+  // saved session would still land him on the dashboard. Redirect quietly —
+  // this is not an attempt at anything, so it needs no scolding alert.
+  if(pg === 'dashboard' && curUserRole === 'technician') pg = 'visits';
+
   var _deny = _blocked[curUserRole];
   if(_deny && _deny.indexOf(pg) !== -1){
     alert(TR('هذه الصفحة ليست ضمن صلاحياتك.', 'This page is not part of your permissions.'));
@@ -10430,12 +10515,19 @@ function applyRolePermissions(){
     var hide = false;
     if(salesOnly)  hide = (n.id !== 'nav-maint-requests');
     if(dataEntry)  hide = ['nav-clients','nav-visits','nav-maint-requests'].indexOf(n.id) === -1;
+    // The dashboard is a manager's screen — month totals, other people's
+    // pending reports, contracts due. A technician has no use for it and it is
+    // not his to read.
+    if(n.id === 'nav-dashboard' && curUserRole === 'technician') hide = true;
     if(n.id === 'nav-checklists' && !canEditChecklists()) hide = true;
     n.style.display = hide ? 'none' : '';
   });
   // The two matrix-governed entries are decided here, on the current role —
   // applyFeatureFlags() otherwise only ever ran at settings-load time, before
   // anyone had logged in, so it judged them against no role at all.
+  var bnDash = document.getElementById('bn-dashboard');
+  if(bnDash) bnDash.style.display = (curUserRole === 'technician') ? 'none' : '';
+
   try{ applyFeatureFlags(); }catch(e){}
   // A section heading with nothing under it is clutter — hide any group whose
   // items are all hidden for this role, rather than naming a fixed list that
@@ -11771,11 +11863,11 @@ function renderInvList(q,sf){
   fl.forEach(function(p){
     var st = stk(p);
     var r = document.createElement('div');
-    r.className = 'trow';
+    r.className = 'trow prow';
     r.style.gridTemplateColumns = '110px 1.8fr 1fr 0.8fr 1fr 0.8fr 1fr 118px';
     r.innerHTML =
-        '<div class="tc" style="font-weight:700;color:#1D4E89;padding-inline-end:10px"><bdi dir="ltr">' + (p.code || '—') + '</bdi></div>'
-      + '<div class="tc" style="min-width:0;padding-inline-end:14px;display:flex;align-items:center;gap:9px" title="' + String(p.name||'').replace(/"/g,'&quot;') + '">'
+        '<div class="tc p-code" style="font-weight:700;color:#1D4E89;padding-inline-end:10px"><bdi dir="ltr">' + (p.code || '—') + '</bdi></div>'
+      + '<div class="tc p-name" style="min-width:0;padding-inline-end:14px;display:flex;align-items:center;gap:9px" title="' + String(p.name||'').replace(/"/g,'&quot;') + '">'
       +   partThumb(p, 34)
       +   '<div style="min-width:0;flex:1">'
       +   '<div style="font-weight:500;unicode-bidi:plaintext;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"><bdi>' + partName(p) + '</bdi></div>'
@@ -11784,9 +11876,9 @@ function renderInvList(q,sf){
             : '')
       +   '</div>'
       + '</div>'
-      + '<div class="tc2" style="padding-inline-end:10px;white-space:nowrap"><bdi>' + catLabel(p.cat) + '</bdi></div>'
-      + '<div class="tc" style="font-weight:700">' + partQty(p) + ' <span class="tc2">' + unitLabel(p.unit) + '</span></div>'
-      + '<div class="tc" style="white-space:nowrap">'
+      + '<div class="tc2 p-cat" style="padding-inline-end:10px;white-space:nowrap"><bdi>' + catLabel(p.cat) + '</bdi></div>'
+      + '<div class="tc p-qty" style="font-weight:700">' + partQty(p) + ' <span class="tc2">' + unitLabel(p.unit) + '</span></div>'
+      + '<div class="tc p-cost" style="white-space:nowrap">'
       +   (partCost(p) > 0
             ? ('<span style="font-weight:700;color:#1a202c">' + money(partCost(p)) + '</span>'
                + '<span class="tc2"> ' + ((LNG==='ar')?'ر.س':'SAR') + '</span>')
@@ -11794,9 +11886,9 @@ function renderInvList(q,sf){
               + ((LNG==='ar')?'بلا تكلفة مسجّلة':'No cost recorded')
               + '"><i class="ti ti-alert-triangle"></i> ' + ((LNG==='ar')?'بلا تكلفة':'no cost') + '</span>')
       + '</div>'
-      + '<div class="tc2">' + p.min + ' ' + unitLabel(p.unit) + '</div>'
-      + '<div><span class="bdg ' + st.c + '">' + st.l + '</span></div>'
-      + '<div style="display:flex;gap:2px;justify-content:flex-end">'
+      + '<div class="tc2 p-min">' + p.min + ' ' + unitLabel(p.unit) + '</div>'
+      + '<div class="p-st"><span class="bdg ' + st.c + '">' + st.l + '</span></div>'
+      + '<div class="p-acts" style="display:flex;gap:2px;justify-content:flex-end">'
       +   ((canManageParts() && stockOwner !== 'all' && canEditStore(stockOwner))
             ? '<button class="rbtn" onclick="quickAdd(' + p.id + ')" title="' + (TR('إضافة كمية', 'Add stock')) + '"><i class="ti ti-package-import"></i></button>'
             : '')
@@ -15618,23 +15710,23 @@ function renderQuotations(){
   rows.forEach(function(x){
     var t = quoteTotals(x);
     var row = document.createElement('div');
-    row.className = 'trow';
+    row.className = 'trow qrow';
     row.style.gridTemplateColumns = 'minmax(200px,1.2fr) 1.6fr 1fr 1fr 110px 110px';
     row.style.minWidth = '820px';
     row.style.cursor = 'pointer';
     row.onclick = function(){ openQuotation(x.id); };
     row.innerHTML =
-        '<div class="tc" style="font-weight:700;color:#1D4E89" dir="ltr">' + (x.number || '—') + '</div>'
-      + '<div class="tc"><div style="font-weight:500">' + clientOrderLabel(x.client, x.order_id)
+        '<div class="tc q-no" style="font-weight:700;color:#1D4E89" dir="ltr">' + (x.number || '—') + '</div>'
+      + '<div class="tc q-cl"><div style="font-weight:500">' + clientOrderLabel(x.client, x.order_id)
       +   (!x.client_id ? ' <span style="background:#FDF0E0;color:#C4680A;font-size:10px;font-weight:700;padding:1px 7px;border-radius:99px">'
                         + (TR('غير مسجّل', 'Not registered')) + '</span>' : '')
       +   '</div>'
       +   '<div class="tc2">' + (x.date || '') + '</div></div>'
-      + '<div class="tc2">' + (x.city || '—') + '</div>'
-      + '<div class="tc" style="font-weight:700">' + money(t.total)
+      + '<div class="tc2 q-city">' + (x.city || '—') + '</div>'
+      + '<div class="tc q-total" style="font-weight:700">' + money(t.total)
       +   '<span class="tc2"> ' + (TR('ر.س', 'SAR')) + '</span></div>'
-      + '<div class="tc">' + quoteStatusChip(x.status) + '</div>'
-      + '<div style="display:flex;gap:4px">'
+      + '<div class="tc q-st">' + quoteStatusChip(x.status) + '</div>'
+      + '<div class="q-acts" style="display:flex;gap:4px">'
       +   '<button class="rbtn" onclick="event.stopPropagation();openQuotation(' + x.id + ')" title="' + (TR('فتح', 'Open')) + '"><i class="ti ti-eye"></i></button>'
       +   '<button class="rbtn" onclick="event.stopPropagation();deleteQuotation(' + x.id + ')" title="' + (TR('حذف', 'Delete')) + '" style="color:#C0392B"><i class="ti ti-trash"></i></button>'
       + '</div>';
