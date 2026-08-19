@@ -198,11 +198,14 @@ html,body{height:100%;overflow:auto;font-family:Tajawal,sans-serif;font-size:14p
    A Windows laptop reports hover:hover even in a narrow window, so the desktop
    table is never touched — that is the whole point of pairing the two.
    ══════════════════════════════════════════════════════════════════════ */
-@media (max-width:1180px) and (pointer:coarse) and (hover:none){
-  #pg-visits .thd{display:none}
-  #pg-visits .tbl{overflow-x:visible}
+/* Driven by a class the code puts on <html>, NOT by a media feature.
+   Samsung phones that support the S Pen report hover:hover and pointer:fine,
+   so a pure-CSS test skipped them entirely — the layout must be decided from
+   what the device actually is, and re-decided on rotate and resize. */
+html.touch-ui #pg-visits .thd{display:none}
+html.touch-ui #pg-visits .tbl{overflow-x:visible}
 
-  #visBody .vrow{
+html.touch-ui #visBody .vrow{
     display:grid !important;
     /* the row carries a 7-column template as an inline style, set by the
        renderer — an inline style beats a stylesheet, so this must be forced */
@@ -221,30 +224,29 @@ html,body{height:100%;overflow:auto;font-family:Tajawal,sans-serif;font-size:14p
     margin-bottom:9px;
     padding:12px 13px;
   }
-  #visBody .vrow.is-round{border-inline-start:4px solid #6D28D9 !important}
+html.touch-ui #visBody .vrow.is-round{border-inline-start:4px solid #6D28D9 !important}
 
-  #visBody .vrow .v-no{grid-area:no;font-size:12.5px;white-space:nowrap;overflow:visible}
-  #visBody .vrow .v-date{grid-area:date;text-align:end;font-size:11px;color:#718096}
-  #visBody .vrow .v-date div{display:inline;margin-inline-start:4px}
-  #visBody .vrow .v-cl{grid-area:cl;margin-top:4px;white-space:normal;overflow:visible}
-  #visBody .vrow .v-cl > div:first-child{font-size:15px;font-weight:700;line-height:1.35}
-  #visBody .vrow .v-tech{grid-area:tech;font-size:12.5px;color:#4A5568;white-space:normal}
-  #visBody .vrow .v-type{grid-area:type;justify-self:start;margin-top:7px}
-  #visBody .vrow .v-st{grid-area:st;justify-self:end;margin-top:7px}
+html.touch-ui #visBody .vrow .v-no{grid-area:no;font-size:12.5px;white-space:nowrap;overflow:visible}
+html.touch-ui #visBody .vrow .v-date{grid-area:date;text-align:end;font-size:11px;color:#718096}
+html.touch-ui #visBody .vrow .v-date div{display:inline;margin-inline-start:4px}
+html.touch-ui #visBody .vrow .v-cl{grid-area:cl;margin-top:4px;white-space:normal;overflow:visible}
+html.touch-ui #visBody .vrow .v-cl > div:first-child{font-size:15px;font-weight:700;line-height:1.35}
+html.touch-ui #visBody .vrow .v-tech{grid-area:tech;font-size:12.5px;color:#4A5568;white-space:normal}
+html.touch-ui #visBody .vrow .v-type{grid-area:type;justify-self:start;margin-top:7px}
+html.touch-ui #visBody .vrow .v-st{grid-area:st;justify-self:end;margin-top:7px}
 
   /* the four actions were 13px icons pushed off-screen; on a card they become
      targets an adult thumb can hit without aiming */
-  #visBody .vrow .v-acts{
+html.touch-ui #visBody .vrow .v-acts{
     grid-area:acts;display:flex !important;gap:7px;margin-top:11px;
     padding-top:10px;border-top:1px solid #EDF2F7;
   }
-  #visBody .vrow .v-acts .rbtn{
+html.touch-ui #visBody .vrow .v-acts .rbtn{
     flex:1;min-height:44px;border:1px solid #D9E2EC;background:#F8FAFC;
     border-radius:9px;font-size:17px !important;padding:0 !important;
     display:flex;align-items:center;justify-content:center;
   }
-  #visBody .vrow .v-acts .rbtn:first-child{background:#1D4E89;border-color:#1D4E89;color:#fff;flex:1.6}
-}
+html.touch-ui #visBody .vrow .v-acts .rbtn:first-child{background:#1D4E89;border-color:#1D4E89;color:#fff;flex:1.6}
 
 @media print{
   #topbar,#sidebar,#bnav,.btn,.rbtn{display:none!important}
@@ -2142,6 +2144,39 @@ function canEditChecklists(){
   if(typeof isSysAdmin === 'function' && isSysAdmin()) return true;
   return curUserRole === 'manager';
 }
+
+// ── Which layout: table or cards ─────────────────────────────────────────
+// A pure CSS media query got this wrong on Samsung phones: any handset that
+// supports a stylus reports hover:hover and pointer:fine, so it was treated as
+// a desktop. Decide it here instead, from what the device really has, and
+// re-decide whenever the window changes or the phone is rotated.
+var TOUCH_UI_MAX = 1180;
+
+function isTouchDevice(){
+  try{
+    if((navigator.maxTouchPoints || 0) > 0) return true;
+    if(navigator.msMaxTouchPoints) return true;
+    if(window.matchMedia && window.matchMedia('(any-pointer: coarse)').matches) return true;
+    if('ontouchstart' in window) return true;
+  }catch(e){}
+  return false;
+}
+
+function applyTouchUI(){
+  var w = window.innerWidth || document.documentElement.clientWidth || 0;
+  // Both conditions still hold: a touch device AND a screen narrower than a
+  // laptop. A desktop stays a table at every window size, which is the promise.
+  var on = isTouchDevice() && w <= TOUCH_UI_MAX;
+  var el = document.documentElement;
+  if(on) el.classList.add('touch-ui');
+  else   el.classList.remove('touch-ui');
+}
+
+try{
+  applyTouchUI();
+  window.addEventListener('resize', applyTouchUI);
+  window.addEventListener('orientationchange', function(){ setTimeout(applyTouchUI, 120); });
+}catch(e){ console.log('touch layout detection skipped:', e); }
 
 function go(pg){
   // Hiding a nav entry is not a rule — refuse the page itself too, or a stale
