@@ -190,6 +190,62 @@ html,body{height:100%;overflow:auto;font-family:Tajawal,sans-serif;font-size:14p
   .tcgrid{grid-template-columns:1fr}
   .rfg{grid-template-columns:1fr}
 }
+/* ══════════════════════════════════════════════════════════════════════
+   TOUCH DEVICES ONLY — phone and iPad. The visits table becomes cards.
+   Two conditions, both required:
+     · pointer:coarse + hover:none  → a finger, not a mouse
+     · max-width:1180px             → phone, or iPad in either orientation
+   A Windows laptop reports hover:hover even in a narrow window, so the desktop
+   table is never touched — that is the whole point of pairing the two.
+   ══════════════════════════════════════════════════════════════════════ */
+@media (max-width:1180px) and (pointer:coarse) and (hover:none){
+  #pg-visits .thd{display:none}
+  #pg-visits .tbl{overflow-x:visible}
+
+  #visBody .vrow{
+    display:grid !important;
+    /* the row carries a 7-column template as an inline style, set by the
+       renderer — an inline style beats a stylesheet, so this must be forced */
+    grid-template-columns:1fr auto !important;
+    grid-template-areas:
+      "no   date"
+      "cl   cl"
+      "tech tech"
+      "type st"
+      "acts acts";
+    gap:2px 10px;
+    min-width:0 !important;
+    background:#fff;
+    border:1px solid #E2E8F0;
+    border-radius:12px;
+    margin-bottom:9px;
+    padding:12px 13px;
+  }
+  #visBody .vrow.is-round{border-inline-start:4px solid #6D28D9 !important}
+
+  #visBody .vrow .v-no{grid-area:no;font-size:12.5px;white-space:nowrap;overflow:visible}
+  #visBody .vrow .v-date{grid-area:date;text-align:end;font-size:11px;color:#718096}
+  #visBody .vrow .v-date div{display:inline;margin-inline-start:4px}
+  #visBody .vrow .v-cl{grid-area:cl;margin-top:4px;white-space:normal;overflow:visible}
+  #visBody .vrow .v-cl > div:first-child{font-size:15px;font-weight:700;line-height:1.35}
+  #visBody .vrow .v-tech{grid-area:tech;font-size:12.5px;color:#4A5568;white-space:normal}
+  #visBody .vrow .v-type{grid-area:type;justify-self:start;margin-top:7px}
+  #visBody .vrow .v-st{grid-area:st;justify-self:end;margin-top:7px}
+
+  /* the four actions were 13px icons pushed off-screen; on a card they become
+     targets an adult thumb can hit without aiming */
+  #visBody .vrow .v-acts{
+    grid-area:acts;display:flex !important;gap:7px;margin-top:11px;
+    padding-top:10px;border-top:1px solid #EDF2F7;
+  }
+  #visBody .vrow .v-acts .rbtn{
+    flex:1;min-height:44px;border:1px solid #D9E2EC;background:#F8FAFC;
+    border-radius:9px;font-size:17px !important;padding:0 !important;
+    display:flex;align-items:center;justify-content:center;
+  }
+  #visBody .vrow .v-acts .rbtn:first-child{background:#1D4E89;border-color:#1D4E89;color:#fff;flex:1.6}
+}
+
 @media print{
   #topbar,#sidebar,#bnav,.btn,.rbtn{display:none!important}
   #main{padding:0!important}
@@ -2301,7 +2357,7 @@ function renderVisits(f,q){
   var typeLabel={'warranty':t('typeWarranty'),'paid':t('typePaid'),'contract':t('typeContract')};
   var stBadge={'Completed':'b-s','Pending':'b-w'};
   fl.forEach(function(r){
-    var row=document.createElement('div');row.className='trow';
+    var row=document.createElement('div');row.className='trow vrow';
     row.style.gridTemplateColumns='minmax(160px,1fr) 2fr 1.2fr 1fr 1fr 0.8fr 120px';
     row.style.minWidth='940px';
     var rid = r.id||'';
@@ -2316,6 +2372,7 @@ function renderVisits(f,q){
       // a standing marker rather than leaving them to blend in.
       row.style.borderInlineStart = '3px solid #6D28D9';
       row.style.background = '#FBFAFF';
+      row.classList.add('is-round');
     }
     row.innerHTML='<div class="tc" style="font-weight:700;color:#1D4E89" dir="ltr"><bdi>'+visitRef(r)+'</bdi></div>'
       +'<div class="tc"><div style="font-weight:500">'+(r.client||'—')
