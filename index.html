@@ -1951,13 +1951,8 @@ function lgSuccess(u, restoring){
   var ua=document.getElementById('uAv');
   if(ua) ua.textContent=u.init||'M';
   
-  // Hide nav items for technician role
-  if(u.role==='technician'){
-    ['nav-technicians','nav-clients','nav-reports','nav-archive'].forEach(function(id){
-      var el=document.getElementById(id);
-      if(el) el.style.display='none';
-    });
-  }
+  // (Technician nav rules live in applyRolePermissions — doing it here too let
+  // the two disagree, and the later one always won.)
   
   // Ensure sidebar is visible on desktop
   var sb=document.getElementById('sidebar');
@@ -2225,6 +2220,21 @@ function canEditChecklists(){
   return curUserRole === 'manager';
 }
 
+// ── Who gets the dashboard, and where everyone else starts ───────────────
+// Month totals, other people's pending reports, contracts due — a manager's
+// screen. A technician and a salesman have no business on it.
+function canSeeDashboard(){
+  if(typeof isSysAdmin === 'function' && isSysAdmin()) return true;
+  return ['technician','salesman','data_entry'].indexOf(curUserRole) === -1;
+}
+
+function homePage(){
+  if(curUserRole === 'technician') return 'visits';
+  if(curUserRole === 'salesman')   return 'maint-requests';
+  if(curUserRole === 'data_entry') return 'clients';
+  return 'dashboard';
+}
+
 // ── Which layout: table or cards ─────────────────────────────────────────
 // A pure CSS media query got this wrong on Samsung phones: any handset that
 // supports a stylus reports hover:hover and pointer:fine, so it was treated as
@@ -2266,17 +2276,20 @@ function go(pg){
                  'parts','parts-request','parts-orders','technicians','reports','archive','settings',
                  'visits','pending','newvisit','signature','checklists'],
     data_entry: ['parts','parts-request',
-                 'parts-orders','technicians','reports','archive','checklists']
+                 'parts-orders','technicians','reports','archive','checklists'],
+    technician: ['settings','technicians','clients','client-orders','reports','archive','checklists']
   };
-  // Hiding the nav entry is never the rule: a stale link, the back button or a
-  // saved session would still land him on the dashboard. Redirect quietly —
-  // this is not an attempt at anything, so it needs no scolding alert.
-  if(pg === 'dashboard' && curUserRole === 'technician') pg = 'visits';
+  // The dashboard is a manager's screen. Anyone without it needs somewhere
+  // else to be — and the redirect target must never itself be blocked, or the
+  // two rules bounce off each other forever.
+  if(pg === 'dashboard' && !canSeeDashboard()) pg = homePage();
 
   var _deny = _blocked[curUserRole];
   if(_deny && _deny.indexOf(pg) !== -1){
     alert(TR('هذه الصفحة ليست ضمن صلاحياتك.', 'This page is not part of your permissions.'));
-    pg = (curUserRole === 'salesman') ? 'maint-requests' : 'dashboard';
+    // Send him to HIS home, not to the dashboard — data entry was being pushed
+    // onto a page it is not allowed to open either.
+    pg = homePage();
   }
   // Whatever the matrix says, in code — not just by hiding the nav entry.
   var _needs = { 'contracts':'contracts.view', 'contract-detail':'contracts.view',
@@ -10492,6 +10505,57 @@ function hideEmptyNavSections(){
   close();
 }
 
+// The bottom bar on a phone was hardcoded — five buttons for everyone, no
+// matter the role. Four of them did nothing when a salesman tapped them, and
+// the fifth opened a page he should never see. It now mirrors the sidebar
+// exactly, because the sidebar is where the role rules already live.
+var BNAV_MAP = {
+  'bn-dashboard': 'nav-dashboard',
+  'bn-visits':    'nav-visits',
+  'bn-pending':   'nav-pending',
+  'bn-techs':     'nav-technicians',
+  'bn-reports':   'nav-reports'
+};
+
+function syncBottomNav(){
+  var shown = 0;
+  Object.keys(BNAV_MAP).forEach(function(bid){
+    var b = document.getElementById(bid);
+    if(!b) return;
+    var side = document.getElementById(BNAV_MAP[bid]);
+    // No sidebar twin means the page is not part of this role's world either.
+    var on = side && side.style.display !== 'none';
+    b.style.display = on ? '' : 'none';
+    if(on) shown++;
+  });
+
+  // A salesman ends up with one page; his bar would be a single lonely button.
+  // Give him the one screen he actually lives in instead.
+  var extra = document.getElementById('bn-requests');
+  if(!extra){
+    var row = document.querySelector('#bnav .bnav-row');
+    if(row){
+      extra = document.createElement('button');
+      extra.className = 'bn';
+      extra.id = 'bn-requests';
+      extra.onclick = function(){ go('maint-requests'); setBn(extra); };
+      extra.innerHTML = '<i class="ti ti-headset"></i><span>'
+        + TR('الطلبات', 'Requests') + '</span>';
+      row.appendChild(extra);
+    }
+  }
+  if(extra){
+    var sideR = document.getElementById('nav-maint-requests');
+    var onR = sideR && sideR.style.display !== 'none';
+    extra.style.display = onR ? '' : 'none';
+    if(onR) shown++;
+  }
+
+  // Nothing left to show? Hide the bar rather than leave an empty strip.
+  var bar = document.getElementById('bnav');
+  if(bar && !shown) bar.style.display = 'none';
+}
+
 function applyRolePermissions(){
   var salesOnly = (curUserRole === 'salesman');
   // Sales staff track their requests across every stage, so default to All.
@@ -10515,18 +10579,21 @@ function applyRolePermissions(){
     var hide = false;
     if(salesOnly)  hide = (n.id !== 'nav-maint-requests');
     if(dataEntry)  hide = ['nav-clients','nav-visits','nav-maint-requests'].indexOf(n.id) === -1;
-    // The dashboard is a manager's screen — month totals, other people's
-    // pending reports, contracts due. A technician has no use for it and it is
-    // not his to read.
-    if(n.id === 'nav-dashboard' && curUserRole === 'technician') hide = true;
+    // A technician's world: his visits, the parts he needs, the checklists he
+    // ticks. Not the team roster, not the client register, not the reports.
+    // These were hidden once at sign-in and then UNHIDDEN again by this very
+    // loop, which set display='' on everything it did not explicitly hide.
+    if(curUserRole === 'technician'){
+      hide = ['nav-dashboard','nav-technicians','nav-clients',
+              'nav-reports','nav-archive','nav-checklists'].indexOf(n.id) !== -1;
+    }
     if(n.id === 'nav-checklists' && !canEditChecklists()) hide = true;
     n.style.display = hide ? 'none' : '';
   });
   // The two matrix-governed entries are decided here, on the current role —
   // applyFeatureFlags() otherwise only ever ran at settings-load time, before
   // anyone had logged in, so it judged them against no role at all.
-  var bnDash = document.getElementById('bn-dashboard');
-  if(bnDash) bnDash.style.display = (curUserRole === 'technician') ? 'none' : '';
+  syncBottomNav();
 
   try{ applyFeatureFlags(); }catch(e){}
   // A section heading with nothing under it is clutter — hide any group whose
